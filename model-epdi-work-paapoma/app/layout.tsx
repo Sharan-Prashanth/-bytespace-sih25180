@@ -27,13 +27,13 @@ export default function RootLayout({
           <header className="bg-primary text-primary-foreground border-b">
             <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-              {/* <Image
-                    src="/india-emblem.png"
+              <Image
+                    src="/munu-thala-singam.png"
                     width={32}
                     height={32}
                     alt="Emblem"
                     className="rounded"
-                  />                 */}
+                  />                
                   <div className="leading-tight">
                   <p className="text-sm">Government of India</p>
                   <p className="text-xs opacity-90">Ministry of Coal • NaCCER</p>
