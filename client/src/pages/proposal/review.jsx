@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { ROLES } from "../../context/AuthContext";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import Navbar from "../../components/Navbar";
+import { getProposalUrl } from "../../utils/api";
 
 function ReviewProposalContent() {
   const router = useRouter();
@@ -47,7 +48,7 @@ function ReviewProposalContent() {
     
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/proposals/${id}/feedback`, {
+      const response = await fetch(getProposalUrl(id, 'feedback'), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -74,7 +75,7 @@ function ReviewProposalContent() {
     
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/proposals/${id}/assign`, {
+      const response = await fetch(getProposalUrl(id, 'assign'), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -98,7 +99,7 @@ function ReviewProposalContent() {
   const handleUpdateStatus = async (newStatus) => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/proposals/${id}/status`, {
+      const response = await fetch(getProposalUrl(id, 'status'), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

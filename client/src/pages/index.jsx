@@ -6,12 +6,16 @@ import Footer from "../components/Footer";
 export default function Home() {
   const [activeInfoTab, setActiveInfoTab] = useState('whats-new');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showCollaborateModal, setShowCollaborateModal] = useState(false);
+  const [collaboratorEmail, setCollaboratorEmail] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
 
   // Array of banner images
   const bannerImages = [
     "/images/banner image.jpg", // Default image (first)
     "/images/aatai1.jpeg",
-    "/images/aatai2.png"
+    "/images/aatai2.png",
+    "/images/Sibi.png"
   ];
 
   // Auto-switch images every 4 seconds
@@ -39,6 +43,40 @@ export default function Home() {
     );
   };
 
+  // Handle collaboration invitation
+  const handleCollaborateInvite = async () => {
+    if (!collaboratorEmail) return;
+    
+    setIsInviting(true);
+    try {
+      // Here you would typically make an API call to send the invitation
+      const response = await fetch('/api/invite-collaborator', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: collaboratorEmail,
+          inviteType: 'collaboration',
+          platform: 'NaCCER Research Portal'
+        }),
+      });
+
+      if (response.ok) {
+        alert(`Collaboration invitation sent to ${collaboratorEmail}!`);
+        setCollaboratorEmail('');
+        setShowCollaborateModal(false);
+      } else {
+        throw new Error('Failed to send invitation');
+      }
+    } catch (error) {
+      console.error('Error sending invitation:', error);
+      alert('Failed to send invitation. Please try again.');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white pt-16">
       <Navbar />
@@ -55,14 +93,11 @@ export default function Home() {
               }`}
             >
               <img 
-                src={image}   
-                alt={`Government Banner ${index + 1}`} 
-                className={`w-full h-full ${
-                  image.includes('aatai1.jpeg') || image.includes('aatai4.jpeg') || image.includes('aatai5.jpeg')
-                    ? 'object-cover object-top bg-gray-100' 
-                    : 'object-cover'
-                }`}
-              />
+              src={image}   
+              alt={`Government Banner ${index + 1}`} 
+              className={`w-full h-full object-contain bg-gray-100`} 
+            />
+
             </div>
           ))}
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
@@ -384,7 +419,9 @@ export default function Home() {
       {/* Our Ministers Section */}
       <section className="py-20 bg-blue-900 text-white">
         <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-4xl font-bold text-center text-white mb-16 animate-fade-in-up border-b-4 border-yellow-500 pb-4 inline-block">Our Ministers</h2>
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold text-center text-white mb-8 animate-fade-in-up border-b-4 border-yellow-500 pb-4 inline-block">Our Ministers</h2>
+          </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Prime Minister */}
@@ -1121,6 +1158,77 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Collaboration Modal */}
+      {showCollaborateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Invite Collaborator</h2>
+              <button
+                onClick={() => setShowCollaborateModal(false)}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <label htmlFor="collaboratorEmail" className="block text-sm font-medium text-gray-700 mb-2">
+                Collaborator Email Address
+              </label>
+              <input
+                type="email"
+                id="collaboratorEmail"
+                value={collaboratorEmail}
+                onChange={(e) => setCollaboratorEmail(e.target.value)}
+                placeholder="Enter email address"
+                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isInviting}
+              />
+            </div>
+            
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowCollaborateModal(false)}
+                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                disabled={isInviting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCollaborateInvite}
+                disabled={!collaboratorEmail || isInviting}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isInviting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Send Invitation
+                  </>
+                )}
+              </button>
+            </div>
+            
+            <div className="mt-4 p-3 bg-blue-50 rounded-md">
+              <p className="text-sm text-blue-700">
+                <strong>Note:</strong> An email invitation will be sent to the collaborator with instructions to join the NaCCER Research Portal.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>

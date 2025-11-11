@@ -81,36 +81,135 @@ function DashboardContent() {
             setProposals([
               { 
                 id: 1, 
-                title: "AI-Powered Medical Diagnosis System", 
-                description: "Development of AI system for medical diagnosis using machine learning and computer vision.",
+                title: "AI-Powered Coal Quality Assessment System", 
+                description: "Development of machine learning algorithms for real-time coal quality assessment and grading using computer vision and spectroscopic analysis.",
                 status: "under_review", 
-                author: "John Doe", 
-                domain: "Artificial Intelligence",
-                budget: 150000,
-                createdAt: "2025-09-20T10:00:00Z",
-                assignedStaff: null 
+                author: "Dr. Rajesh Kumar", 
+                domain: "Artificial Intelligence & Mining",
+                budget: 285000,
+                createdAt: "2025-09-25T10:00:00Z",
+                assignedStaff: null,
+                aiScore: {
+                  overall: 87,
+                  technical: 92,
+                  feasibility: 85,
+                  innovation: 89,
+                  impact: 83,
+                  budget: 88,
+                  timeline: 84
+                },
+                submissionDate: "2025-09-25",
+                category: "Technology Innovation"
               },
               { 
                 id: 2, 
-                title: "Sustainable Energy Storage Solutions", 
-                description: "Research on next-generation battery technology for renewable energy storage.",
+                title: "Sustainable Coal Mining Waste Management", 
+                description: "Research on converting coal mining waste into useful construction materials using advanced chemical processing techniques.",
                 status: "assigned_to_staff", 
-                author: "Jane Smith", 
-                domain: "Energy Technology",
-                budget: 200000,
-                createdAt: "2025-09-19T14:30:00Z",
-                assignedStaff: "Staff Member 1" 
+                author: "Prof. Priya Sharma", 
+                domain: "Environmental Technology",
+                budget: 195000,
+                createdAt: "2025-09-22T14:30:00Z",
+                assignedStaff: "Research Team Alpha",
+                aiScore: {
+                  overall: 93,
+                  technical: 90,
+                  feasibility: 95,
+                  innovation: 88,
+                  impact: 96,
+                  budget: 92,
+                  timeline: 91
+                },
+                submissionDate: "2025-09-22",
+                category: "Environmental Research"
               },
               { 
                 id: 3, 
-                title: "Quantum Computing Algorithms", 
-                description: "Development of efficient algorithms for quantum computing applications.",
+                title: "Advanced Coal Gasification Process Optimization", 
+                description: "Development of next-generation coal gasification technology with enhanced efficiency and reduced emissions using AI-driven process optimization.",
                 status: "approved", 
-                author: "Bob Wilson", 
-                domain: "Quantum Computing",
-                budget: 300000,
-                createdAt: "2025-09-18T09:15:00Z",
-                assignedStaff: "Staff Member 2" 
+                author: "Dr. Michael Chen", 
+                domain: "Clean Coal Technology",
+                budget: 420000,
+                createdAt: "2025-09-20T09:15:00Z",
+                assignedStaff: "Advanced Research Unit",
+                aiScore: {
+                  overall: 91,
+                  technical: 94,
+                  feasibility: 87,
+                  innovation: 93,
+                  impact: 89,
+                  budget: 85,
+                  timeline: 90
+                },
+                submissionDate: "2025-09-20",
+                category: "Process Innovation"
+              },
+              { 
+                id: 4, 
+                title: "Digital Twin Technology for Mining Operations", 
+                description: "Implementation of comprehensive digital twin systems for coal mining operations to optimize production, safety, and equipment maintenance.",
+                status: "under_review", 
+                author: "Dr. Sarah Williams", 
+                domain: "Digital Mining Technology",
+                budget: 350000,
+                createdAt: "2025-09-18T16:45:00Z",
+                assignedStaff: null,
+                aiScore: {
+                  overall: 85,
+                  technical: 88,
+                  feasibility: 82,
+                  innovation: 90,
+                  impact: 87,
+                  budget: 81,
+                  timeline: 86
+                },
+                submissionDate: "2025-09-18",
+                category: "Digital Innovation"
+              },
+              { 
+                id: 5, 
+                title: "Carbon Capture and Utilization from Coal Plants", 
+                description: "Research on innovative carbon capture technologies and conversion of captured CO2 into valuable industrial chemicals and materials.",
+                status: "under_review", 
+                author: "Prof. Amit Patel", 
+                domain: "Carbon Management",
+                budget: 485000,
+                createdAt: "2025-09-15T11:20:00Z",
+                assignedStaff: null,
+                aiScore: {
+                  overall: 89,
+                  technical: 91,
+                  feasibility: 86,
+                  innovation: 92,
+                  impact: 94,
+                  budget: 83,
+                  timeline: 88
+                },
+                submissionDate: "2025-09-15",
+                category: "Climate Technology"
+              },
+              { 
+                id: 6, 
+                title: "Smart Mining Safety and Monitoring System", 
+                description: "IoT-based comprehensive safety monitoring system for underground coal mines with real-time hazard detection and automated emergency response.",
+                status: "assigned_to_staff", 
+                author: "Dr. Lisa Anderson", 
+                domain: "Mining Safety Technology",
+                budget: 225000,
+                createdAt: "2025-09-12T13:15:00Z",
+                assignedStaff: "Safety Research Team",
+                aiScore: {
+                  overall: 92,
+                  technical: 89,
+                  feasibility: 94,
+                  innovation: 87,
+                  impact: 96,
+                  budget: 90,
+                  timeline: 93
+                },
+                submissionDate: "2025-09-12",
+                category: "Safety Innovation"
               }
             ]);
           } else if (isStaff()) {
@@ -822,6 +921,59 @@ function DashboardContent() {
                           )}
                         </div>
                       </div>
+
+                      {/* AI Score Section */}
+                      {proposal.aiScore && (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg mb-4 border border-blue-200">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                              </svg>
+                              AI Assessment Score
+                            </h4>
+                            <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              proposal.aiScore.overall >= 90 ? 'bg-green-100 text-green-800' :
+                              proposal.aiScore.overall >= 80 ? 'bg-blue-100 text-blue-800' :
+                              proposal.aiScore.overall >= 70 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {proposal.aiScore.overall}/100
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {Object.entries(proposal.aiScore).filter(([key]) => key !== 'overall').map(([category, score]) => (
+                              <div key={category} className="bg-white p-3 rounded-lg border border-gray-100">
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="text-xs font-medium text-gray-600 capitalize">
+                                    {category.replace(/([A-Z])/g, ' $1').trim()}
+                                  </span>
+                                  <span className="text-xs font-bold text-gray-800">{score}</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className={`h-2 rounded-full transition-all duration-500 ${
+                                      score >= 90 ? 'bg-green-500' :
+                                      score >= 80 ? 'bg-blue-500' :
+                                      score >= 70 ? 'bg-yellow-500' :
+                                      'bg-red-500'
+                                    }`}
+                                    style={{ width: `${score}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <div className="mt-3 text-xs text-gray-500 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            AI assessment based on technical feasibility, innovation potential, and research impact
+                          </div>
+                        </div>
+                      )}
 
                       {proposal.assignedStaff && (
                         <div className="bg-green-50 p-3 rounded-lg mb-3">

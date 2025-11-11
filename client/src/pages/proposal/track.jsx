@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useAuth } from "../../context/AuthContext";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import dynamic from 'next/dynamic';
+import { getProposalUrl } from "../../utils/api";
 
 // Dynamically import TimelineChart to avoid SSR issues
 const TimelineChart = dynamic(() => import("../../components/TimelineChart"), { 
@@ -26,7 +27,7 @@ function TrackProposalContent() {
   const fetchProposal = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/proposals/${id}`, {
+      const response = await fetch(getProposalUrl(id), {
         headers: { 
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"

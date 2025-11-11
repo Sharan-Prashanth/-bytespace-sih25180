@@ -155,6 +155,13 @@ function CollaborateContent() {
   const [characterCount, setCharacterCount] = useState(0);
   const [editorContent, setEditorContent] = useState('');
   
+  // Collaboration modal state
+  const [showCollaborateModal, setShowCollaborateModal] = useState(false);
+  const [collaboratorEmail, setCollaboratorEmail] = useState('');
+  const [collaboratorRole, setCollaboratorRole] = useState('');
+  const [collaboratorDescription, setCollaboratorDescription] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+  
   // Tooltip state
   const [hoveredCollaborator, setHoveredCollaborator] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -460,6 +467,45 @@ function CollaborateContent() {
     setShowCommitModal(true);
   };
 
+  // Handle collaboration invitation
+  const handleCollaborateInvite = async () => {
+    if (!collaboratorEmail || !collaboratorRole) return;
+    
+    setIsInviting(true);
+    try {
+      // Here you would typically make an API call to send the invitation
+      const response = await fetch('/api/invite-collaborator', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: collaboratorEmail,
+          role: collaboratorRole,
+          description: collaboratorDescription,
+          proposalId: id,
+          inviteType: 'collaboration',
+          platform: 'NaCCER Research Portal'
+        }),
+      });
+
+      if (response.ok) {
+        alert(`Collaboration invitation sent to ${collaboratorEmail} as ${collaboratorRole}!`);
+        setCollaboratorEmail('');
+        setCollaboratorRole('');
+        setCollaboratorDescription('');
+        setShowCollaborateModal(false);
+      } else {
+        throw new Error('Failed to send invitation');
+      }
+    } catch (error) {
+      console.error('Error sending invitation:', error);
+      alert('Failed to send invitation. Please try again.');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   // Handle tooltip positioning
   const handleMouseEnter = (collaborator, event) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -682,6 +728,20 @@ function CollaborateContent() {
                     }`}></div>
                   </div>
                 ))}
+                
+                {/* Add Collaborator Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowCollaborateModal(true)}
+                    className="w-10 h-10 rounded-full border-2 border-white shadow-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 flex items-center justify-center text-white cursor-pointer transition-all duration-300 hover:scale-125 transform hover:shadow-xl hover:shadow-green-500/30 animate-pulse"
+                    title="Add New Collaborator"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border border-white animate-ping"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1141,6 +1201,130 @@ function CollaborateContent() {
                 >
                   Continue
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Collaboration Modal */}
+        {showCollaborateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-8 max-w-lg w-full mx-4 shadow-xl">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Invite Collaborator</h2>
+                <button
+                  onClick={() => {
+                    setShowCollaborateModal(false);
+                    setCollaboratorEmail('');
+                    setCollaboratorRole('');
+                    setCollaboratorDescription('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Email Field */}
+                <div>
+                  <label htmlFor="collaboratorEmail" className="block text-sm font-medium text-gray-700 mb-2">
+                    Collaborator Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    id="collaboratorEmail"
+                    value={collaboratorEmail}
+                    onChange={(e) => setCollaboratorEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isInviting}
+                  />
+                </div>
+
+                {/* Role Selection */}
+                <div>
+                  <label htmlFor="collaboratorRole" className="block text-sm font-medium text-gray-700 mb-2">
+                    Role *
+                  </label>
+                  <select
+                    id="collaboratorRole"
+                    value={collaboratorRole}
+                    onChange={(e) => setCollaboratorRole(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isInviting}
+                  >
+                    <option value="">Select a role</option>
+                    <option value="Technical Reviewer">Technical Reviewer</option>
+                    <option value="Research Coordinator">Research Coordinator</option>
+                    <option value="Environmental Specialist">Environmental Specialist</option>
+                    <option value="Data Analyst">Data Analyst</option>
+                    <option value="Subject Matter Expert">Subject Matter Expert</option>
+                    <option value="Project Manager">Project Manager</option>
+                    <option value="Quality Assurance">Quality Assurance</option>
+                    <option value="External Reviewer">External Reviewer</option>
+                  </select>
+                </div>
+
+                {/* Description Field */}
+                <div>
+                  <label htmlFor="collaboratorDescription" className="block text-sm font-medium text-gray-700 mb-2">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    id="collaboratorDescription"
+                    value={collaboratorDescription}
+                    onChange={(e) => setCollaboratorDescription(e.target.value)}
+                    placeholder="Brief description of their role and responsibilities..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows="3"
+                    disabled={isInviting}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-4 mt-6">
+                <button
+                  onClick={() => {
+                    setShowCollaborateModal(false);
+                    setCollaboratorEmail('');
+                    setCollaboratorRole('');
+                    setCollaboratorDescription('');
+                  }}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-medium"
+                  disabled={isInviting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCollaborateInvite}
+                  disabled={!collaboratorEmail || !collaboratorRole || isInviting}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+                >
+                  {isInviting ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Send Invitation
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              <div className="mt-4 p-3 bg-blue-50 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Note:</strong> An email invitation will be sent to the collaborator with their assigned role and instructions to join this collaborative workspace.
+                </p>
               </div>
             </div>
           </div>

@@ -42,6 +42,9 @@ export default function LoadingScreen() {
         <p className="text-slate-700 text-xl font-semibold mb-8 animate-pulse">
           Developed by Team :ByteSpace
         </p>
+        <p className="text-slate-700 text-xl font-semibold mb-8 animate-pulse">
+          SIH TEAM ID : 72110
+        </p>
         
         {/* Loading Animation Dots */}
         <div className="flex justify-center space-x-3">

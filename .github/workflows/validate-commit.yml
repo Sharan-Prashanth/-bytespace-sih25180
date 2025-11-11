@@ -1,0 +1,55 @@
+name: Validate Commit Format
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  validate-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get latest commit message
+        id: commit
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
+
+      - name: Validate commit format
+        run: |
+          echo "Checking commit format..."
+          if [[ "${{ steps.commit.outputs.commit_msg }}" =~ ^
+
+\[[A-Z]+\]
+
+: ]]; then
+            echo "✅ Valid commit format."
+          else
+            echo "❌ Invalid commit format. Start with [TAG]: using uppercase letters."
+            exit 1
+          fi
+
+      - name: Comment on PR if invalid
+        if: failure()
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            🚫 **Commit format check failed!**
+            Please start your commit message with:
+            ```
+            [TAG]: your message here
+            ```
+            Examples:
+            - `[FEAT]: add login page`
+            - `[FIX]: resolve crash`
+            - `[DOC]: update documentation`
+
+            Your latest commit was:
+            ```
+            ${{ steps.commit.outputs.commit_msg }}
+            ```

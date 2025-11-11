@@ -1,8 +1,10 @@
+import { API_ENDPOINTS } from './api';
+
 export async function uploadFile(file, token) {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch("http://localhost:5000/api/upload", {
+  const res = await fetch(API_ENDPOINTS.UPLOAD, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

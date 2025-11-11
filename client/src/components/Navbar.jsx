@@ -112,16 +112,19 @@ export default function Navbar({ variant = "default" }) {
         {/* Animated Background Elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full animate-float"></div>
+
           <div className="absolute top-0 -left-5 w-24 h-24 bg-white/5 rounded-full animate-float animation-delay-1000"></div>
         </div>
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
+            {/* (SIH ID badge moved near right controls) */}
             {/* Combined Government & Logo Section */}
             <Link href={user ? "/dashboard" : "/"}>
               <div className="flex items-center gap-6 cursor-pointer group">
                 {/* Government Section */}
                 <div className={`flex items-center gap-4 text-sm font-semibold ${navStyles.text}`}>
+                  {/* SIH TEAM ID moved to corner badge */}
                   <a href="https://www.india.gov.in/" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
                     variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
                   }`}>
@@ -362,6 +365,18 @@ export default function Navbar({ variant = "default" }) {
                   </Link>
                 </div>
               )}
+              </div>
+            </div>
+
+            {/* Badge placed to the right of the right-section (appears on md+ screens) */}
+            <div className="hidden md:flex items-center pl-2">
+              <div
+                className="px-3 py-1 rounded-full bg-black text-white text-xs font-semibold shadow-lg border border-white/10 ml-2"
+                role="status"
+                aria-label="SIH Team ID 72110"
+                title="SIH Team ID: 72110"
+              >
+                SIH ID: 72110
               </div>
             </div>
 

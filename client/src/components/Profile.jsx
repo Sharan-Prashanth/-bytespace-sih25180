@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth, ROLES } from "../context/AuthContext";
 import LoadingScreen from "./LoadingScreen";
+import { API_ENDPOINTS } from "../utils/api";
 
 export default function Profile() {
   const { user, loading } = useAuth();
@@ -82,7 +83,7 @@ export default function Profile() {
         return;
       }
       
-      const response = await fetch("http://localhost:5000/api/auth/profile", {
+      const response = await fetch(API_ENDPOINTS.PROFILE, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

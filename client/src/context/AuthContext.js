@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { API_ENDPOINTS } from "../utils/api";
 
 // Hook to prevent hydration mismatches
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useEffect : () => {};
@@ -33,7 +34,7 @@ export const AuthProvider = ({ children }) => {
 
     const token = localStorage.getItem("token");
     if (token) {
-      fetch("http://localhost:5000/api/auth/me", {
+      fetch(API_ENDPOINTS.ME, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(res => res.json())
@@ -49,7 +50,7 @@ export const AuthProvider = ({ children }) => {
 
   // Login function
   const login = async (email, password) => {
-    const res = await fetch("http://localhost:5000/api/auth/login", {
+    const res = await fetch(API_ENDPOINTS.LOGIN, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -68,7 +69,7 @@ export const AuthProvider = ({ children }) => {
 
   // Register function
   const register = async (name, email, password, role = ROLES.USER, department = "") => {
-    const res = await fetch("http://localhost:5000/api/auth/register", {
+    const res = await fetch(API_ENDPOINTS.REGISTER, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, password, role, department }),
