@@ -9,6 +9,8 @@ import reviewRoutes from "./routes/reviewRoutes.js";
 import collaborationRoutes from "./routes/collaborationRoutes.js";
 
 import { errorHandler } from "./middleware/errorHandler.js";
+import blockchainRoutes from "./routes/blockchainRoutes.js";
+
 
 // Load environment variables
 dotenv.config();
@@ -22,7 +24,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-
+app.use("/api/blockchain", blockchainRoutes);
 // Health check route
 app.get('/api/health', (req, res) => {
   res.json({ 
