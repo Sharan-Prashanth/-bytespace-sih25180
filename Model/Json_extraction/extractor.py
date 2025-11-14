@@ -5,83 +5,151 @@ import PyPDF2
 import docx
 import re
 import google.generativeai as genai
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-
-# -----------------------------
-# Configure Gemini API
-# -----------------------------
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-1.5-flash")
+from supabase import create_client, Client
+from io import BytesIO
 
 router = APIRouter()
 
-# -----------------------------
-# Helper functions
-# -----------------------------
-def extract_text(file) -> str:
-    filename = file.filename
-    ext = os.path.splitext(filename)[1].lower()
+# Environment variables
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    if ext == ".pdf":
+UPLOAD_BUCKET = "Coal-research-files"
+JSON_BUCKET = "processed-json"
+
+# Gemini
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel("gemini-2.5-flash-lite")
+
+
+# ----------------------------------------------------
+# TEXT EXTRACTION
+# ----------------------------------------------------
+def extract_text(filename, file_bytes):
+    ext = filename.lower().split(".")[-1]
+
+    if ext == "pdf":
+        reader = PyPDF2.PdfReader(BytesIO(file_bytes))
         text = ""
-        reader = PyPDF2.PdfReader(file.file)
         for page in reader.pages:
             text += page.extract_text() or ""
         return text
 
-    elif ext == ".docx":
-        doc = docx.Document(file.file)
-        return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+    elif ext == "docx":
+        doc = docx.Document(BytesIO(file_bytes))
+        return "\n".join([p.text for p in doc.paragraphs])
 
-    elif ext in [".txt", ".csv"]:
-        raw = file.file.read()
-        enc = chardet.detect(raw)["encoding"] or "utf-8"
-        return raw.decode(enc, errors="ignore")
+    elif ext in ["txt", "csv"]:
+        enc = chardet.detect(file_bytes)["encoding"] or "utf-8"
+        return file_bytes.decode(enc, errors="ignore")
 
     else:
-        raise ValueError(f"Unsupported file type: {ext}")
+        return ""
 
-def generate_json(file_content: str):
+
+# ----------------------------------------------------
+# JSON GENERATION
+# ----------------------------------------------------
+def generate_json(content):
     prompt = """
-    Extract the following details from the document and return ONLY valid JSON:
+    Extract the following details and return ONLY valid JSON structure:
     {
-        "title": "...",
-        "author": "...",
-        "affiliation": "...",
-        "abstract": "...",
-        "keywords": ["...", "..."],
-        "introduction": "...",
-        "methodology": "...",
-        "results": "...",
-        "discussion": "...",
-        "conclusion": "...",
-        "references": ["...", "..."],
-        "timeline": "...",
-        "research_needs": ["...", "..."],
-        "funding_sources": ["...", "..."],
-        "collaborating_institutions": ["...", "..."]
+        "title": "",
+        "author": "",
+        "affiliation": "",
+        "abstract": "",
+        "keywords": [],
+        "introduction": "",
+        "methodology": "",
+        "results": "",
+        "discussion": "",
+        "conclusion": "",
+        "references": [],
+        "timeline": "",
+        "research_needs": [],
+        "funding_sources": [],
+        "collaborating_institutions": []
     }
-    Respond with JSON ONLY. No explanations, no markdown.
+    Return ONLY JSON. No explanation.
     """
-    response = model.generate_content([prompt, file_content])
-    raw_text = response.text.strip()
-    match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-    if match:
-        raw_text = match.group(0)
-    try:
-        return json.loads(raw_text)
-    except json.JSONDecodeError:
-        return {"raw_output": raw_text}
+    response = model.generate_content([prompt, content])
+    raw = response.text.strip()
 
-# -----------------------------
-# API route
-# -----------------------------
-@router.post("/extract-json")
-async def extract_json(file: UploadFile = File(...)):
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if m:
+        raw = m.group(0)
+
     try:
-        content = extract_text(file)
-        parsed_json = generate_json(content)
-        return parsed_json
+        return json.loads(raw)
+    except:
+        return {"raw_output": raw}
+
+
+# ----------------------------------------------------
+# MAIN AUTOMATIC PROCESSING ENDPOINT
+# ----------------------------------------------------
+@router.post("/process-all-files")
+def process_all_files():
+    try:
+        files = supabase.storage.from_(UPLOAD_BUCKET).list()
+
+        if not files:
+            return {"message": "No files found in bucket"}
+
+        results = []
+
+        for f in files:
+            try:
+                filename = f["name"]
+                print(f"Processing file: {filename}")
+
+                # 1️⃣ Download file
+                file_bytes = supabase.storage.from_(UPLOAD_BUCKET).download(filename)
+
+                if not file_bytes:
+                    print(f"Skipping: unable to download {filename}")
+                    continue
+
+                # 2️⃣ Extract text safely
+                try:
+                    text = extract_text(filename, file_bytes)
+                except Exception as err:
+                    print(f"Skipping {filename}: unsupported file or extraction error {err}")
+                    continue
+
+                # 3️⃣ Generate JSON
+                structured = generate_json(text)
+
+                # 4️⃣ Save JSON
+                json_name = filename.rsplit(".", 1)[0] + ".json"
+                supabase.storage.from_(JSON_BUCKET).upload(
+                    json_name,
+                    json.dumps(structured).encode(),
+                    {"content-type": "application/json"},
+                )
+
+                # 5️⃣ Public URL
+                json_url = supabase.storage.from_(JSON_BUCKET).get_public_url(json_name)
+
+                results.append({
+                    "file": filename,
+                    "json_file": json_name,
+                    "json_url": json_url
+                })
+
+            except Exception as file_error:
+                print("Error inside processing loop:", file_error)
+                continue  # continue processing other files
+
+        return {
+            "message": "Processing completed",
+            "processed_files": results
+        }
+
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        import traceback
+        print(traceback.format_exc())
+        return JSONResponse({"error": str(e)}, status_code=500)

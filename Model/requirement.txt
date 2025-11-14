@@ -20,3 +20,4 @@ pymongo
 fastapi
 uvicorn
 python-multipart
+supabase
