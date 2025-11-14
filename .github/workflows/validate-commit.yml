@@ -21,11 +21,7 @@ jobs:
       - name: Validate commit format
         run: |
           echo "Checking commit format..."
-          if [[ "${{ steps.commit.outputs.commit_msg }}" =~ ^
-
-\[[A-Z]+\]
-
-: ]]; then
+          if [[ "${{ steps.commit.outputs.commit_msg }}" =~ ^\[[A-Z]+\]: ]]; then
             echo "✅ Valid commit format."
           else
             echo "❌ Invalid commit format. Start with [TAG]: using uppercase letters."

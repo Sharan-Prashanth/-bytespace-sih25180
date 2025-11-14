@@ -2,6 +2,15 @@ import Proposal from "../models/Proposal.js";
 import User from "../models/User.js";
 import emailService from "../services/emailService.js";
 
+// Blockchain helpers (store approved/completed proposals on-chain via IPFS)
+import fs from 'fs';
+import path from 'path';
+import {
+  uploadFileToIPFS,
+  computeFileHash,
+  storeOnChain
+} from '../../blockchain/utils/blockchainClient.js';
+
 // Create a new proposal
 export const createProposal = async (req, res) => {
   try {
@@ -477,6 +486,43 @@ export const updateProposalStatus = async (req, res) => {
       console.error('❌ Failed to send status update email:', emailError.message);
     }
 
+    // If proposal was approved by reviewer, persist a record on-chain (IPFS + contract)
+    if (status === 'approved') {
+      try {
+        // Prepare payload
+        const payload = {
+          proposalId: updatedProposal._id.toString(),
+          title: updatedProposal.title,
+          author: updatedProposal.author ? (updatedProposal.author.name || updatedProposal.author.email) : null,
+          domain: updatedProposal.domain,
+          budget: updatedProposal.budget,
+          status: updatedProposal.status,
+          reviewer: req.user.name || req.user.email || req.user._id,
+          decisionAt: new Date().toISOString(),
+        };
+
+        // Ensure tmp dir exists inside blockchain folder
+        const tmpDir = path.join(process.cwd(), 'blockchain', 'tmp');
+        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+        const tmpFilePath = path.join(tmpDir, `${updatedProposal._id.toString()}.json`);
+        fs.writeFileSync(tmpFilePath, JSON.stringify(payload, null, 2));
+
+        // Upload to IPFS
+        const cid = await uploadFileToIPFS(tmpFilePath);
+        const fileHash = await computeFileHash(tmpFilePath);
+
+        // Store reference on-chain
+        const receipt = await storeOnChain(updatedProposal._id.toString(), cid, fileHash, `Approved by reviewer: ${req.user.name || req.user._id}`);
+        console.log('✅ Stored approved proposal on-chain, tx receipt:', receipt.transactionHash || receipt.transactionHash === undefined ? receipt : receipt.transactionHash);
+
+        // Optionally remove temp file
+        try { fs.unlinkSync(tmpFilePath); } catch (e) { /* ignore */ }
+      } catch (chainError) {
+        console.error('❌ Failed to persist approved proposal on-chain:', chainError.message || chainError);
+      }
+    }
+
     res.json({
       success: true,
       message: `Proposal status updated to ${status}`,
@@ -545,6 +591,35 @@ export const submitStaffReport = async (req, res) => {
       success: true,
       message: 'Staff report submitted successfully'
     });
+
+    // If staff marked this report as completed, persist a record on-chain
+    if (status === 'completed') {
+      try {
+        const payload = {
+          proposalId: proposal._id.toString(),
+          title: proposal.title,
+          author: proposal.author,
+          status: proposal.status,
+          staff: req.user.name || req.user.email || req.user._id,
+          completedAt: new Date().toISOString()
+        };
+
+        const tmpDir = path.join(process.cwd(), 'blockchain', 'tmp');
+        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+        const tmpFilePath = path.join(tmpDir, `${proposal._id.toString()}-staff.json`);
+        fs.writeFileSync(tmpFilePath, JSON.stringify(payload, null, 2));
+
+        const cid = await uploadFileToIPFS(tmpFilePath);
+        const fileHash = await computeFileHash(tmpFilePath);
+        const receipt = await storeOnChain(proposal._id.toString(), cid, fileHash, `Completed by staff: ${req.user.name || req.user._id}`);
+        console.log('✅ Stored staff-completed proposal on-chain, tx receipt:', receipt.transactionHash || receipt);
+
+        try { fs.unlinkSync(tmpFilePath); } catch (e) { /* ignore */ }
+      } catch (chainError) {
+        console.error('❌ Failed to persist staff-completed proposal on-chain:', chainError.message || chainError);
+      }
+    }
 
   } catch (error) {
     console.error('Submit report error:', error);
