@@ -11,7 +11,7 @@ from RAG import similarity_checker
 from Json_extraction import extractor
 import uvicorn
 from data_files import file_storage
-
+from RAG import ai_detector_pipeline
 app = FastAPI()
 
 # Allow CORS for frontend
@@ -33,6 +33,7 @@ app.include_router(novelty.router)
 app.include_router(cost_estimator.router)
 app.include_router(plag.router)
 app.include_router(file_storage.router)
+app.include_router(ai_detector_pipeline.router)
 # app.include_router(online_checker.app)
 # -----------------------------
 # Run FastAPI directly with Python
