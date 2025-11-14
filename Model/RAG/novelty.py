@@ -1,4 +1,3 @@
-# novelty_processor_v2.py
 import os
 import json
 import re

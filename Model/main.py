@@ -6,7 +6,7 @@ from RAG import plag
 from RAG import rag_chat_guidlines
 from RAG import rag_chat_specialist
 from RAG import timeline
-from RAG import similarity_checker
+# from RAG import similarity_checker
 # from live_checker import online_checker
 from Json_extraction import extractor
 import uvicorn
@@ -25,7 +25,7 @@ app.add_middleware(
 
 # Include all routers
 app.include_router(timeline.router)
-app.include_router(similarity_checker.router)
+# app.include_router(similarity_checker.router)
 app.include_router(rag_chat_guidlines.router)
 app.include_router(rag_chat_specialist.router)
 app.include_router(extractor.router)

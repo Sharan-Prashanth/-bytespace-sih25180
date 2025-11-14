@@ -1,4 +1,3 @@
-# ai_sentence_detector_option_b.py
 import os
 import json
 import re
