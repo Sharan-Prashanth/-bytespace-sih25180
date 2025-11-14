@@ -55,3 +55,14 @@ export async function getRecordsByProposal(proposalId) {
 export async function getRecord(index) {
   return await contract.getRecord(index);
 }
+
+export async function getRecordCount() {
+  return await contract.getRecordCount();
+}
+
+export async function storeDraftVersionOnChain(proposalId, cid, fileHash, parentHash, versionNumber, metadata) {
+  // Calls the new contract method for storing draft/versioned records
+  const tx = await contract.storeDraftVersion(proposalId, cid, fileHash, parentHash, versionNumber, metadata);
+  const receipt = await tx.wait();
+  return receipt;
+}
