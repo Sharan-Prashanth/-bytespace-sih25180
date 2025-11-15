@@ -23,7 +23,7 @@ load_dotenv()
 # ---------- Config ----------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")  # server-only (service_role recommended)
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY4")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
     raise Exception("Set SUPABASE_URL, SUPABASE_KEY, and GEMINI_API_KEY in environment")

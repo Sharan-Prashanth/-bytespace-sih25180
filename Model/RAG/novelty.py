@@ -24,7 +24,7 @@ load_dotenv()
 # ---------------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")   # service_role recommended
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY2")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
     raise Exception("Set SUPABASE_URL, SUPABASE_KEY, and GEMINI_API_KEY in environment")
@@ -178,10 +178,12 @@ Read the chunk below and return JSON ONLY with:
 {{
   "novelty_percentage": 0,
   "unique_sections": [],
+  "points_of_novelty": [],
   "detailed_context": ""
 }}
 - novelty_percentage: integer 0-100 for this chunk
 - unique_sections: 2-6 short excerpts or summaries (8-40 words)
+- points_of_novelty: list of all the novelty brief innovation points (each point need to be in 5-20 words)
 - detailed_context: 20-40 lines explaining why these are novel or not
 
 Chunk:

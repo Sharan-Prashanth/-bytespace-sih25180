@@ -39,7 +39,7 @@ load_dotenv()
 # -------------------- CONFIG --------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")  # service_role recommended
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY4")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
     raise Exception("Set SUPABASE_URL, SUPABASE_KEY, and GEMINI_API_KEY in .env")
@@ -319,6 +319,7 @@ Return ONLY valid JSON with keys:
   "validated_ai_probability": 0.0,
   "decision": "ai"|"human"|"uncertain",
   "comment": "one-line comment | reasons | confidence:<0.0-1.0>",
+  "Lines": "the detected sentence are needed to be shown one by one in point wise and they needed to be highlighted in bold format",
   "matched_past_files": [ {{ "filename": "...", "similarity": 0.0 }} ]
 }}
 
