@@ -4,7 +4,6 @@ import json
 from io import BytesIO
 from datetime import datetime
 from typing import Dict, Any, Optional
-
 import PyPDF2
 import docx
 import chardet

@@ -25,3 +25,5 @@ accelerate
 setuptools
 httpx[http2]
 reportlab
+pillow 
+requests

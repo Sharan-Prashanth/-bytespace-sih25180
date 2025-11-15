@@ -1,60 +1,79 @@
 import os
 import io
 import json
+import re
 import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional
 
 import httpx
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
-from dotenv import load_dotenv
+from reportlab.lib.colors import HexColor, black
+from reportlab.lib.utils import ImageReader
 from supabase import create_client, Client
 import google.generativeai as genai
 
 load_dotenv()
 
-# ---------- Config ----------
+# ---------------- Config (ENV) ----------------
 APP_BASE = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY2")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+HEADER_BUCKET = os.getenv("HEADER_BUCKET", "assets")
+HEADER_FILENAME = os.getenv("HEADER_FILENAME", "coal_header.png")
 REPORT_BUCKET = os.getenv("REPORT_BUCKET", "reports")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise Exception("Missing SUPABASE_URL or SUPABASE_KEY in environment")
+    raise Exception("Set SUPABASE_URL and SUPABASE_KEY in environment")
 
 if not GEMINI_API_KEY:
-    raise Exception("Missing GEMINI_API_KEY in environment")
+    raise Exception("Set GEMINI_API_KEY in environment")
 
-# supabase & gemini
+# supabase + gemini init
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
 
 router = APIRouter()
+app = FastAPI()
+app.include_router(router)
 
-# ---------- helper: call one endpoint with file bytes ----------
-async def post_file_to_route(client: httpx.AsyncClient, route: str, filename: str, file_bytes: bytes) -> Dict[str, Any]:
-    """
-    POST file bytes as multipart/form-data to {APP_BASE}{route}.
-    Returns JSON dict (or error info).
-    """
+# ---------------- Helpers ----------------
+def sanitize_text(txt: Optional[str]) -> str:
+    if not txt:
+        return ""
+    # remove markdown-like bold/italic, control chars, repetitive whitespace
+    txt = re.sub(r"\*\*+", "", txt)
+    txt = re.sub(r"`+", "", txt)
+    txt = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", txt)
+    lines = [ln.strip() for ln in txt.splitlines()]
+    clean = "\n".join([ln for ln in lines if ln])
+    # collapse many spaces in-line
+    clean = re.sub(r"[ \t]{2,}", " ", clean)
+    return clean.strip()
+
+async def post_file_to_route(client: httpx.AsyncClient, route: str, filename: str, file_bytes: bytes, timeout: float = 120.0) -> Dict[str, Any]:
     url = APP_BASE + route
     files = {"file": (filename, file_bytes, "application/octet-stream")}
     try:
-        r = await client.post(url, files=files, timeout=120.0)
+        r = await client.post(url, files=files, timeout=timeout)
         try:
-            return {"ok": True, "route": route, "status": r.status_code, "json": r.json()}
+            body = r.json()
         except Exception:
-            return {"ok": False, "route": route, "status": r.status_code, "text": r.text}
+            body = {"_raw_text": r.text}
+        return {"ok": True, "route": route, "status": r.status_code, "json": body}
     except Exception as e:
         return {"ok": False, "route": route, "error": str(e)}
 
-# ---------- helper: normalize module outputs (robust) ----------
-def safe_get(d: Dict[str, Any], *keys, default=None):
+def replace_non_numeric(s):
+    return re.sub(r"[^\d\.]", "", str(s or ""))
+
+def safe_get(d: Dict[str,Any], *keys, default=None):
     cur = d
     for k in keys:
         if isinstance(cur, dict) and k in cur:
@@ -63,79 +82,52 @@ def safe_get(d: Dict[str, Any], *keys, default=None):
             return default
     return cur
 
-# ---------- scoring algorithm ----------
 def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Accept module outputs (raw JSON per route). Return per-module numeric scores and overall score.
-    We'll define a baseline scoring heuristic — tune weights as required.
-    """
-
-    # extract useful numbers safely (many modules follow slightly different keys)
-    # plagiarism percent (0-100) -> lower is better
-    plag_pct = None
+    """Heuristic mapping to convert module outputs into subscores and an overall score (0-100)."""
+    # plagiarism percent -> lower better
+    plag_pct = safe_get(mod_outputs.get("/check-plagiarism-final", {}), "plagiarism_percentage") or safe_get(mod_outputs.get("/check-plagiarism-final", {}), "plagiarism") or None
     try:
-        plag_json = mod_outputs.get("/check-plagiarism-final", {}) or {}
-        # try common keys
-        plag_pct = (plag_json.get("plagiarism_percentage") or
-                    safe_get(plag_json, "result", "plagiarism_percentage") or
-                    safe_get(plag_json, "plagiarism", "percentage") or
-                    None)
         if isinstance(plag_pct, str):
-            plag_pct = float(replace_non_numeric(plag_pct))  # helper defined below if needed
+            plag_pct = float(replace_non_numeric(plag_pct))
     except Exception:
         plag_pct = None
 
-    # ai detection percent (AI-likelihood, higher is worse)
-    ai_pct = None
+    # ai detection percent (0-100)
+    ai_pct = safe_get(mod_outputs.get("/detect-ai-and-validate", {}), "ai_sentences_percentage_by_gemini") or safe_get(mod_outputs.get("/detect-ai-and-validate", {}), "ai_sentences_percentage") or safe_get(mod_outputs.get("/detect-ai-and-validate", {}), "ai_percentage") or None
     try:
-        ai_json = mod_outputs.get("/detect-ai-and-validate", {}) or {}
-        ai_pct = (ai_json.get("ai_probability") or safe_get(ai_json, "result","ai_probability") or ai_json.get("ai_percentage") or None)
         if isinstance(ai_pct, str):
-            ai_pct = float(ai_pct)
+            ai_pct = float(replace_non_numeric(ai_pct))
     except Exception:
         ai_pct = None
 
-    # novelty (0-100) higher is better
-    novelty_pct = None
+    # novelty: higher better
+    novelty_pct = safe_get(mod_outputs.get("/novelty-checks", {}), "novelty_percentage") or safe_get(mod_outputs.get("/novelty-checks", {}), "novelty") or None
     try:
-        nov_json = mod_outputs.get("/novelty-checks", {}) or {}
-        novelty_pct = (nov_json.get("novelty_percentage") or safe_get(nov_json,"result","novelty_percentage") or None)
         if isinstance(novelty_pct, str):
-            novelty_pct = float(novelty_pct)
+            novelty_pct = float(replace_non_numeric(novelty_pct))
     except Exception:
         novelty_pct = None
 
-    # cost: lower cost -> better. We expect estimated_cost in INR
-    cost_value = None
+    # cost: estimated_cost INR (lower better)
+    cost_value = safe_get(mod_outputs.get("/process-and-estimate", {}), "estimated_cost") or safe_get(mod_outputs.get("/process-and-estimate", {}), "result", "estimated_cost") or None
     try:
-        cost_json = mod_outputs.get("/process-and-estimate", {}) or {}
-        cost_value = (cost_json.get("estimated_cost") or safe_get(cost_json,"result","estimated_cost") or None)
         if isinstance(cost_value, str):
-            cost_value = float(cost_value)
+            cost_value = float(replace_non_numeric(cost_value))
     except Exception:
         cost_value = None
 
-    # timeline: if long timeline (many months) -> may reduce score
-    timeline_len = None
-    try:
-        tl_json = mod_outputs.get("/timeline", {}) or {}
-        timeline_list = (tl_json.get("timeline") or safe_get(tl_json,"timeline") or [])
-        timeline_len = len(timeline_list)
-    except Exception:
-        timeline_len = None
+    # timeline length
+    timeline_list = safe_get(mod_outputs.get("/timeline", {}), "timeline") or safe_get(mod_outputs.get("/timeline", {}), "timeline", default=[])
+    timeline_len = len(timeline_list) if isinstance(timeline_list, list) else None
 
-    # compute normalized sub-scores (0-100, higher is better)
-    # plagiarism subscore: 100 if plag_pct is 0, down to 0 if 100
+    # compute normalized subscores (0-100)
     plag_sub = 100.0 if plag_pct is None else max(0.0, 100.0 - float(plag_pct))
-    # ai_sub: higher ai_pct -> lower score
-    ai_sub = 100.0 if ai_pct is None else max(0.0, 100.0 - float(ai_pct)*100.0) if ai_pct <= 1 else max(0.0, 100.0 - float(ai_pct))
-    # novelty_sub: higher is better (map 0-100)
-    novelty_sub = 50.0 if novelty_pct is None else float(novelty_pct)
-    # cost_sub: we invert cost: cheaper is better. define threshold
+    ai_sub = 100.0 if ai_pct is None else max(0.0, 100.0 - float(ai_pct))
+    novelty_sub = 50.0 if novelty_pct is None else float(max(0.0, min(100.0, novelty_pct)))
+    # cost mapping (tunable)
     if cost_value is None:
         cost_sub = 60.0
     else:
-        # example mapping: 0-50k INR -> 90, 50k-200k -> 70, 200k-1M -> 40, >1M -> 10
         c = float(cost_value)
         if c <= 50_000:
             cost_sub = 90.0
@@ -145,8 +137,7 @@ def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
             cost_sub = 40.0
         else:
             cost_sub = 10.0
-
-    # timeline_sub: longer timeline reduces score: len >8 -> reduce
+    # timeline mapping
     if timeline_len is None:
         timeline_sub = 60.0
     else:
@@ -157,15 +148,7 @@ def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
         else:
             timeline_sub = 40.0
 
-    # weighting rules: you mentioned AI+plag+novelty are main drivers, cost & timeline also matter
-    weights = {
-        "plag": 0.28,
-        "ai":   0.28,
-        "novelty": 0.22,
-        "cost": 0.12,
-        "timeline": 0.10
-    }
-
+    weights = {"plag": 0.28, "ai": 0.28, "novelty": 0.22, "cost": 0.12, "timeline": 0.10}
     overall = (
         plag_sub * weights["plag"] +
         ai_sub * weights["ai"] +
@@ -173,19 +156,17 @@ def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
         cost_sub * weights["cost"] +
         timeline_sub * weights["timeline"]
     )
-
-    # ensure 0-100
     overall = max(0.0, min(100.0, overall))
 
     return {
         "subscores": {
-            "plagiarism_subscore": round(plag_sub,1),
-            "ai_subscore": round(ai_sub,1),
-            "novelty_subscore": round(novelty_sub,1),
-            "cost_subscore": round(cost_sub,1),
-            "timeline_subscore": round(timeline_sub,1)
+            "plagiarism_subscore": round(plag_sub, 1),
+            "ai_subscore": round(ai_sub, 1),
+            "novelty_subscore": round(novelty_sub, 1),
+            "cost_subscore": round(cost_sub, 1),
+            "timeline_subscore": round(timeline_sub, 1)
         },
-        "overall_score": round(overall,1),
+        "overall_score": round(overall, 1),
         "raw_inputs": {
             "plag_pct": plag_pct,
             "ai_pct": ai_pct,
@@ -195,209 +176,211 @@ def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
         }
     }
 
-# small helper to strip non-numeric from strings
-import re
-def replace_non_numeric(s):
-    return re.sub(r"[^\d\.]", "", s or "")
-
-# ---------- Gemini summarizer prompt ----------
 def build_gemini_scoring_prompt(all_module_json: Dict[str, Any], computed_scores: Dict[str, Any]) -> str:
-    """
-    Fully robust, brace-escaped, professional scoring prompt.
-    Safe for Python f-strings and .format().
-    """
-
-    modules_str = json.dumps(all_module_json, ensure_ascii=False, indent=2)
+    modules_str = json.dumps(all_module_json, ensure_ascii=False, indent=2)[:10000]  # trim for prompt size
     scores_str = json.dumps(computed_scores, ensure_ascii=False, indent=2)
-
     prompt = f"""
-You are a *Senior Research Project Auditor* with expertise in:
-- plagiarism detection,
-- novelty assessment,
-- AI-generated content analysis,
-- research cost estimation,
-- academic project timeline construction.
+You are a Senior Research Project Auditor. You will validate the automatically computed subscores and overall score from structured module outputs, then produce content for a polished 6-page audit report.
 
-You will receive:
-1. `modules_json` → the raw outputs from five analyzers.
-2. `initial_scores` → the automatically computed numeric scores.
+INSTRUCTIONS (strict):
+1) Validate or correct the numeric subscores (ai, plagiarism, novelty, cost, timeline) and produce a brief 1-line justification for each correction (if any).
+2) Provide a final overall percentage (0-100).
+3) For each of the 6 pages produce a concise, professional content string (clear paragraphs, bullet summaries) suitable for a government-style report.
+   - Page1: Executive summary (overall score, 5-line summary, top 3 actions)
+   - Page2: AI Detection (score, list sentences/paragraphs flagged, long explanation, they need to point for what are the sentence the score of the get increased)
+   - Page3: Plagiarism (score, suspicious passages, matched sources line in brief and point wise explanation)
+   - Page4: Novelty (score, novel contributions, weaknesses they need to brief and point wise explanation)
+   - Page5: Cost (estimated cost, breakdown highlights, optimization suggestions benefit they need to brief and point wise explanation)
+   - Page6: Timeline (recommended stages, adjustments needed, risk factors they need to brief and point wise explanation)
 
-====================================================
-YOUR OBJECTIVES (CRITICAL — FOLLOW EXACTLY)
-====================================================
-
-A) **VALIDATE ALL SCORES**
-- Recalculate the correctness of each sub-score using evidence from `modules_json`.
-- If any score is inconsistent or mathematically incorrect, FIX it.
-- Provide 1–2 line justification for each correction.
-- Compute a FINAL overall percentage (0–100).
-
-B) **GENERATE A SIX-PAGE REPORT** (for PDF generation later)
-You must produce polished, concise, professional text for each page.
-
-1) **Page 1 — Executive Summary**
-   - Final overall score (percentage).
-   - 5-line summary of the entire paper quality.
-   - Key strengths + risks.
-
-2) **Page 2 — AI-Generated Text Audit**
-   - AI probability score.
-   - Sentences/paragraphs flagged as AI-generated.
-   - Short explanation of why they appear AI-generated.
-
-3) **Page 3 — Plagiarism Report**
-   - Final plagiarism percentage.
-   - List of suspicious sections.
-   - Reasoning behind detected overlap.
-   - Mention if any content matches internal database / Supabase stored files.
-
-4) **Page 4 — Novelty Evaluation**
-   - Novelty percentage.
-   - Unique ideas.
-   - Weak originality areas.
-   - Suggestions to increase novelty.
-
-5) **Page 5 — Cost Estimation**
-   - Estimated project cost (INR).
-   - Detailed cost breakdown.
-   - Recommendations to reduce cost.
-
-6) **Page 6 — Timeline**
-   - Recommended stage-by-stage project timeline.
-   - Clarify if source document lacked a proper timeline.
-   - Adjusted timeline if needed.
-
-C) **WRITE SHORT RECOMMENDATIONS**
-3–8 bullets, one line each.
-
-====================================================
-OUTPUT FORMAT (STRICT JSON — MUST FOLLOW EXACTLY)
-====================================================
-
-Return ONLY a JSON object of the form:
-
+OUTPUT:
+Return a single JSON ONLY with keys:
 {{
-  "validated_scores": {{
-      "ai_score": 0,
-      "plagiarism_score": 0,
-      "novelty_score": 0,
-      "cost_score": 0,
-      "timeline_score": 0,
-      "final_overall_score": 0,
-      "justification": "..."
-  }},
-  "pages": {{
-      "page1": {{
-        "title": "Executive Summary",
-        "content": "..."
-      }},
-      "page2": {{
-        "title": "AI Detection",
-        "content": "..."
-      }},
-      "page3": {{
-        "title": "Plagiarism Report",
-        "content": "..."
-      }},
-      "page4": {{
-        "title": "Novelty Assessment",
-        "content": "..."
-      }},
-      "page5": {{
-        "title": "Cost Estimation",
-        "content": "..."
-      }},
-      "page6": {{
-        "title": "Timeline Evaluation",
-        "content": "..."
-      }}
-  }},
-  "short_recommendations": [
-      "Recommendation 1...",
-      "Recommendation 2...",
-      "Recommendation 3..."
-  ]
+ "validated_scores": {{
+    "ai_score": 0,
+    "plagiarism_score": 0,
+    "novelty_score": 0,
+    "cost_score": 0,
+    "timeline_score": 0,
+    "final_overall_score": 0,
+    "justification": "one-line summary of corrections"
+ }},
+ "pages": {{
+   "page1": {{"title":"", "content":""}},
+   "page2": {{"title":"", "content":""}},
+   "page3": {{"title":"", "content":""}},
+   "page4": {{"title":"", "content":""}},
+   "page5": {{"title":"", "content":""}},
+   "page6": {{"title":"", "content":""}}
+ }},
+ "short_recommendations": ["one-line rec 1", "one-line rec 2"]
 }}
 
-====================================================
-REFERENCE INPUT
-====================================================
-
-### Modules JSON:
+MODULES_JSON:
 {modules_str}
 
-### Initial Computed Scores:
+INITIAL_SCORES:
 {scores_str}
 
-IMPORTANT:
-- DO NOT add commentary outside the JSON.
-- DO NOT include markdown formatting.
-- Return ONLY VALID JSON.
+Return ONLY valid JSON.
 """
-
     return prompt
 
-# ---------- PDF generator using reportlab ----------
-def make_pdf_bytes(pages_content: Dict[str, Any], overall_score: float, filename_short: str) -> bytes:
-    """
-    pages_content: dict with keys page1..page6 each containing title & content strings.
-    returns PDF bytes
-    """
+def safe_parse_json_from_text(txt: str) -> Dict[str, Any]:
+    if not txt:
+        return {}
+    txt = txt.strip()
+    # try direct parse
+    try:
+        return json.loads(txt)
+    except Exception:
+        pass
+    # attempt to extract last JSON object
+    start = txt.find("{")
+    end = txt.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(txt[start:end+1])
+        except Exception:
+            pass
+    return {}
+
+# ---------------- PDF rendering (with Circular seal A1) ----------------
+def draw_circular_seal(c: canvas.Canvas, center_x: float, center_y: float, radius: float, score_text: str):
+    """Draw a circular seal with score_text in center (A1 style)."""
+    # outer circle
+    c.setLineWidth(2)
+    c.setStrokeColor(HexColor("#0b3d91"))
+    c.circle(center_x, center_y, radius, stroke=1, fill=0)
+    # inner ring
+    c.setLineWidth(1)
+    c.circle(center_x, center_y, radius * 0.8, stroke=1, fill=0)
+    # fill center rectangle with score
+    c.setFont("Helvetica-Bold", int(radius * 0.5))
+    c.setFillColor(HexColor("#0b3d91"))
+    # center the text
+    c.drawCentredString(center_x, center_y - (radius * 0.15), score_text)
+
+def fetch_header_bytes() -> Optional[bytes]:
+    # try Supabase storage
+    try:
+        data = supabase.storage.from_(HEADER_BUCKET).download(HEADER_FILENAME)
+        if data:
+            return data
+    except Exception:
+        pass
+    # try public URL
+    try:
+        url = "https://ukykrsrwamxhfbcfdncm.supabase.co/storage/v1/object/public/assets/coal%20image.jpg"
+        import requests
+        r = requests.get(url, timeout=8)
+        if r.status_code == 200:
+            return r.content
+    except Exception:
+        pass
+    # local fallback
+    local = os.path.join(os.getcwd(), HEADER_FILENAME)
+    if os.path.exists(local):
+        with open(local, "rb") as f:
+            return f.read()
+    return None
+
+def make_pdf_bytes(pages: Dict[str, Any], overall_score: float, filename_short: str, header_bytes: Optional[bytes]) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    def draw_page(title: str, body: str, footer: Optional[str] = None):
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(20*mm, height - 30*mm, title)
-        c.setFont("Helvetica", 10)
-        text_obj = c.beginText(20*mm, height - 40*mm)
-        # wrap body reasonably
-        for line in body.splitlines():
-            text_obj.textLine(line)
-        c.drawText(text_obj)
-        if footer:
-            c.setFont("Helvetica-Oblique", 9)
-            c.drawString(20*mm, 10*mm, footer)
-        c.showPage()
+    # draw header + footer helper
+    def draw_header_footer(page_num: int):
+        # header image (if available) centered top
+        if header_bytes:
+            try:
+                img = ImageReader(io.BytesIO(header_bytes))
+                iw, ih = img.getSize()
+                desired_w = width * 0.5
+                scale = desired_w / float(iw)
+                draw_w = desired_w
+                draw_h = float(ih) * scale
+                x = (width - draw_w) / 2.0
+                y = height - draw_h - 12
+                c.drawImage(img, x, y, draw_w, draw_h, mask='auto')
+            except Exception:
+                pass
+        # footer
+        footer_text = f"Generated by Bytespace evaluator — Page {page_num} of 6"
+        c.setFont("Helvetica-Oblique", 9)
+        c.setFillColor(HexColor("#333333"))
+        c.drawCentredString(width / 2.0, 12 * mm, footer_text)
 
-    # Cover page - page1 (include overall score big)
-    p1 = pages_content.get("page1", {})
-    title = p1.get("title", f"Authenticator Report — {filename_short}")
-    content = p1.get("content", "")
-    # draw big score
-    c.setFont("Helvetica-Bold", 36)
-    c.drawCentredString(width/2.0, height - 50*mm, f"Overall Score: {overall_score}%")
+    # Page 1 — Cover with circular seal
+    p1 = pages.get("page1", {})
+    title1 = p1.get("title", "Executive Summary")
+    content1 = sanitize_text(p1.get("content", ""))
+    # draw header/footer
+    draw_header_footer(1)
+    # draw circular seal center-right top
+    seal_radius = 42 * mm
+    seal_cx = width * 0.75
+    seal_cy = height - 80*mm
+    draw_circular_seal(c, seal_cx, seal_cy, seal_radius, f"{int(round(overall_score))}%")
+    # title + small info
     c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(width/2.0, height - 70*mm, title)
-    c.setFont("Helvetica", 10)
-    text_obj = c.beginText(20*mm, height - 90*mm)
-    for line in content.splitlines():
-        text_obj.textLine(line)
-    c.drawText(text_obj)
+    c.drawString(24*mm, height - 70*mm, title1)
+    c.setFont("Helvetica", 11)
+    y = height - 80*mm
+    # draw content lines (wrap roughly)
+    text = c.beginText(24*mm, y)
+    text.setFont("Helvetica", 10)
+    lines = []
+    for para in content1.split("\n\n"):
+        for ln in re.split(r'(?<=\.)\s+', para):
+            if ln.strip():
+                lines.append(ln.strip())
+        lines.append("")  # paragraph gap
+    for ln in lines[:40]:
+        text.textLine(ln)
+    c.drawText(text)
+    draw_header_footer(1)
     c.showPage()
 
-    # pages 2..6
-    for i in range(2,7):
-        key = f"page{i}"
-        p = pages_content.get(key, {})
-        draw_page(p.get("title", f"Page {i}"), p.get("content",""), footer=f"Generated: {datetime.utcnow().isoformat()}")
+    # Pages 2-6: each with title + content
+    for i in range(2, 7):
+        page = pages.get(f"page{i}", {})
+        title = page.get("title", f"Page {i}")
+        content = sanitize_text(page.get("content", ""))
+        draw_header_footer(i)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(20*mm, height - 30*mm, title)
+        c.setFont("Helvetica", 10)
+        text = c.beginText(20*mm, height - 40*mm)
+        # wrap: naive split by sentences/lines
+        for para in content.split("\n\n"):
+            # split long lines further
+            lines = re.split(r'(?<=[.!?])\s+', para)
+            for ln in lines:
+                ln2 = ln.strip()
+                if not ln2:
+                    continue
+                # ensure max characters per line ~95
+                while len(ln2) > 120:
+                    text.textLine(ln2[:120])
+                    ln2 = ln2[120:]
+                text.textLine(ln2)
+            text.textLine("")
+        c.drawText(text)
+        draw_header_footer(i)
+        c.showPage()
 
     c.save()
     buffer.seek(0)
     return buffer.read()
 
-# ---------- Main endpoint: /report-gen ----------
+# ---------------- Main endpoint ----------------
 @router.post("/report-gen")
 async def authenticator_endpoint(file: UploadFile = File(...)):
     """
-    Receives a paper and:
-      - calls 5 endpoints in parallel with the same file
-      - aggregates JSON outputs
-      - computes scores
-      - asks Gemini to validate + produce page text
-      - renders PDF and uploads to supabase
-      - returns public_url and details
+    Receives a paper file, sends it to multiple endpoints in parallel,
+    aggregates outputs, validates with Gemini, renders PDF, uploads to Supabase.
     """
     try:
         filename = file.filename or f"upload_{datetime.utcnow().isoformat()}"
@@ -415,59 +398,86 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
             tasks = [post_file_to_route(client, r, filename, file_bytes) for r in routes]
             results = await asyncio.gather(*tasks, return_exceptions=False)
 
-        # normalize into dict by route
         modules_out = {}
         for res in results:
             route = res.get("route")
             if res.get("ok"):
-                modules_out[route] = res.get("json") if res.get("json") is not None else {}
+                modules_out[route] = res.get("json") or {}
             else:
                 modules_out[route] = {"error": res.get("error") or res.get("text") or f"HTTP {res.get('status')}"}
 
-        # compute local heuristic scores
         computed = compute_scores(modules_out)
 
-        # ask Gemini to validate and produce page contents
+        # call Gemini to validate and produce page content
         prompt = build_gemini_scoring_prompt(modules_out, computed)
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
         resp = model.generate_content(prompt)
-        try:
-            gem_json = json.loads(resp.text)
-        except Exception:
-            # attempt to extract JSON substring
-            txt = resp.text or ""
-            start = txt.find("{")
-            end = txt.rfind("}")
-            gem_json = json.loads(txt[start:end+1]) if start!=-1 and end!=-1 else {"error":"gemini output non-json", "raw": txt}
+        gem_out = safe_parse_json_from_text(resp.text or "")
 
-        validated = gem_json.get("validated_scores", computed)
-        pages = gem_json.get("pages", {})
-        short_recs = gem_json.get("short_recommendations", [])
+        validated_scores = gem_out.get("validated_scores") or {
+            "ai_score": computed["subscores"]["ai_subscore"],
+            "plagiarism_score": computed["subscores"]["plagiarism_subscore"],
+            "novelty_score": computed["subscores"]["novelty_subscore"],
+            "cost_score": computed["subscores"]["cost_subscore"],
+            "timeline_score": computed["subscores"]["timeline_subscore"],
+            "final_overall_score": computed["overall_score"],
+            "justification": ""
+        }
 
-        # build PDF bytes from pages and overall score
-        overall_score = validated.get("overall_score", computed["overall_score"])
-        pdf_bytes = make_pdf_bytes(pages, overall_score, filename.rsplit(".",1)[0])
+        pages = gem_out.get("pages") or {}
+        # Ensure each page has a title & content
+        for i in range(1,7):
+            key = f"page{i}"
+            if key not in pages or not isinstance(pages[key], dict):
+                pages[key] = {"title": f"Page {i}", "content": f"No content generated for {key}."}
 
-        # upload PDF to supabase REPORT_BUCKET
+        short_recs = gem_out.get("short_recommendations") or gem_out.get("short_recs") or []
+
+        # get header image once
+        header_bytes = fetch_header_bytes()
+
+        overall_score = validated_scores.get("final_overall_score") or computed.get("overall_score")
+        pdf_bytes = make_pdf_bytes(pages, float(overall_score), filename.rsplit(".",1)[0], header_bytes)
+
+        # upload PDF to Supabase
         safe_name = re.sub(r"[<>:\"/\\|?*]+", "_", filename.rsplit(".",1)[0]) + ".authenticator.pdf"
+        # if name exists, pick unique
         try:
-            supabase.storage.from_(REPORT_BUCKET).upload(safe_name, pdf_bytes, {"content-type":"application/pdf"})
-        except Exception as e:
-            # if object exists, rename
             existing = supabase.storage.from_(REPORT_BUCKET).list() or []
             existing_names = [o.get("name") for o in existing]
-            if safe_name in existing_names:
-                i = 1
-                candidate = f"{safe_name.rsplit('.',1)[0]}_{i}.authenticator.pdf"
-                while candidate in existing_names:
-                    i += 1
-                    candidate = f"{safe_name.rsplit('.',1)[0]}_{i}.authenticator.pdf"
-                supabase.storage.from_(REPORT_BUCKET).upload(candidate, pdf_bytes, {"content-type":"application/pdf"})
-                safe_name = candidate
-            else:
-                raise e
+        except Exception:
+            existing_names = []
+        if safe_name in existing_names:
+            i = 1
+            base = safe_name.rsplit(".",1)[0]
+            candidate = f"{base}_{i}.authenticator.pdf"
+            while candidate in existing_names:
+                i += 1
+                candidate = f"{base}_{i}.authenticator.pdf"
+            safe_name = candidate
 
-        public_url = supabase.storage.from_(REPORT_BUCKET).get_public_url(safe_name)
+        # upload (some clients accept bytes; attempt both)
+        upload_ok = False
+        try:
+            supabase.storage.from_(REPORT_BUCKET).upload(safe_name, pdf_bytes, {"content-type":"application/pdf"})
+            upload_ok = True
+        except Exception:
+            try:
+                supabase.storage.from_(REPORT_BUCKET).upload(safe_name, io.BytesIO(pdf_bytes), {"content-type":"application/pdf"})
+                upload_ok = True
+            except Exception:
+                upload_ok = False
+
+        public_url = None
+        try:
+            pub = supabase.storage.from_(REPORT_BUCKET).get_public_url(safe_name)
+            # get_public_url sometimes returns dict or string - handle both
+            if isinstance(pub, str):
+                public_url = pub
+            elif isinstance(pub, dict):
+                public_url = pub.get("publicUrl") or pub.get("url") or None
+        except Exception:
+            public_url = None
 
         return JSONResponse({
             "ok": True,
@@ -475,11 +485,19 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
             "report_object": safe_name,
             "report_url": public_url,
             "computed_scores": computed,
-            "validated_scores": validated,
+            "validated_scores": validated_scores,
             "short_recommendations": short_recs,
-            "modules": modules_out
+            "modules": modules_out,
+            "uploaded_to_supabase": upload_ok,
+            "created_at": datetime.utcnow().isoformat()
         })
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+# --- run with: uvicorn report_gen_final:app --reload --port 8000
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("report_gen_final:app", host="0.0.0.0", port=8000, reload=True)
