@@ -21,7 +21,7 @@ load_dotenv()
 # -----------------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY7")
 TIMELINE_BUCKET = "timelines-json"
 STORE_IN_BUCKET = os.getenv("STORE_IN_BUCKET", "true").lower() in ("true", "1", "yes")
 

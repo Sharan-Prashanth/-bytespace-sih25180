@@ -27,3 +27,4 @@ httpx[http2]
 reportlab
 pillow 
 requests
+docx2pdf

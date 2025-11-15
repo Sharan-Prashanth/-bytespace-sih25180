@@ -24,7 +24,7 @@ load_dotenv()
 # -------------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")  # service_role
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY5")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
     raise Exception("Set SUPABASE_URL, SUPABASE_KEY and GEMINI_API_KEY in environment")
@@ -217,6 +217,7 @@ Return JSON:
   "missing_citation": false,
   "severity": "low|medium|high",
   "confidence": 0.0,
+  "points_of_plagiarism": [ "which line caused plagiarism and give each line as each segment causes plagiarism", in detail ],
   "matched_files": [
     {{
       "filename": "",
