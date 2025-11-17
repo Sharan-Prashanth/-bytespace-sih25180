@@ -660,9 +660,3 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
-# ============================================================
-# ===================== RUN SERVER ===========================
-# ============================================================
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("report_gen_final:app", host="0.0.0.0", port=8000, reload=True)
