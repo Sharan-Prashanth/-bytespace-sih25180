@@ -15,16 +15,19 @@ jobs:
       - name: Get latest commit message
         id: commit
         run: |
-          COMMIT_MSG=$(git log -1 --pretty=%B)
+          COMMIT_MSG="$(git log -1 --pretty=%B | tr -d '\n')"
           echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
 
       - name: Validate commit format
+        id: validate
         run: |
-          echo "Checking commit format..."
-          if [[ "${{ steps.commit.outputs.commit_msg }}" =~ ^\[[A-Z]+\]: ]]; then
-            echo "✅ Valid commit format."
+          COMMIT="${{ steps.commit.outputs.commit_msg }}"
+          echo "Checking commit message: $COMMIT"
+
+          if [[ "$COMMIT" =~ ^\[[A-Z]+\]: ]]; then
+            echo "Valid commit format."
           else
-            echo "❌ Invalid commit format. Start with [TAG]: using uppercase letters."
+            echo "Invalid commit format."
             exit 1
           fi
 
