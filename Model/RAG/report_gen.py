@@ -115,7 +115,7 @@ def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
 
     # AI percent
     ai_pct = safe_get(mod_outputs.get("/detect-ai-and-validate", {}),
-                      "ai_sentences_percentage_by_gemini") \
+                "ai_sentences_percentage_by_gemini") \
         or safe_get(mod_outputs.get("/detect-ai-and-validate", {}), "ai_percentage")
     try:
         ai_pct = float(replace_non_numeric(ai_pct)) if ai_pct else None
