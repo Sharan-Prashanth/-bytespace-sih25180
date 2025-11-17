@@ -106,6 +106,8 @@ contract ProposalRegistry {
         return proposalToRecordIndexes[proposalId];
     }
 
+    
+
     function getRecordCount() external view returns (uint256) {
         return records.length;
     }
