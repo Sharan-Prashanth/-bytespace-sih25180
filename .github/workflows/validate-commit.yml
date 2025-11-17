@@ -11,12 +11,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 2   
 
       - name: Get latest commit message
         id: commit
         run: |
           COMMIT_MSG="$(git log -1 --pretty=%B | tr -d '\n')"
           echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "Latest commit message: $COMMIT_MSG"
 
       - name: Validate commit format
         id: validate
@@ -24,10 +27,15 @@ jobs:
           COMMIT="${{ steps.commit.outputs.commit_msg }}"
           echo "Checking commit message: $COMMIT"
 
+          if [[ "$COMMIT" =~ ^Merge ]]; then
+            echo "Merge commit detected — skipping format validation."
+            exit 0
+          fi
+
           if [[ "$COMMIT" =~ ^\[[A-Z]+\]: ]]; then
-            echo "Valid commit format."
+            echo "✅ Valid commit format."
           else
-            echo "Invalid commit format."
+            echo "❌ Invalid commit format."
             exit 1
           fi
 
@@ -38,17 +46,24 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            🚫 **Commit format check failed!**
-            Please start your commit message with:
+            🚫 **Commit Format Check Failed**
+
+            Your latest commit message does not follow the required format.
+
+            ### Required format:
             ```
             [TAG]: your message here
             ```
-            Examples:
+
+            ### Allowed TAGS (example):
             - `[FEAT]: add login page`
             - `[FIX]: resolve crash`
             - `[DOC]: update documentation`
+            - `[CHORE]: cleanup code`
 
-            Your latest commit was:
+            ### Merge commits are allowed and ignored automatically.
+
+            **Your commit message was:**
             ```
             ${{ steps.commit.outputs.commit_msg }}
             ```
