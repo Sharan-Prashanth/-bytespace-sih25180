@@ -9,7 +9,7 @@ import {
   uploadFileToIPFS,
   computeFileHash,
   storeOnChain
-} from '../../blockchain/utils/blockchainClient.js';
+} from '../utils/blockchainShim.js';
 
 // Create a new proposal
 export const createProposal = async (req, res) => {
