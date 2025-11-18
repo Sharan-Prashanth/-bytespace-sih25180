@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from RAG import novelty
-from RAG import cost_estimator
+from Cost_validation import cost_estimator
 from RAG import plag
 from RAG import rag_chat_guidlines
 from RAG import rag_chat_specialist
@@ -43,7 +43,7 @@ app.include_router(report_gen.router)
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=8000,
         reload=True
     )
