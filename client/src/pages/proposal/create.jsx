@@ -34,12 +34,15 @@ function CreateProposalContent() {
   const [characterCount, setCharacterCount] = useState(0);
   const [proposalData, setProposalData] = useState({
     projectTitle: '',
-    implementingAgency: '',
+    fundingMethod: 'S&T of MoC',
+    implementingAgency: '', // Principal Implementing Agency
+    subImplementingAgency: '',
     projectLeader: '',
+    projectCoordinator: '',
     coInvestigators: '',
     domain: 'Coal Technology & Clean Energy',
-    budget: '',
-    duration: ''
+    projectOutlayLakhs: '',
+    durationMonths: ''
   });
 
   // Editor content and counts state
@@ -96,6 +99,117 @@ function CreateProposalContent() {
       setUploadSuccess(true);
       setIsUploading(false);
     }, 1000);
+  };
+
+  // Per-field upload state (Covering Letter, Proposal, CV)
+  const [selectedFiles, setSelectedFiles] = useState({
+    coveringLetter: null,
+    proposal: null,
+    cv: null,
+  });
+
+  const [fieldIsUploading, setFieldIsUploading] = useState({
+    coveringLetter: false,
+    proposal: false,
+    cv: false,
+  });
+
+  const [fieldUploadProgress, setFieldUploadProgress] = useState({
+    coveringLetter: 0,
+    proposal: 0,
+    cv: 0,
+  });
+
+  const [fieldUploadStage, setFieldUploadStage] = useState({
+    coveringLetter: '',
+    proposal: '',
+    cv: '',
+  });
+
+  const [fieldUploadSuccess, setFieldUploadSuccess] = useState({
+    coveringLetter: false,
+    proposal: false,
+    cv: false,
+  });
+
+  const [fieldError, setFieldError] = useState({
+    coveringLetter: '',
+    proposal: '',
+    cv: '',
+  });
+
+  const FILE_LIMITS = {
+    coveringLetter: 2 * 1024 * 1024, // 2 MB
+    proposal: 20 * 1024 * 1024, // 20 MB
+    cv: 10 * 1024 * 1024, // 10 MB
+  };
+
+  const validateFile = (field, file) => {
+    if (!file) return 'No file selected';
+    const name = file.name || '';
+    const lower = name.toLowerCase();
+    if (!lower.endsWith('.pdf')) return 'Only PDF files are allowed';
+    const limit = FILE_LIMITS[field] || 5 * 1024 * 1024;
+    if (file.size > limit) return `File exceeds maximum size of ${Math.round(limit / 1024 / 1024)} MB`;
+    return '';
+  };
+
+  const handleSelectFile = (field, e) => {
+    const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    setSelectedFiles(prev => ({ ...prev, [field]: file }));
+    setFieldError(prev => ({ ...prev, [field]: '' }));
+    setFieldUploadProgress(prev => ({ ...prev, [field]: 0 }));
+    setFieldUploadStage(prev => ({ ...prev, [field]: '' }));
+    setFieldUploadSuccess(prev => ({ ...prev, [field]: false }));
+  };
+
+  const uploadFieldFile = async (field) => {
+    const file = selectedFiles[field];
+    const err = validateFile(field, file);
+    if (err) { setFieldError(prev => ({ ...prev, [field]: err })); return; }
+
+    setFieldIsUploading(prev => ({ ...prev, [field]: true }));
+    setFieldUploadProgress(prev => ({ ...prev, [field]: 0 }));
+    setFieldUploadSuccess(prev => ({ ...prev, [field]: false }));
+
+    const stages = [
+      { stage: 'Validating file...', duration: 800 },
+      { stage: 'Scanning for viruses...', duration: 1000 },
+      { stage: 'Optimizing for storage...', duration: 900 },
+      { stage: 'Storing securely...', duration: 1200 },
+      { stage: 'Finalizing upload...', duration: 700 }
+    ];
+
+    let currentProgress = 0;
+    const progressPerStage = 100 / stages.length;
+
+    for (let i = 0; i < stages.length; i++) {
+      setFieldUploadStage(prev => ({ ...prev, [field]: stages[i].stage }));
+      await new Promise(resolve => {
+        const interval = setInterval(() => {
+          currentProgress += Math.random() * 6 + 2;
+          const target = (i + 1) * progressPerStage;
+          if (currentProgress >= target) {
+            currentProgress = target;
+            setFieldUploadProgress(prev => ({ ...prev, [field]: Math.round(currentProgress) }));
+            clearInterval(interval);
+            resolve();
+          } else {
+            setFieldUploadProgress(prev => ({ ...prev, [field]: Math.round(currentProgress) }));
+          }
+        }, 120);
+      });
+      await new Promise(res => setTimeout(res, stages[i].duration));
+    }
+
+    setFieldUploadProgress(prev => ({ ...prev, [field]: 100 }));
+    setFieldUploadStage(prev => ({ ...prev, [field]: 'Upload complete' }));
+
+    // Simulate server storage delay
+    setTimeout(() => {
+      setFieldIsUploading(prev => ({ ...prev, [field]: false }));
+      setFieldUploadSuccess(prev => ({ ...prev, [field]: true }));
+    }, 600);
   };
 
 
@@ -346,6 +460,255 @@ function CreateProposalContent() {
           </div>
         </div>
 
+        {/* Upload Documents Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200">
+          <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
+            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+            Upload Documents
+          </h2>
+          
+          {/* Important Note */}
+          <div className="mb-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
+            <div className="flex items-start">
+              <svg className="w-5 h-5 text-orange-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-black font-medium">
+                <strong>Important Note:</strong> Please upload one document at a time.
+              </p>
+            </div>
+          </div>
+
+          {/* Document Upload Fields */}
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* 1. Covering Letter Upload */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-5 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <h4 className="text-base font-bold text-black mb-3 flex items-center">
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">1</span>
+                Covering Letter Upload
+              </h4>
+              <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+                Select covering letter to Upload (Covering Letter in PDF format with size less than 2 MB)
+              </p>
+              
+              <div className="mb-3">
+                <input
+                  id="coveringLetterUpload"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => handleSelectFile('coveringLetter', e)}
+                  className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+              
+              {selectedFiles.coveringLetter && (
+                <div className="text-xs text-black mb-2 p-2 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {selectedFiles.coveringLetter.name}
+                </div>
+              )}
+              
+              {fieldError.coveringLetter && (
+                <div className="text-xs text-red-600 mb-2 p-2 bg-red-50 rounded border border-red-200">
+                  {fieldError.coveringLetter}
+                </div>
+              )}
+              
+              <button
+                type="button"
+                onClick={() => uploadFieldFile('coveringLetter')}
+                disabled={fieldIsUploading.coveringLetter || !selectedFiles.coveringLetter}
+                className="w-full bg-orange-600 text-white py-2.5 rounded-lg text-sm font-semibold mb-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300 shadow-md hover:shadow-lg"
+              >
+                {fieldIsUploading.coveringLetter ? 'Uploading...' : 'Upload'}
+              </button>
+              
+              <div className="text-xs text-gray-500 mb-2">
+                <strong>Allowed format:</strong> PDF
+              </div>
+              <div className="text-xs text-gray-500">
+                <strong>Maximum size:</strong> 2 MB
+              </div>
+              
+              {fieldIsUploading.coveringLetter && (
+                <div className="mt-3">
+                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden mb-1">
+                    <div 
+                      style={{ width: `${fieldUploadProgress.coveringLetter}%` }} 
+                      className="h-2 bg-orange-500 transition-all duration-300 rounded-full"
+                    ></div>
+                  </div>
+                  <div className="text-xs text-black">
+                    {fieldUploadStage.coveringLetter} • {fieldUploadProgress.coveringLetter}%
+                  </div>
+                </div>
+              )}
+              
+              {fieldUploadSuccess.coveringLetter && (
+                <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded successfully
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Proposal Document Upload */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-5 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <h4 className="text-base font-bold text-black mb-3 flex items-center">
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">2</span>
+                Proposal Document Upload
+              </h4>
+              <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+                Select proposal to Upload (Proposal in PDF format with size less than 20 MB)
+              </p>
+              
+              <div className="mb-3">
+                <input
+                  id="proposalDocUpload"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => handleSelectFile('proposal', e)}
+                  className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+              
+              {selectedFiles.proposal && (
+                <div className="text-xs text-black mb-2 p-2 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {selectedFiles.proposal.name}
+                </div>
+              )}
+              
+              {fieldError.proposal && (
+                <div className="text-xs text-red-600 mb-2 p-2 bg-red-50 rounded border border-red-200">
+                  {fieldError.proposal}
+                </div>
+              )}
+              
+              <button
+                type="button"
+                onClick={() => uploadFieldFile('proposal')}
+                disabled={fieldIsUploading.proposal || !selectedFiles.proposal}
+                className="w-full bg-orange-600 text-white py-2.5 rounded-lg text-sm font-semibold mb-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300 shadow-md hover:shadow-lg"
+              >
+                {fieldIsUploading.proposal ? 'Uploading...' : 'Upload'}
+              </button>
+              
+              <div className="text-xs text-gray-500 mb-2">
+                <strong>Allowed format:</strong> PDF
+              </div>
+              <div className="text-xs text-gray-500">
+                <strong>Maximum size:</strong> 20 MB
+              </div>
+              
+              {fieldIsUploading.proposal && (
+                <div className="mt-3">
+                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden mb-1">
+                    <div 
+                      style={{ width: `${fieldUploadProgress.proposal}%` }} 
+                      className="h-2 bg-orange-500 transition-all duration-300 rounded-full"
+                    ></div>
+                  </div>
+                  <div className="text-xs text-black">
+                    {fieldUploadStage.proposal} • {fieldUploadProgress.proposal}%
+                  </div>
+                </div>
+              )}
+              
+              {fieldUploadSuccess.proposal && (
+                <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded successfully
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. CV Upload */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-5 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <h4 className="text-base font-bold text-black mb-3 flex items-center">
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">3</span>
+                CV Upload
+              </h4>
+              <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+                Select CV to Upload (CV in PDF format with size less than 10 MB)
+              </p>
+              
+              <div className="mb-3">
+                <input
+                  id="cvUpload"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => handleSelectFile('cv', e)}
+                  className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+              
+              {selectedFiles.cv && (
+                <div className="text-xs text-black mb-2 p-2 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {selectedFiles.cv.name}
+                </div>
+              )}
+              
+              {fieldError.cv && (
+                <div className="text-xs text-red-600 mb-2 p-2 bg-red-50 rounded border border-red-200">
+                  {fieldError.cv}
+                </div>
+              )}
+              
+              <button
+                type="button"
+                onClick={() => uploadFieldFile('cv')}
+                disabled={fieldIsUploading.cv || !selectedFiles.cv}
+                className="w-full bg-orange-600 text-white py-2.5 rounded-lg text-sm font-semibold mb-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300 shadow-md hover:shadow-lg"
+              >
+                {fieldIsUploading.cv ? 'Uploading...' : 'Upload'}
+              </button>
+              
+              <div className="text-xs text-gray-500 mb-2">
+                <strong>Allowed format:</strong> PDF
+              </div>
+              <div className="text-xs text-gray-500">
+                <strong>Maximum size:</strong> 10 MB
+              </div>
+              
+              {fieldIsUploading.cv && (
+                <div className="mt-3">
+                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden mb-1">
+                    <div 
+                      style={{ width: `${fieldUploadProgress.cv}%` }} 
+                      className="h-2 bg-orange-500 transition-all duration-300 rounded-full"
+                    ></div>
+                  </div>
+                  <div className="text-xs text-black">
+                    {fieldUploadStage.cv} • {fieldUploadProgress.cv}%
+                  </div>
+                </div>
+              )}
+              
+              {fieldUploadSuccess.cv && (
+                <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded successfully
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Editor Mode Toggle */}
         <div className="mb-6">
           <div className="bg-white rounded-xl shadow-lg p-6 border border-orange-200">
@@ -477,55 +840,116 @@ function CreateProposalContent() {
                 <div className="p-6">
                   {!isUploading && !uploadSuccess ? (
                     <>
-                      <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-500 hover:bg-green-50 transition-all duration-300 cursor-pointer group"
-                      >
-                        <div className="w-12 h-12 bg-orange-500 group-hover:bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-all duration-300">
-                          <svg className="w-6 h-6 text-white group-hover:text-white transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        {/* Covering Letter */}
+                        <div className="bg-white rounded-lg border border-orange-200 p-4">
+                          <h4 className="text-sm font-semibold text-black mb-2">1. Covering Letter Upload</h4>
+                          <p className="text-xs text-gray-600 mb-2">Select covering letter to Upload (Covering Letter in PDF format with size less than 2 MB)</p>
+                          <input
+                            id="coveringLetter"
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={(e) => handleSelectFile('coveringLetter', e)}
+                            className="mb-2"
+                          />
+                          {selectedFiles.coveringLetter && (
+                            <div className="text-xs text-black mb-2">Selected: {selectedFiles.coveringLetter.name}</div>
+                          )}
+                          {fieldError.coveringLetter && <div className="text-xs text-red-600 mb-2">{fieldError.coveringLetter}</div>}
+                          <button
+                            type="button"
+                            onClick={() => uploadFieldFile('coveringLetter')}
+                            disabled={fieldIsUploading.coveringLetter}
+                            className="w-full bg-orange-600 text-white py-2 rounded-md text-sm mb-2 disabled:opacity-50"
+                          >
+                            Upload
+                          </button>
+                          <div className="text-xs text-gray-500">Allowed format: PDF • Max size: 2 MB</div>
+                          {fieldIsUploading.coveringLetter && (
+                            <div className="mt-2">
+                              <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div style={{ width: `${fieldUploadProgress.coveringLetter}%` }} className="h-2 bg-orange-500"></div>
+                              </div>
+                              <div className="text-xs mt-1">{fieldUploadStage.coveringLetter} • {fieldUploadProgress.coveringLetter}%</div>
+                            </div>
+                          )}
+                          {fieldUploadSuccess.coveringLetter && <div className="text-xs text-green-600 mt-2">Uploaded successfully</div>}
                         </div>
-                        <h3 className="text-lg font-medium text-black mb-2">Upload Your Proposal Document</h3>
-                        <p className="text-sm text-black mb-3">Drag and drop your .doc or .docx file here, or click to browse</p>
-                        <p className="text-xs text-gray-500">Maximum file size: 50MB • Secure Government-Grade Processing</p>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={handleFileUpload}
-                          className="hidden"
-                        />
+
+                        {/* Proposal Document */}
+                        <div className="bg-white rounded-lg border border-orange-200 p-4">
+                          <h4 className="text-sm font-semibold text-black mb-2">2. Proposal Document Upload</h4>
+                          <p className="text-xs text-gray-600 mb-2">Select proposal to Upload (Proposal in PDF format with size less than 20 MB)</p>
+                          <input
+                            id="proposalDoc"
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={(e) => handleSelectFile('proposal', e)}
+                            className="mb-2"
+                          />
+                          {selectedFiles.proposal && (
+                            <div className="text-xs text-black mb-2">Selected: {selectedFiles.proposal.name}</div>
+                          )}
+                          {fieldError.proposal && <div className="text-xs text-red-600 mb-2">{fieldError.proposal}</div>}
+                          <button
+                            type="button"
+                            onClick={() => uploadFieldFile('proposal')}
+                            disabled={fieldIsUploading.proposal}
+                            className="w-full bg-orange-600 text-white py-2 rounded-md text-sm mb-2 disabled:opacity-50"
+                          >
+                            Upload
+                          </button>
+                          <div className="text-xs text-gray-500">Allowed format: PDF • Max size: 20 MB</div>
+                          {fieldIsUploading.proposal && (
+                            <div className="mt-2">
+                              <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div style={{ width: `${fieldUploadProgress.proposal}%` }} className="h-2 bg-orange-500"></div>
+                              </div>
+                              <div className="text-xs mt-1">{fieldUploadStage.proposal} • {fieldUploadProgress.proposal}%</div>
+                            </div>
+                          )}
+                          {fieldUploadSuccess.proposal && <div className="text-xs text-green-600 mt-2">Uploaded successfully</div>}
+                        </div>
+
+                        {/* CV Upload */}
+                        <div className="bg-white rounded-lg border border-orange-200 p-4">
+                          <h4 className="text-sm font-semibold text-black mb-2">3. CV Upload</h4>
+                          <p className="text-xs text-gray-600 mb-2">Select CV to Upload (CV in PDF format with size less than 10 MB)</p>
+                          <input
+                            id="cvUpload"
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={(e) => handleSelectFile('cv', e)}
+                            className="mb-2"
+                          />
+                          {selectedFiles.cv && (
+                            <div className="text-xs text-black mb-2">Selected: {selectedFiles.cv.name}</div>
+                          )}
+                          {fieldError.cv && <div className="text-xs text-red-600 mb-2">{fieldError.cv}</div>}
+                          <button
+                            type="button"
+                            onClick={() => uploadFieldFile('cv')}
+                            disabled={fieldIsUploading.cv}
+                            className="w-full bg-orange-600 text-white py-2 rounded-md text-sm mb-2 disabled:opacity-50"
+                          >
+                            Upload
+                          </button>
+                          <div className="text-xs text-gray-500">Allowed format: PDF • Max size: 10 MB</div>
+                          {fieldIsUploading.cv && (
+                            <div className="mt-2">
+                              <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div style={{ width: `${fieldUploadProgress.cv}%` }} className="h-2 bg-orange-500"></div>
+                              </div>
+                              <div className="text-xs mt-1">{fieldUploadStage.cv} • {fieldUploadProgress.cv}%</div>
+                            </div>
+                          )}
+                          {fieldUploadSuccess.cv && <div className="text-xs text-green-600 mt-2">Uploaded successfully</div>}
+                        </div>
                       </div>
-                      
+
                       <div className="mt-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
-                        <h4 className="font-medium text-black mb-2">Government-Grade Security & Benefits:</h4>
-                        <ul className="text-sm text-black space-y-2">
-                          <li className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                            Advanced virus scanning & security validation
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                            Blockchain-based secure document storage
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                            Continue editing directly in our online editor
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                            Real-time AI assistance with SAARTHI
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                            Automatic NaCCER compliance checking
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                            Collaborative features and version control
-                          </li>
-                        </ul>
+                        <h4 className="font-medium text-black mb-2">Important Note</h4>
+                        <p className="text-sm text-black">Please upload one document at a time. Use the Upload button next to each field to start its upload. Files must be PDF and respect the maximum sizes shown.</p>
                       </div>
                     </>
                   ) : isUploading ? (
@@ -748,52 +1172,121 @@ function CreateProposalContent() {
                 
                 <div className="grid md:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Project Title *</label>
+                    <label className="block text-xs font-semibold text-black mb-1">Title of Research Proposal *</label>
                     <input
                       type="text"
                       value={proposalData.projectTitle}
                       onChange={(e) => handleInputChange('projectTitle', e.target.value)}
+                      maxLength={150}
                       className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Enter your innovative project title"
+                      placeholder="Enter your innovative project title (max 150 characters)"
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Implementing Agency *</label>
+                    <label className="block text-xs font-semibold text-black mb-1">Required Research Funding Method *</label>
+                    <select
+                      value={proposalData.fundingMethod}
+                      onChange={(e) => handleInputChange('fundingMethod', e.target.value)}
+                      required
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                    >
+                      <option value="S&T of MoC">S&T of MoC</option>
+                      <option value="R&D of CIL">R&D of CIL</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-black mb-1">Name of the Principal Implementing Agency *</label>
                     <input
                       type="text"
                       value={proposalData.implementingAgency}
                       onChange={(e) => handleInputChange('implementingAgency', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Name of implementing organization"
+                      maxLength={100}
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                      placeholder="Name of principal implementing organization (max 100 chars)"
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Project Leader *</label>
+                    <label className="block text-xs font-semibold text-black mb-1">Name of the Sub-Implementing Agency *</label>
+                    <input
+                      type="text"
+                      value={proposalData.subImplementingAgency}
+                      onChange={(e) => handleInputChange('subImplementingAgency', e.target.value)}
+                      maxLength={100}
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                      placeholder="Name of sub-implementing agency (max 100 chars)"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-black mb-1">Name of the Project Leader *</label>
                     <input
                       type="text"
                       value={proposalData.projectLeader}
                       onChange={(e) => handleInputChange('projectLeader', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Principal investigator name"
+                      maxLength={100}
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                      placeholder="Principal investigator name (max 100 chars)"
                       required
                     />
                   </div>
-                  
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-black mb-1">Name of the Project Coordinator *</label>
+                    <input
+                      type="text"
+                      value={proposalData.projectCoordinator}
+                      onChange={(e) => handleInputChange('projectCoordinator', e.target.value)}
+                      maxLength={100}
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                      placeholder="Project coordinator name (max 100 chars)"
+                      required
+                    />
+                  </div>
+
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-black mb-1">Co-investigators</label>
                     <input
                       type="text"
                       value={proposalData.coInvestigators}
                       onChange={(e) => handleInputChange('coInvestigators', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
                       placeholder="Names of co-investigators"
                     />
                   </div>
-                  
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-black mb-1">Project Outlay (Rs. in Lakhs) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={proposalData.projectOutlayLakhs}
+                      onChange={(e) => handleInputChange('projectOutlayLakhs', e.target.value)}
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                      placeholder="Project outlay in lakhs (e.g., 150.50)"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-black mb-1">Project Duration (in months) *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={proposalData.durationMonths}
+                      onChange={(e) => handleInputChange('durationMonths', e.target.value)}
+                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
+                      placeholder="Duration in months (e.g., 24)"
+                      required
+                    />
+                  </div>
+
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-black mb-1">Research Domain</label>
                     <select
@@ -808,28 +1301,6 @@ function CreateProposalContent() {
                       <option value="Materials Science">Materials Science</option>
                       <option value="Process Engineering">Process Engineering</option>
                     </select>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Estimated Budget (₹)</label>
-                    <input
-                      type="number"
-                      value={proposalData.budget}
-                      onChange={(e) => handleInputChange('budget', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Total project budget"
-                    />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Project Duration</label>
-                    <input
-                      type="text"
-                      value={proposalData.duration}
-                      onChange={(e) => handleInputChange('duration', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="e.g., 24 months"
-                    />
                   </div>
                 </div>
               </div>

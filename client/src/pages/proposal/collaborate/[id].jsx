@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import LoadingScreen from '../../../components/LoadingScreen';
-import AdvancedProposalEditor from '../../../components/AdvancedProposalEditor';
+import AdvancedProposalEditor from '../../../components/AdvancedProposalEditorClean';
 import Chatbot from '../../../components/Chatbot';
 import VersionHistory from '../../../components/VersionHistory';
 import ChatWindow from '../../../components/ChatWindow';

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "../../../context/AuthContext";
 import ProtectedRoute from "../../../components/ProtectedRoute";
-import AdvancedProposalEditor from "../../../components/AdvancedProposalEditor";
+import AdvancedProposalEditor from "../../../components/AdvancedProposalEditorClean";
 import Chatbot from "../../../components/Chatbot";
 import VersionHistory from "../../../components/VersionHistory";
 import Navbar from "../../../components/Navbar";
@@ -117,30 +117,127 @@ function EditProposalContent() {
 
   // Initial proposal content
   const initialContent = `
-    <h1 style="color: black; text-align: center;">Advanced Coal Gasification Technology for Enhanced Energy Production</h1>
-    
-    <h2 style="color: black;">1. Problem Statement</h2>
-    <p style="color: black;">The coal sector faces significant challenges in optimizing energy extraction while minimizing environmental impact. Traditional coal combustion methods result in only 35-40% energy efficiency, with substantial CO2 emissions and particulate matter release. There is an urgent need for innovative gasification technologies that can improve energy output to 60-65% efficiency while reducing harmful emissions by 40-50%.</p>
-    
-    <p style="color: black;">Current coal processing facilities in India operate with outdated equipment that struggles to meet environmental compliance standards set by the Ministry of Coal. The lack of advanced gasification infrastructure limits the country's ability to maximize coal utilization for power generation and industrial applications.</p>
-    
-    <h2 style="color: black;">2. Research Objectives</h2>
-    <p style="color: black;"><strong>Primary Objectives:</strong></p>
-    <ul style="color: black;">
-      <li>Develop an integrated coal gasification system achieving 60%+ energy efficiency</li>
-      <li>Design carbon capture mechanisms reducing CO2 emissions by 45%</li>
-      <li>Create automated monitoring systems for real-time process optimization</li>
-      <li>Establish economic viability models for large-scale implementation</li>
-    </ul>
-    
-    <p style="color: black;"><strong>Secondary Objectives:</strong></p>
-    <ul style="color: black;">
-      <li>Train technical personnel in advanced gasification operations</li>
-      <li>Develop maintenance protocols for extended equipment lifespan</li>
-      <li>Create safety standards for gasification plant operations</li>
-      <li>Establish environmental monitoring frameworks</li>
-    </ul>
-  `;
+  <h1 style="color: black; text-align: center;">
+    PROJECT PROPOSAL FOR S&T GRANT OF MoC
+  </h1>
+
+  <h2 style="color: black;">1. Project Title</h2>
+  <p style="color: black;">Enter project title here.</p>
+
+  <h2 style="color: black;">2. Principal Implementing Agency</h2>
+  <p style="color: black;">Name and address of principal Implementing Agency(s)</p>
+
+  <h2 style="color: black;">3. Project Leader / Coordinator / Principal Investigator</h2>
+  <p style="color: black;">Name of Project Leader/Coordinator/Principal Investigator</p>
+
+  <h2 style="color: black;">4. Sub-Implementing Agency</h2>
+  <p style="color: black;">Name and address of Sub-Implementing Agency(s)</p>
+
+  <h2 style="color: black;">5. Co-Investigator(s)</h2>
+  <p style="color: black;">Name of Co-Investigator(s)</p>
+
+  <h2 style="color: black;">6. Definition of the Issue (Max. 300 words)</h2>
+  <p style="color: black;">Provide definition of the issue here.</p>
+
+  <h2 style="color: black;">7. Research Objectives (2–3 Specific Objectives)</h2>
+  <ul style="color: black;">
+    <li>Objective 1</li>
+    <li>Objective 2</li>
+    <li>Objective 3</li>
+  </ul>
+
+  <h2 style="color: black;">8. Justification for Subject Area (Max. 200 words)</h2>
+  <p style="color: black;">Provide justification here.</p>
+
+  <h2 style="color: black;">9. Benefits to the Coal Industry</h2>
+  <p style="color: black;">Explain how the project is beneficial to the coal industry.</p>
+
+  <h2 style="color: black;">10. Work Plan (Max. 100 words)</h2>
+  <p style="color: black;">Provide summary of work plan here.</p>
+
+  <h2 style="color: black;">10.1 Methodology (Max. 200 words)</h2>
+  <p style="color: black;">Describe methodology here.</p>
+
+  <h2 style="color: black;">10.2 Organization of Work Elements (Max. 200 words)</h2>
+  <p style="color: black;">Describe organization of work elements here.</p>
+
+  <h2 style="color: black;">10.3 Time Schedule & Milestones</h2>
+  <p style="color: black;">Provide timeline & milestones. Add Bar Chart/PERT Chart if required.</p>
+
+  <h2 style="color: black;">11. Proposed Outlay (Rs. in Lakhs)</h2>
+  <table border="1" style="width:100%; color: black; border-collapse: collapse;">
+    <tr><th>Sl. No.</th><th>Items</th><th>Total Cost</th><th>1st Year</th><th>2nd Year</th></tr>
+    <tr><td></td><td>Capital Expenditure</td><td></td><td></td><td></td></tr>
+    <tr><td>9.1</td><td>Land & Building</td><td></td><td></td><td></td></tr>
+    <tr><td>9.2</td><td>Equipment</td><td></td><td></td><td></td></tr>
+    <tr><td>9.3</td><td>Total Capital (9.1+9.2)</td><td></td><td></td><td></td></tr>
+    <tr><td></td><td>Revenue Expenditure</td><td></td><td></td><td></td></tr>
+    <tr><td>9.4</td><td>Salaries / Allowances</td><td></td><td></td><td></td></tr>
+    <tr><td>9.5</td><td>Consumables</td><td></td><td></td><td></td></tr>
+    <tr><td>9.6</td><td>Travel</td><td></td><td></td><td></td></tr>
+    <tr><td>9.7</td><td>Workshop/Seminar</td><td></td><td></td><td></td></tr>
+    <tr><td>9.8</td><td>Total Revenue Expenditure (9.4+9.5+9.6+9.7)</td><td></td><td></td><td></td></tr>
+    <tr><td>9.9</td><td>Contingency</td><td></td><td></td><td></td></tr>
+    <tr><td>9.10</td><td>Institutional Overhead</td><td></td><td></td><td></td></tr>
+    <tr><td>9.11</td><td>Applicable taxes/duties/charges</td><td></td><td></td><td></td></tr>
+    <tr><td>9.12</td><td>Grand Total (9.3+9.8+9.9+9.10+9.11)</td><td></td><td></td><td></td></tr>
+  </table>
+
+  <h2 style="color: black;">12. Foreign Exchange Component</h2>
+  <p style="color: black;">
+    Foreign Currency: <br/>
+    Exchange Rate: <br/>
+    Date: 
+  </p>
+
+  <h2 style="color: black;">13. Phasing of Fund Requirement (%)</h2>
+  <p style="color: black;">Provide fund phasing with respect to milestones.</p>
+
+  <h2 style="color: black;">14. Outlay for Land & Building (Rs. in Lakhs)</h2>
+  <table border="1" style="width:100%; color: black; border-collapse: collapse;">
+    <tr><th>Sl. No.</th><th>Item</th><th>Plinth Area</th><th>Type of Building</th><th>Estimated Cost</th></tr>
+    <tr><td>1</td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>2</td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>Total</td><td colspan="4"></td></tr>
+  </table>
+
+  <h2 style="color: black;">15. Justification for Land & Building</h2>
+  <p style="color: black;">Provide justification here.</p>
+
+  <h2 style="color: black;">16. Outlay for Equipment</h2>
+  <table border="1" style="width:100%; color: black; border-collapse: collapse;">
+    <tr><th>Equipment & Specifications</th><th>Number</th><th>Imported/Indigenous</th><th>Estimated Cost (Lakhs)</th><th>Foreign Exchange Component</th></tr>
+    <tr><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>Total</td><td colspan="4"></td></tr>
+  </table>
+
+  <h2 style="color: black;">17. Justification for Equipment</h2>
+  <p style="color: black;">Provide justification here.</p>
+
+  <h2 style="color: black;">18. Outlay for Consumable Materials</h2>
+  <table border="1" style="width:100%; color: black; border-collapse: collapse;">
+    <tr><th>Head</th><th>Particulars</th><th>1st Year</th><th>2nd Year</th><th>3rd Year</th><th>Total</th></tr>
+    <tr><td>Q</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>B</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>F</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>E</td><td></td><td></td><td></td><td></td><td></td></tr>
+  </table>
+
+  <h2 style="color: black;">19. Mandatory Proposal Components</h2>
+  <ul style="color: black;">
+    <li>Brief details of the organization / institution</li>
+    <li>Details of infrastructural resources available including R&D setup</li>
+    <li>Details of expertise, past experience, and performance</li>
+    <li>R&D component under the proposed study</li>
+    <li>How the project benefits the coal industry</li>
+    <li>Detailed web survey report</li>
+    <li>Exclusive research or development content</li>
+    <li>Details of proposed collaboration / tie-up (if applicable)</li>
+  </ul>
+`;
+
 
   useEffect(() => {
     if (id) {
