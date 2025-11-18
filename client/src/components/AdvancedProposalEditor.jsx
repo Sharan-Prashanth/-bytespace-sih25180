@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Table } from '@tiptap/extension-table';
@@ -20,9 +20,492 @@ import { HardBreak } from '@tiptap/extension-hard-break';
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 
-const AdvancedProposalEditor = ({
-  initialContent = '',
-  onContentChange = () => {},
+const formIAContent = `
+  <div style="color: black; font-family: Arial, sans-serif; line-height:1.5; padding: 16px;">
+    <h1 style="text-align: center; color: black; margin-bottom: 6px;">FORM – IA</h1>
+    <h2 style="text-align: center; color: black; font-size:18px; margin-top:0;">ENDORSEMENT FROM<br/>THE HEAD OF THE INSTITUTION</h2>
+    <p style="text-align: center; font-style: italic; margin-top: 4px;">(To be given on the letter head)</p>
+
+    <div style="margin-top: 18px;">
+      <p><strong>Project Title:</strong></p>
+      <p style="border: 1px solid #ccc; padding: 8px; min-height: 30px;">&nbsp;</p>
+              </div>
+
+    <div style="margin-top: 16px;">
+      <ol style="padding-left: 20px; color: black;">
+        <li style="margin-bottom: 8px;">
+          <strong>Certified that the Company/Institute intends to undertake above project with Dr/Sri/Smt</strong>
+          <span style="border-bottom: 1px solid #000; padding: 0 12px;">&nbsp;..........................................................&nbsp;</span>
+          <strong>as a Project Leader/Coordinator/Principal Investigator of the project.</strong>
+        </li>
+
+        <li style="margin-bottom: 8px;">
+          <strong>Certified that necessary infrastructure facilities shall be made available to Project Team.</strong>
+          <div style="margin-top:6px; margin-left: 4px;">
+            Accommodation, transport, manpower etc. will be provided at the project site to the research team for undertaking the field work.
+          </div>
+        </li>
+
+        <li style="margin-bottom: 8px;">
+          <strong>Certified that equipment proposed to be procured from the S&T Grant are not readily available in the Company/Institute for the purpose.</strong>
+        </li>
+
+        <li style="margin-bottom: 8px;">
+          <strong>The company/Institute assumes to undertake the financial and other management responsibilities of the project.</strong>
+        </li>
+      </ol>
+            </div>
+            
+    <div style="margin-top: 28px;">
+      <p style="margin-bottom: 40px;">
+        <strong>Name and signature of Head of the Company/Institution</strong><br/>
+        <span style="font-style: italic;">(With seal)</span>
+      </p>
+
+      <table style="width:100%; border-collapse: collapse; color: black;">
+        <tr>
+          <td style="width:50%; padding: 8px; vertical-align: top;">
+            <p style="margin:0;"><strong>Date:</strong></p>
+            <p style="border-bottom:1px solid #000; height:20px; margin-top:6px;">&nbsp;</p>
+          </td>
+          <td style="width:50%; padding: 8px; vertical-align: top;">
+            <p style="margin:0;"><strong>Place:</strong></p>
+            <p style="border-bottom:1px solid #000; height:20px; margin-top:6px;">&nbsp;</p>
+          </td>
+        </tr>
+      </table>
+                </div>
+                </div>
+`;
+
+const formIXContent = `
+  <div style="color: black; font-family: Arial, sans-serif; line-height:1.5; padding: 16px;">
+
+    <h1 style="text-align: center; color: black; margin-bottom: 6px;">FORM – IX</h1>
+
+    <h2 style="color: black; text-align: center; font-size:18px; margin-top:0;">
+      Details of Equipment other than Computer Hardware / Software already procured<br/>
+      under S&T Scheme of Ministry of Coal / R&D Fund of CIL in the past<br/>
+      (Related to the below-mentioned S&T Project)
+    </h2>
+
+    <div style="margin-top: 20px;">
+      <p><strong>Name of the Project:</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+      <p style="margin-top: 12px;"><strong>Project Code:</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+      <p style="margin-top: 12px;"><strong>Principal Implementing Agency(s):</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+      <p style="margin-top: 12px;"><strong>Sub Implementing Agency(s):</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+    </div>
+
+    <h2 style="color:black; margin-top:30px;">Equipment Details</h2>
+
+    <table border="1" style="width:100%; border-collapse: collapse; color:black; text-align:center; font-size:14px;">
+      <tr>
+        <th>Sl. No</th>
+        <th>Details of Equipment</th>
+        <th>No. of Sets</th>
+        <th>Make & Model</th>
+        <th>Year of Procurement</th>
+        <th>S&T/R&D Project Against Which Procured</th>
+        <th>Status of Equipment</th>
+        <th>Remarks</th>
+      </tr>
+
+      <tr>
+        <td style="height:32px;"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+
+      <tr>
+        <td style="height:32px;"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+
+      <tr>
+        <td style="height:32px;"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+    </table>
+
+    <h2 style="color:black; margin-top:30px;">Note:</h2>
+
+    <ul style="color:black; padding-left:20px;">
+      <li>
+        A list of all equipment procured for the last seven years from S&T/R&D Fund giving the status and its present utilisation.
+      </li>
+      <li>
+        The status should indicate whether the equipment is in working condition or under breakdown. If under breakdown, state whether it can be repaired and used in this research project.
+      </li>
+      <li>
+        Provide detailed justification for procurement of additional equipment when similar equipment had been procured earlier under other S&T/R&D funding.
+      </li>
+      <li>
+        This form should be signed by the Project Leader and Project Coordinator and incorporated in the project proposal.
+      </li>
+    </ul>
+
+  </div>
+`;
+  const formXIContent = `
+    <div style="color: black; font-family: Arial, sans-serif; line-height:1.5; padding: 16px;">
+
+      <h1 style="text-align: center; color: black; margin-bottom: 6px;">FORM – XI</h1>
+
+      <h2 style="color: black; text-align: center; font-size:18px; margin-top:0;">
+        DETAILS OF MANPOWER COST (SALARY AND WAGES)
+      </h2>
+
+      <div style="margin-top: 20px;">
+        <p><strong>Name of the Project:</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+        <p style="margin-top: 12px;"><strong>Project Code:</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+        <p style="margin-top: 12px;"><strong>Principal Implementing Agency(s):</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+        <p style="margin-top: 12px;"><strong>Sub Implementing Agency(s):</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+      </div>
+
+      <h2 style="color:black; margin-top:30px;">Manpower Cost Details</h2>
+
+      <table border="1" style="width:100%; border-collapse: collapse; color:black; text-align:center; font-size:14px;">
+        <tr>
+          <th>Sl. No.</th>
+          <th>Designation</th>
+          <th>No. of Persons</th>
+          <th>Total No. of Months Required / Person</th>
+          <th>Salary per Month (Rs.)</th>
+          <th>Total Salary (3 × 4 × 5) (Rs.)</th>
+          <th>1st Year (Rs.)</th>
+          <th>2nd Year (Rs.)</th>
+          <th>3rd Year (Rs.)</th>
+        </tr>
+
+        <tr>
+          <td style="height:32px;"></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+
+        <tr>
+          <td style="height:32px;"></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+
+        <tr>
+          <td style="height:32px;"></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      </table>
+
+      <h2 style="color:black; margin-top:30px;">Note:</h2>
+
+      <ul style="color:black; padding-left:20px;">
+        <li>
+          Engagement of personnel (Research Associate/Research Assistant/Research Fellow/JRF/SRF) shall be the responsibility of the Principal or Sub-implementing Agencies.  
+          Payment must follow the approved norms/guidelines of the respective institution.
+        </li>
+
+        <li>
+          Salaries of permanent employees of Principal Implementing / Sub-implementing Agencies are <strong>not admissible</strong>.
+        </li>
+
+        <li>
+          This form must be jointly signed by the <strong>Project Leader/Coordinator</strong> and the <strong>Associated Finance Officer</strong>  
+          of the implementing agency and incorporated in the project proposal.
+        </li>
+      </ul>
+
+    </div>
+  `;
+  const formXContent = `
+    <div style="color: black; font-family: Arial, sans-serif; line-height:1.5; padding: 16px;">
+
+      <h1 style="text-align: center; color: black; margin-bottom: 6px;">FORM – X</h1>
+
+      <h2 style="color: black; text-align: center; font-size:18px; margin-top:0;">
+        Details of Computers, Software and Accessories already procured<br/>
+        under S&T Scheme of Ministry of Coal / R&D Fund of CIL in the past<br/>
+        (Related to the below-mentioned S&T Project)
+      </h2>
+
+      <div style="margin-top: 20px;">
+        <p><strong>Name of the Project:</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+        <p style="margin-top: 12px;"><strong>Project Code:</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+        <p style="margin-top: 12px;"><strong>Principal Implementing Agency(s):</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+        <p style="margin-top: 12px;"><strong>Sub Implementing Agency(s):</strong></p>
+        <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+      </div>
+
+      <h2 style="color:black; margin-top:30px;">Computer / Software Details</h2>
+
+      <table border="1" style="width:100%; border-collapse: collapse; color:black; text-align:center; font-size:14px;">
+        <tr>
+          <th>Sl. No</th>
+          <th>Details of Computers / Software</th>
+          <th>No. of Sets</th>
+          <th>Make & Model</th>
+          <th>Year of Procurement</th>
+          <th>S&T/R&D Project Against Which Procured</th>
+          <th>Present Condition of Equipment / Instrument</th>
+          <th>Remarks</th>
+        </tr>
+
+        <tr>
+          <td style="height:32px;"></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+
+        <tr>
+          <td style="height:32px;"></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+
+        <tr>
+          <td style="height:32px;"></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      </table>
+
+      <h2 style="color:black; margin-top:30px;">Note:</h2>
+
+      <ul style="color:black; padding-left:20px;">
+        <li>
+          A list of all computer & accessories procured for the last three years from S&T/R&D Fund giving the status and their present utilisation.
+        </li>
+        <li>
+          The status should mention whether the equipment is in working condition or under breakdown.  
+          If under breakdown, specify whether it can be repaired & used in this research project.
+        </li>
+        <li>
+          Provide detailed justification for procurement of additional equipment when similar items were procured earlier under S&T/R&D funding.
+        </li>
+        <li>
+          This form should be signed by the Project Leader and Project Coordinator and incorporated in the project proposal.
+        </li>
+      </ul>
+
+    </div>
+  `;
+const formXIIContent = `
+  <div style="color: black; font-family: Arial, sans-serif; line-height:1.5; padding: 16px;">
+
+    <h1 style="text-align: center; color: black; margin-bottom: 6px;">FORM – XII</h1>
+
+    <h2 style="color: black; text-align: center; font-size:18px; margin-top:0;">
+      DETAILS OF TRAVEL EXPENDITURE (TA/DA)
+    </h2>
+
+    <div style="margin-top: 20px;">
+      <p><strong>Name of the Project:</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+      <p style="margin-top: 12px;"><strong>Project Code:</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+      <p style="margin-top: 12px;"><strong>Principal Implementing Agency(s):</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+
+      <p style="margin-top: 12px;"><strong>Sub Implementing Agency(s):</strong></p>
+      <p style="border:1px solid #ccc; padding:8px; min-height:30px;">&nbsp;</p>
+    </div>
+
+    <h2 style="color:black; margin-top:30px;">Travel Expenditure Details (TA/DA)</h2>
+
+    <table border="1" style="width:100%; border-collapse: collapse; color:black; text-align:center; font-size:14px;">
+      <tr>
+        <th>Sl. No</th>
+        <th>Designation</th>
+        <th>From (Place → Place)</th>
+        <th>Approx. Distance (Km)</th>
+        <th>Mode</th>
+        <th>Fare (Rs.)</th>
+        <th>No. of Trips</th>
+        <th>Total Travel Expenses (5 × 6) (Rs.)</th>
+        <th>No. of Days for DA</th>
+        <th>Rate of DA per Day (Rs.)</th>
+        <th>Total DA (8 × 9) (Rs.)</th>
+        <th>Total TA + DA (7 + 10) (Rs.)</th>
+      </tr>
+
+      <tr>
+        <td style="height:32px;"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+
+      <tr>
+        <td style="height:32px;"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+
+      <tr>
+        <td style="height:32px;"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+    </table>
+
+    <h2 style="color:black; margin-top:30px;">NB:</h2>
+
+    <ul style="color:black; padding-left:20px;">
+      <li>
+        This form must be jointly signed by the <strong>Project Leader/Coordinator</strong>  
+        and the <strong>Associated Finance Officer</strong> of the Principal Implementing Agency(s) / Sub-implementing Agency(s),  
+        and incorporated in the project proposal.
+      </li>
+    </ul>
+
+  </div>
+`;
+const TAB_DEFINITIONS = [
+  {
+    id: 'main',
+    label: 'Proposal Body',
+    description: 'Compose the primary content of the proposal',
+    type: 'editor',
+  },
+  {
+    id: 'form-ia',
+    label: 'Form IA',
+    description: 'ENDORSEMENT FROM THE HEAD OF THE INSTITUTION',
+    type: 'editor',
+    template: formIAContent,
+  },
+  {
+    id: 'form-ix',
+    label: 'Form IX',
+    description: 'Details of equipment procured earlier under S&T/R&D funding (Form IX)',
+    type: 'editor',
+    template: formIXContent,
+  },
+  {
+    id: 'form-x',
+    label: 'Form X',
+    description: 'Details of computers/software procured earlier under S&T/R&D funding (Form X)',
+    type: 'editor',
+    template: formXContent,
+  },
+  {
+    id: 'form-xi',
+    label: 'Form XI',
+    description: 'Details of manpower cost (Form XI)',
+    type: 'editor',
+    template: formXIContent,
+  },
+  {
+    id: 'form-xii',
+    label: 'Form XII',
+    description: 'Details of travel expenditure (Form XII)',
+    type: 'editor',
+    template: formXIIContent,
+  },
+];
+
+const formIATab = TAB_DEFINITIONS.find((tab) => tab.id === 'form-ia');
+
+const AdvancedProposalEditor = ({ 
+  initialContent = '', 
+  onContentChange = () => {}, 
   onWordCountChange = () => {},
   onCharacterCountChange = () => {},
   proposalTitle = 'Research Proposal',
@@ -32,9 +515,17 @@ const AdvancedProposalEditor = ({
 }) => {
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
+  const [formWordCount, setFormWordCount] = useState(0);
+  const [formCharacterCount, setFormCharacterCount] = useState(0);
+  const [activeTab, setActiveTab] = useState(TAB_DEFINITIONS[0].id);
+  const [tabContent, setTabContent] = useState(() =>
+    TAB_DEFINITIONS.reduce((acc, tab) => {
+      if (tab.type === 'textarea') acc[tab.id] = '';
+      return acc;
+    }, {})
+  );
 
-  const editor = useEditor({
-    extensions: [
+  const editorExtensions = useMemo(() => [
       StarterKit.configure({
         history: {
           depth: 100,
@@ -99,7 +590,10 @@ const AdvancedProposalEditor = ({
       }),
       CharacterCount,
       HardBreak,
-    ],
+  ], []);
+
+  const editor = useEditor({
+    extensions: editorExtensions,
     content: initialContent || `
       <h1 style="color: black; text-align: center;">
     PROJECT PROPOSAL FOR S&T GRANT OF MoC
@@ -128,7 +622,7 @@ const AdvancedProposalEditor = ({
     <li>Objective 1</li>
     <li>Objective 2</li>
     <li>Objective 3</li>
-  </ul>
+      </ul>
 
   <h2 style="color: black;">8. Justification for Subject Area (Max. 200 words)</h2>
   <p style="color: black;">Provide justification here.</p>
@@ -236,6 +730,85 @@ const AdvancedProposalEditor = ({
     },
   });
 
+  const formEditor = useEditor({
+    extensions: editorExtensions,
+    content: formIATab?.template || '',
+    immediatelyRender: true,
+    onUpdate: ({ editor }) => {
+      if (editor.storage.characterCount) {
+        const words = editor.storage.characterCount.words();
+        const characters = editor.storage.characterCount.characters();
+        setFormWordCount(words);
+        setFormCharacterCount(characters);
+      }
+    },
+  });
+
+  const formIXEditor = useEditor({
+    extensions: editorExtensions,
+    content: formIXContent || '',
+    immediatelyRender: true,
+    onUpdate: ({ editor }) => {
+      if (editor.storage.characterCount) {
+        const words = editor.storage.characterCount.words();
+        const characters = editor.storage.characterCount.characters();
+        setFormWordCount(words);
+        setFormCharacterCount(characters);
+      }
+    },
+  });
+
+  const formXEditor = useEditor({
+    extensions: editorExtensions,
+    content: formXContent || '',
+    immediatelyRender: true,
+    onUpdate: ({ editor }) => {
+      if (editor.storage.characterCount) {
+        const words = editor.storage.characterCount.words();
+        const characters = editor.storage.characterCount.characters();
+        setFormWordCount(words);
+        setFormCharacterCount(characters);
+      }
+    },
+  });
+
+  const formXIEditor = useEditor({
+    extensions: editorExtensions,
+    content: formXIContent || '',
+    immediatelyRender: true,
+    onUpdate: ({ editor }) => {
+      if (editor.storage.characterCount) {
+        const words = editor.storage.characterCount.words();
+        const characters = editor.storage.characterCount.characters();
+        setFormWordCount(words);
+        setFormCharacterCount(characters);
+      }
+    },
+  });
+
+  const formXIIEditor = useEditor({
+    extensions: editorExtensions,
+    content: formXIIContent || '',
+    immediatelyRender: true,
+    onUpdate: ({ editor }) => {
+      if (editor.storage.characterCount) {
+        const words = editor.storage.characterCount.words();
+        const characters = editor.storage.characterCount.characters();
+        setFormWordCount(words);
+        setFormCharacterCount(characters);
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (formEditor && formEditor.storage && formEditor.storage.characterCount) {
+      const words = formEditor.storage.characterCount.words();
+      const characters = formEditor.storage.characterCount.characters();
+      setFormWordCount(words);
+      setFormCharacterCount(characters);
+    }
+  }, [formEditor]);
+
   useEffect(() => {
     if (editor && editor.storage.characterCount) {
       const words = editor.storage.characterCount.words();
@@ -247,24 +820,43 @@ const AdvancedProposalEditor = ({
     }
   }, [editor, onWordCountChange, onCharacterCountChange]);
 
+  const handleSecondaryTabChange = (tabId, value) => {
+    setTabContent((prev) => ({ ...prev, [tabId]: value }));
+  };
+
+  const getActiveRichEditor = () => {
+    if (activeTab === 'form-ia') return formEditor;
+    if (activeTab === 'form-ix') return formIXEditor;
+    if (activeTab === 'form-x') return formXEditor;
+    if (activeTab === 'form-xi') return formXIEditor;
+    if (activeTab === 'form-xii') return formXIIEditor;
+    return editor;
+  };
+  const toolbarEditor = getActiveRichEditor();
+
   const insertTable = () => {
-    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    const targetEditor = getActiveRichEditor();
+    targetEditor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   };
 
   const addTableRow = () => {
-    editor?.chain().focus().addRowAfter().run();
+    const targetEditor = getActiveRichEditor();
+    targetEditor?.chain().focus().addRowAfter().run();
   };
 
   const deleteTableRow = () => {
-    editor?.chain().focus().deleteRow().run();
+    const targetEditor = getActiveRichEditor();
+    targetEditor?.chain().focus().deleteRow().run();
   };
 
   const addTableColumn = () => {
-    editor?.chain().focus().addColumnAfter().run();
+    const targetEditor = getActiveRichEditor();
+    targetEditor?.chain().focus().addColumnAfter().run();
   };
 
   const deleteTableColumn = () => {
-    editor?.chain().focus().deleteColumn().run();
+    const targetEditor = getActiveRichEditor();
+    targetEditor?.chain().focus().deleteColumn().run();
   };
 
   const insertImage = () => {
@@ -276,7 +868,8 @@ const AdvancedProposalEditor = ({
       if (file) {
         const reader = new FileReader();
         reader.onload = (event) => {
-          editor?.chain().focus().setImage({ src: event.target?.result }).run();
+          const targetEditor = getActiveRichEditor();
+          targetEditor?.chain().focus().setImage({ src: event.target?.result }).run();
         };
         reader.readAsDataURL(file);
       }
@@ -287,12 +880,14 @@ const AdvancedProposalEditor = ({
   const insertLink = () => {
     const url = window.prompt('Enter the URL:');
     if (url) {
-      editor?.chain().focus().setLink({ href: url }).run();
+      const targetEditor = getActiveRichEditor();
+      targetEditor?.chain().focus().setLink({ href: url }).run();
     }
   };
 
   const exportAsPDF = () => {
-    const content = editor?.getHTML();
+    const targetEditor = getActiveRichEditor();
+    const content = targetEditor?.getHTML();
     if (!content) return;
 
     const tempDiv = document.createElement('div');
@@ -335,12 +930,13 @@ const AdvancedProposalEditor = ({
   };
 
   const exportAsWord = async () => {
-    const content = editor?.getHTML();
+    const targetEditor = getActiveRichEditor();
+    const content = targetEditor?.getHTML();
     if (!content) return;
 
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
-
+    
     const elements = [];
     const children = tempDiv.children;
 
@@ -378,27 +974,27 @@ const AdvancedProposalEditor = ({
               children: [new TextRun(`• ${item.innerText || item.textContent}`)],
             })
           )
-        );
+          );
       }
     }
 
     const doc = new Document({
       sections: [
         {
-          properties: {},
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: proposalTitle,
-                  bold: true,
-                  size: 32,
-                }),
-              ],
-            }),
+        properties: {},
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: proposalTitle,
+                bold: true,
+                size: 32,
+              }),
+            ],
+          }),
             new Paragraph({ text: "" }),
-            ...elements,
-          ],
+          ...elements,
+        ],
         },
       ],
     });
@@ -438,15 +1034,15 @@ const AdvancedProposalEditor = ({
           </div>
           Advanced Proposal Editor
         </h2>
-
+      
         <div className="bg-orange-100 rounded-lg border border-orange-200 mb-4 overflow-hidden">
           <div className="p-2 border-b border-orange-200">
             <div className="flex flex-wrap gap-1 items-center">
               <div className="flex gap-1 items-center border-r border-orange-300 pr-3 mr-3">
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().undo().run()}
-                  disabled={!editor?.can().undo()}
+                  onClick={() => toolbarEditor?.chain().focus().undo().run()}
+                  disabled={!toolbarEditor?.can().undo()}
                   className="px-3 py-2 rounded-lg text-sm bg-white text-black hover:bg-orange-100 border border-orange-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Undo (Ctrl+Z)"
                 >
@@ -461,8 +1057,8 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().redo().run()}
-                  disabled={!editor?.can().redo()}
+                  onClick={() => toolbarEditor?.chain().focus().redo().run()}
+                  disabled={!toolbarEditor?.can().redo()}
                   className="px-3 py-2 rounded-lg text-sm bg-white text-black hover:bg-orange-100 border border-orange-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Redo (Ctrl+Y)"
                 >
@@ -480,10 +1076,10 @@ const AdvancedProposalEditor = ({
               <div className="flex gap-1 items-center border-r border-orange-300 pr-3 mr-3">
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleBold().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleBold().run()}
                   className={`px-3 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
-                    editor?.isActive('bold')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('bold')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Bold (Ctrl+B)"
@@ -492,10 +1088,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleItalic().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleItalic().run()}
                   className={`px-3 py-2 rounded-lg text-sm italic transition-all duration-200 ${
-                    editor?.isActive('italic')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('italic')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Italic (Ctrl+I)"
@@ -504,10 +1100,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleUnderline().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleUnderline().run()}
                   className={`px-3 py-2 rounded-lg text-sm underline transition-all duration-200 ${
-                    editor?.isActive('underline')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('underline')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Underline (Ctrl+U)"
@@ -516,10 +1112,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleStrike().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleStrike().run()}
                   className={`px-3 py-2 rounded-lg text-sm line-through transition-all duration-200 ${
-                    editor?.isActive('strike')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('strike')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Strikethrough"
@@ -531,10 +1127,10 @@ const AdvancedProposalEditor = ({
               <div className="flex gap-1 items-center border-r border-orange-300 pr-3 mr-3">
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleSuperscript().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleSuperscript().run()}
                   className={`px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive('superscript')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('superscript')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Superscript"
@@ -543,10 +1139,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleSubscript().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleSubscript().run()}
                   className={`px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive('subscript')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('subscript')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Subscript"
@@ -558,10 +1154,10 @@ const AdvancedProposalEditor = ({
               <div className="flex gap-1 items-center border-r border-orange-300 pr-3 mr-3">
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleHeading({ level: 1 }).run()}
                   className={`px-3 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
-                    editor?.isActive('heading', { level: 1 })
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('heading', { level: 1 })
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Heading 1"
@@ -570,10 +1166,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleHeading({ level: 2 }).run()}
                   className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    editor?.isActive('heading', { level: 2 })
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('heading', { level: 2 })
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Heading 2"
@@ -582,10 +1178,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleHeading({ level: 3 }).run()}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    editor?.isActive('heading', { level: 3 })
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('heading', { level: 3 })
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Heading 3"
@@ -597,10 +1193,10 @@ const AdvancedProposalEditor = ({
               <div className="flex gap-1 items-center border-r border-orange-300 pr-3 mr-3">
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleBulletList().run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive('bulletList')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('bulletList')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Bullet List"
@@ -611,10 +1207,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleOrderedList().run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive('orderedList')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('orderedList')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Numbered List"
@@ -628,10 +1224,10 @@ const AdvancedProposalEditor = ({
               <div className="flex gap-1 items-center border-r border-orange-300 pr-3 mr-3">
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().setTextAlign('left').run()}
+                  onClick={() => toolbarEditor?.chain().focus().setTextAlign('left').run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive({ textAlign: 'left' })
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive({ textAlign: 'left' })
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Align Left"
@@ -642,10 +1238,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().setTextAlign('center').run()}
+                  onClick={() => toolbarEditor?.chain().focus().setTextAlign('center').run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive({ textAlign: 'center' })
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive({ textAlign: 'center' })
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Align Center"
@@ -656,10 +1252,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().setTextAlign('right').run()}
+                  onClick={() => toolbarEditor?.chain().focus().setTextAlign('right').run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive({ textAlign: 'right' })
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive({ textAlign: 'right' })
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Align Right"
@@ -670,10 +1266,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().setTextAlign('justify').run()}
+                  onClick={() => toolbarEditor?.chain().focus().setTextAlign('justify').run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive({ textAlign: 'justify' })
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive({ textAlign: 'justify' })
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Justify"
@@ -687,10 +1283,10 @@ const AdvancedProposalEditor = ({
               <div className="flex gap-1 items-center">
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleBlockquote().run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive('blockquote')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('blockquote')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Quote"
@@ -701,10 +1297,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleCodeBlock().run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive('codeBlock')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('codeBlock')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Code Block"
@@ -720,10 +1316,10 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().toggleCode().run()}
+                  onClick={() => toolbarEditor?.chain().focus().toggleCode().run()}
                   className={`p-2 rounded-lg text-sm transition-all duration-200 ${
-                    editor?.isActive('code')
-                      ? 'bg-orange-600 text-white shadow-md'
+                    toolbarEditor?.isActive('code')
+                      ? 'bg-orange-600 text-white shadow-md' 
                       : 'bg-white text-black hover:bg-orange-100 border border-orange-200'
                   }`}
                   title="Inline Code"
@@ -739,7 +1335,7 @@ const AdvancedProposalEditor = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => editor?.chain().focus().setHardBreak().run()}
+                  onClick={() => toolbarEditor?.chain().focus().setHardBreak().run()}
                   className="p-2 rounded-lg text-sm bg-white text-black hover:bg-orange-100 border border-orange-200 transition-all duration-200"
                   title="Line Break"
                 >
@@ -894,16 +1490,77 @@ const AdvancedProposalEditor = ({
             </div>
           </div>
         </div>
-
+        
         <div className="prose max-w-none">
-          <div className="border border-gray-200 rounded-xl min-h-[600px] p-8 bg-white shadow-inner">
-            <EditorContent
-              editor={editor}
-              className="focus:outline-none min-h-[550px] text-black leading-relaxed"
-            />
+          <div className="border border-gray-200 rounded-xl min-h-[600px] p-4 bg-white shadow-inner">
+            {/* Tab Bar */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {TAB_DEFINITIONS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-3 py-2 rounded-md text-sm font-semibold transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? 'bg-orange-600 text-white shadow'
+                      : 'bg-white text-black border border-gray-200 hover:bg-orange-50'
+                  }`}
+                  title={tab.description}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="rounded-xl p-4 bg-white border border-gray-100 min-h-[420px]">
+              {(() => {
+                const currentTab = TAB_DEFINITIONS.find((tab) => tab.id === activeTab);
+                if (!currentTab) return null;
+
+                if (currentTab.type === 'editor') {
+                  const activeEditorInstance = getActiveRichEditor();
+                  return (
+                    <EditorContent
+                      editor={activeEditorInstance}
+                      className="focus:outline-none min-h-[380px] text-black leading-relaxed"
+                    />
+                  );
+                }
+
+                if (currentTab.type === 'static') {
+                  return (
+                    <div
+                      className="min-h-[360px] border border-gray-200 rounded-md"
+                      style={{ overflowY: 'auto' }}
+                      dangerouslySetInnerHTML={{ __html: currentTab.template }}
+                    />
+                  );
+                }
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-semibold text-black">{currentTab.label}</p>
+                        <p className="text-xs text-gray-500">{currentTab.description}</p>
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {tabContent[activeTab]?.length || 0} chars
+                      </span>
+                    </div>
+                    <textarea
+                      value={tabContent[activeTab]}
+                      onChange={(e) => handleSecondaryTabChange(activeTab, e.target.value)}
+                      placeholder={currentTab.placeholder}
+                      className="w-full min-h-[360px] p-3 border border-gray-200 rounded-md text-sm text-black focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    />
+                  </>
+                );
+              })()}
+            </div>
           </div>
         </div>
-
+        
         {showStats && (
           <div className="mt-8 space-y-6">
             <div className="pt-4 border-t border-orange-200">
@@ -934,7 +1591,7 @@ const AdvancedProposalEditor = ({
                 </div>
               </div>
             </div>
-
+            
             <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
               <h4 className="font-semibold text-black mb-2 flex items-center text-sm">
                 <svg className="w-4 h-4 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

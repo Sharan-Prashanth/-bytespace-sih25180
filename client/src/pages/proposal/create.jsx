@@ -138,10 +138,44 @@ function CreateProposalContent() {
     cv: '',
   });
 
+  // Form upload state
+  const [formFiles, setFormFiles] = useState({
+    form1: null,
+    form2: null,
+    form3: null,
+    form4: null,
+    form5: null,
+  });
+
+  const [formIsUploading, setFormIsUploading] = useState({
+    form1: false,
+    form2: false,
+    form3: false,
+    form4: false,
+    form5: false,
+  });
+
+  const [formUploadSuccess, setFormUploadSuccess] = useState({
+    form1: false,
+    form2: false,
+    form3: false,
+    form4: false,
+    form5: false,
+  });
+
+  const [formError, setFormError] = useState({
+    form1: '',
+    form2: '',
+    form3: '',
+    form4: '',
+    form5: '',
+  });
+
   const FILE_LIMITS = {
     coveringLetter: 2 * 1024 * 1024, // 2 MB
     proposal: 20 * 1024 * 1024, // 20 MB
     cv: 10 * 1024 * 1024, // 10 MB
+    forms: 10 * 1024 * 1024, // 10 MB for forms
   };
 
   const validateFile = (field, file) => {
@@ -225,6 +259,43 @@ function CreateProposalContent() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Form file handlers
+  const handleFormFileSelect = (formKey, e) => {
+    const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    setFormFiles(prev => ({ ...prev, [formKey]: file }));
+    setFormError(prev => ({ ...prev, [formKey]: '' }));
+    setFormUploadSuccess(prev => ({ ...prev, [formKey]: false }));
+  };
+
+  const uploadFormFile = async (formKey) => {
+    const file = formFiles[formKey];
+    if (!file) {
+      setFormError(prev => ({ ...prev, [formKey]: 'Please select a file first' }));
+      return;
+    }
+
+    const name = file.name || '';
+    const lower = name.toLowerCase();
+    if (!lower.endsWith('.pdf') && !lower.endsWith('.docx') && !lower.endsWith('.doc')) {
+      setFormError(prev => ({ ...prev, [formKey]: 'Only PDF, DOC, or DOCX files are allowed' }));
+      return;
+    }
+
+    if (file.size > FILE_LIMITS.forms) {
+      setFormError(prev => ({ ...prev, [formKey]: `File exceeds maximum size of ${Math.round(FILE_LIMITS.forms / 1024 / 1024)} MB` }));
+      return;
+    }
+
+    setFormIsUploading(prev => ({ ...prev, [formKey]: true }));
+    setFormError(prev => ({ ...prev, [formKey]: '' }));
+
+    // Simulate upload
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    setFormIsUploading(prev => ({ ...prev, [formKey]: false }));
+    setFormUploadSuccess(prev => ({ ...prev, [formKey]: true }));
   };
 
   // Form Input Handlers
@@ -491,7 +562,7 @@ function CreateProposalContent() {
                 <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">1</span>
                 Covering Letter Upload
               </h4>
-              <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+              <p className="text-xs text-black mb-4 leading-relaxed">
                 Select covering letter to Upload (Covering Letter in PDF format with size less than 2 MB)
               </p>
               
@@ -565,7 +636,7 @@ function CreateProposalContent() {
                 <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">2</span>
                 Proposal Document Upload
               </h4>
-              <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+              <p className="text-xs text-black mb-4 leading-relaxed">
                 Select proposal to Upload (Proposal in PDF format with size less than 20 MB)
               </p>
               
@@ -639,7 +710,7 @@ function CreateProposalContent() {
                 <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">3</span>
                 CV Upload
               </h4>
-              <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+              <p className="text-xs text-black mb-4 leading-relaxed">
                 Select CV to Upload (CV in PDF format with size less than 10 MB)
               </p>
               
@@ -702,6 +773,406 @@ function CreateProposalContent() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     Uploaded successfully
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Required Forms Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200">
+          <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
+            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            Required Forms
+          </h2>
+          <p className="text-sm text-gray-600 mb-6">Download the required forms, fill them out, and upload the completed forms below.</p>
+
+          {/* Forms Grid - Single Row */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {/* Form 1 - FORM-IA_NEW */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-base font-bold text-black">Form 1</h4>
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">1</span>
+              </div>
+              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
+                Endorsement from Head of the Institution / Organisation
+              </p>
+              
+              {/* Download Buttons */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-IA_NEW.pdf')}
+                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
+                  title="Download PDF"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-IA_NEW.docx')}
+                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
+                  title="Download DOCX"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  DOCX
+                </button>
+              </div>
+
+              {/* Upload Section */}
+              <div className="mb-2">
+                <input
+                  id="form1Upload"
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e) => handleFormFileSelect('form1', e)}
+                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+
+              {formFiles.form1 && (
+                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {formFiles.form1.name}
+                </div>
+              )}
+
+              {formError.form1 && (
+                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
+                  {formError.form1}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => uploadFormFile('form1')}
+                disabled={formIsUploading.form1 || !formFiles.form1}
+                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
+              >
+                {formIsUploading.form1 ? 'Uploading...' : 'Upload'}
+              </button>
+
+              {formUploadSuccess.form1 && (
+                <div className="p-1.5 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Form 2 - FORM-IX_NEW */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-base font-bold text-black">Form 2</h4>
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">2</span>
+              </div>
+              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
+                List of Equipment Procured in the Past
+              </p>
+              
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-IX_NEW.pdf')}
+                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-IX_NEW.docx')}
+                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  DOCX
+                </button>
+              </div>
+
+              <div className="mb-2">
+                <input
+                  id="form2Upload"
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e) => handleFormFileSelect('form2', e)}
+                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+
+              {formFiles.form2 && (
+                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {formFiles.form2.name}
+                </div>
+              )}
+
+              {formError.form2 && (
+                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
+                  {formError.form2}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => uploadFormFile('form2')}
+                disabled={formIsUploading.form2 || !formFiles.form2}
+                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
+              >
+                {formIsUploading.form2 ? 'Uploading...' : 'Upload'}
+              </button>
+
+              {formUploadSuccess.form2 && (
+                <div className="p-1.5 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Form 3 - FORM-X_NEW */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-base font-bold text-black">Form 3</h4>
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">3</span>
+              </div>
+              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
+                List of Computer and Accessories Procured in the Past
+              </p>
+              
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-X_NEW.pdf')}
+                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-X_NEW.docx')}
+                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  DOCX
+                </button>
+              </div>
+
+              <div className="mb-2">
+                <input
+                  id="form3Upload"
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e) => handleFormFileSelect('form3', e)}
+                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+
+              {formFiles.form3 && (
+                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {formFiles.form3.name}
+                </div>
+              )}
+
+              {formError.form3 && (
+                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
+                  {formError.form3}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => uploadFormFile('form3')}
+                disabled={formIsUploading.form3 || !formFiles.form3}
+                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
+              >
+                {formIsUploading.form3 ? 'Uploading...' : 'Upload'}
+              </button>
+
+              {formUploadSuccess.form3 && (
+                <div className="p-1.5 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Form 4 - FORM-XI_NEW */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-base font-bold text-black">Form 4</h4>
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">4</span>
+              </div>
+              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
+                Justification of Salary & Wages
+              </p>
+              
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-XI_NEW.pdf')}
+                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-XI_NEW.docx')}
+                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  DOCX
+                </button>
+              </div>
+
+              <div className="mb-2">
+                <input
+                  id="form4Upload"
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e) => handleFormFileSelect('form4', e)}
+                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+
+              {formFiles.form4 && (
+                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {formFiles.form4.name}
+                </div>
+              )}
+
+              {formError.form4 && (
+                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
+                  {formError.form4}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => uploadFormFile('form4')}
+                disabled={formIsUploading.form4 || !formFiles.form4}
+                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
+              >
+                {formIsUploading.form4 ? 'Uploading...' : 'Upload'}
+              </button>
+
+              {formUploadSuccess.form4 && (
+                <div className="p-1.5 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Form 5 - FORM-XII_NEW */}
+            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-base font-bold text-black">Form 5</h4>
+                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">5</span>
+              </div>
+              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
+                Justification for TA-DA
+              </p>
+              
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-XII_NEW.pdf')}
+                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('FORM-XII_NEW.docx')}
+                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  DOCX
+                </button>
+              </div>
+
+              <div className="mb-2">
+                <input
+                  id="form5Upload"
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e) => handleFormFileSelect('form5', e)}
+                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+
+              {formFiles.form5 && (
+                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
+                  <strong>Selected:</strong> {formFiles.form5.name}
+                </div>
+              )}
+
+              {formError.form5 && (
+                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
+                  {formError.form5}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => uploadFormFile('form5')}
+                disabled={formIsUploading.form5 || !formFiles.form5}
+                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
+              >
+                {formIsUploading.form5 ? 'Uploading...' : 'Upload'}
+              </button>
+
+              {formUploadSuccess.form5 && (
+                <div className="p-1.5 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center text-xs text-green-700">
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Uploaded
                   </div>
                 </div>
               )}
