@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from RAG import novelty
-from Cost_validation import cost_estimator
+from Common.Cost_validation import cost_estimator
 from RAG import plag
 from RAG import rag_chat_guidlines
 from RAG import rag_chat_specialist
@@ -11,7 +11,7 @@ from RAG import timeline
 from Json_extraction import extractor
 import uvicorn
 from data_files import file_storage
-from RAG import ai_detector_pipeline
+from ai_validator import ai_detector_pipeline
 from RAG import report_gen
 app = FastAPI()
 
