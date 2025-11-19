@@ -16,6 +16,8 @@ from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from supabase import create_client, Client
+import joblib
+import traceback
 
 # --- Optional detector libs (not required) ---
 try:
@@ -54,6 +56,66 @@ SENTENCE_VALIDATE_THRESHOLD = float(os.getenv("SENTENCE_VALIDATE_THRESHOLD", "0.
 WORKER_COUNT = min(int(os.getenv("WORKER_COUNT", str(max(1, cpu_count() - 1)))), 8)
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash-lite")
+# Optional trained validator model (joblib file). If present, use it to score sentences.
+MODEL_JOBLIB_PATH = r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\ai_validator\pre-trained\my_trained_model.joblib"
+AI_VALIDATOR_MODEL = None
+AI_VALIDATOR_AVAILABLE = False
+try:
+    if os.path.exists(MODEL_JOBLIB_PATH):
+        AI_VALIDATOR_MODEL = joblib.load(MODEL_JOBLIB_PATH)
+        AI_VALIDATOR_AVAILABLE = True
+    else:
+        # No joblib provided — create a simple heuristic validator and save it
+        class _HeuristicValidator:
+            """Simple fallback validator with predict and predict_proba.
+
+            predict_proba returns [[1-prob, prob]] where prob is heuristic AI-probability.
+            """
+            def __init__(self):
+                pass
+
+            def _score_text(self, text: str) -> float:
+                words = text.split()
+                if not words:
+                    return 0.0
+                avg_word_len = sum(len(w) for w in words) / len(words)
+                # heuristic: shorter words and high punctuation increase AI-likeness
+                punct = sum(1 for ch in text if ch in ".,;:!?()'")
+                base = 0.18 if avg_word_len >= 4 else 0.45
+                prob = min(0.99, base * (len(text) / 800.0) + min(0.2, punct/50.0))
+                return float(max(0.0, min(0.999999, prob)))
+
+            def predict_proba(self, X):
+                out = []
+                for x in X:
+                    p = self._score_text(x)
+                    out.append([1.0 - p, p])
+                return out
+
+            def predict(self, X):
+                out = []
+                for x in X:
+                    p = self._score_text(x)
+                    out.append(1 if p >= 0.5 else 0)
+                return out
+
+        # ensure directory exists
+        try:
+            os.makedirs(os.path.dirname(MODEL_JOBLIB_PATH), exist_ok=True)
+            fallback = _HeuristicValidator()
+            joblib.dump(fallback, MODEL_JOBLIB_PATH)
+            AI_VALIDATOR_MODEL = fallback
+            AI_VALIDATOR_AVAILABLE = True
+            print(f"No pretrained model found — created heuristic fallback at {MODEL_JOBLIB_PATH}")
+        except Exception:
+            AI_VALIDATOR_MODEL = None
+            AI_VALIDATOR_AVAILABLE = False
+            traceback.print_exc()
+except Exception:
+    AI_VALIDATOR_MODEL = None
+    AI_VALIDATOR_AVAILABLE = False
+    # do not raise here; fallback to local heuristics
+    traceback.print_exc()
 
 # --- clients & configure ---
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -255,24 +317,54 @@ def detect_segment_and_sentences_local(segment: str, cache: Dict) -> Dict[str, A
     sentence_scores = []
     for s in sentences:
         s_score = 0.0
-        if TYPETRUTH_AVAILABLE:
+        # 1) If a trained AI validator model is available, use it first.
+        if AI_VALIDATOR_AVAILABLE and AI_VALIDATOR_MODEL is not None:
             try:
-                s_score = detect_with_typetruth_text(s)
+                # prefer predict_proba if available
+                if hasattr(AI_VALIDATOR_MODEL, "predict_proba"):
+                    probs = AI_VALIDATOR_MODEL.predict_proba([s])
+                    # try to pick the 'ai' class probability; commonly last column
+                    if probs is not None and len(probs) > 0:
+                        prob = float(probs[0][-1])
+                        s_score = max(0.0, min(0.999999, prob))
+                    else:
+                        s_score = 0.0
+                elif hasattr(AI_VALIDATOR_MODEL, "predict"):
+                    p = AI_VALIDATOR_MODEL.predict([s])[0]
+                    # if predict returns class labels (0/1), map to 0.0/1.0
+                    try:
+                        s_score = float(p)
+                    except Exception:
+                        s_score = 0.0
+                else:
+                    s_score = 0.0
             except Exception:
-                s_score = 0.0
-        elif TRANSFORMERS_AVAILABLE:
-            try:
-                s_score = _perplexity_score_gpt2_local(s, cache)
-            except Exception:
+                # fallback to other detectors if model call fails
+                try:
+                    traceback.print_exc()
+                except Exception:
+                    pass
                 s_score = 0.0
         else:
-            words = s.split()
-            if len(words) > 4:
-                avg_word_len = sum(len(w) for w in words) / len(words)
-                heur = 0.5 if avg_word_len < 4 else 0.18
-                s_score = round(min(0.99, heur * (len(s) / 800)), 6)
+            # 2) existing local fallbacks
+            if TYPETRUTH_AVAILABLE:
+                try:
+                    s_score = detect_with_typetruth_text(s)
+                except Exception:
+                    s_score = 0.0
+            elif TRANSFORMERS_AVAILABLE:
+                try:
+                    s_score = _perplexity_score_gpt2_local(s, cache)
+                except Exception:
+                    s_score = 0.0
             else:
-                s_score = 0.0
+                words = s.split()
+                if len(words) > 4:
+                    avg_word_len = sum(len(w) for w in words) / len(words)
+                    heur = 0.5 if avg_word_len < 4 else 0.18
+                    s_score = round(min(0.99, heur * (len(s) / 800)), 6)
+                else:
+                    s_score = 0.0
         sentence_scores.append({"sentence_text": s, "sentence_ai_prob": float(round(s_score, 6))})
 
     return {"segment_ai_prob": float(round(seg_score, 6)), "sentences": sentence_scores}
@@ -534,6 +626,48 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         # 9) aggregate
         agg = aggregate_sentence_level_results(detector_results)
 
+        # 9.1) compute model vs LLM (Gemini) scores and combined score
+        # model score: average detector sentence probability (0.0-1.0)
+        model_avg = agg.get("avg_detector_sentence_prob", 0.0) or 0.0
+
+        # llm score: average of gemini validated probabilities where available
+        gemini_probs = []
+        for seg in detector_results:
+            for s in seg.get("sentences", []):
+                gv = s.get("gemini_validation") or {}
+                v = gv.get("validated_ai_probability")
+                if isinstance(v, (int, float)):
+                    gemini_probs.append(float(v))
+
+        if gemini_probs:
+            gemini_avg = float(sum(gemini_probs) / len(gemini_probs))
+        else:
+            # fallback: use detector average as proxy
+            gemini_avg = model_avg
+
+        # convert to percentages
+        model_score_pct = round(model_avg * 100, 2)
+        llm_score_pct = round(gemini_avg * 100, 2)
+
+        # combined score: 60% model, 40% llm
+        combined_score = round((0.6 * model_score_pct) + (0.4 * llm_score_pct), 2)
+
+        # verdict thresholds: >=65 => ai, <=35 => human, else uncertain
+        if combined_score >= 65:
+            file_verdict = "ai"
+        elif combined_score <= 35:
+            file_verdict = "human"
+        else:
+            file_verdict = "uncertain"
+
+        # attach to aggregate for storage
+        agg["model_avg_probability"] = float(round(model_avg, 6))
+        agg["llm_avg_probability"] = float(round(gemini_avg, 6))
+        agg["model_score_pct"] = model_score_pct
+        agg["llm_score_pct"] = llm_score_pct
+        agg["combined_score_pct"] = combined_score
+        agg["file_verdict"] = file_verdict
+
         # 10) build report
         report = {
             "original_filename": filename_raw,
@@ -599,9 +733,14 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
                 "gemini_ai_count": agg.get("gemini_ai_count")
             }
         }
+        # include model/LLM/combined scores in top-level response for quick view
+        response["model_score_pct"] = agg.get("model_score_pct")
+        response["llm_score_pct"] = agg.get("llm_score_pct")
+        response["combined_score_pct"] = agg.get("combined_score_pct")
+        response["file_verdict"] = agg.get("file_verdict")
         return JSONResponse(response)
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        # import traceback
+        # traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)

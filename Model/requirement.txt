@@ -4,12 +4,6 @@ langchain-community
 langchain-google-genai
 faiss-cpu
 sentence-transformers
-python-dotenv
-langchain
-langchain-community
-langchain-google-genai
-faiss-cpu
-sentence-transformers
 torch
 transformers
 chardet
@@ -28,3 +22,10 @@ reportlab
 pillow 
 requests
 docx2pdf
+pandas
+numpy
+scikit-learn
+lightgbm
+joblib
+tqdm
+openpyxl
