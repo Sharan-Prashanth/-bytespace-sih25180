@@ -1,10 +1,9 @@
-import { ethers } from "hardhat";
-import fs from "fs";
+const { ethers } = require("hardhat");
+const fs = require("fs");
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-
-  console.log("Deploying contract from:", deployer.address);
+  console.log("Deploying contract with the account:", deployer.address);
 
   const ProposalRegistry = await ethers.getContractFactory("ProposalRegistry");
   const registry = await ProposalRegistry.deploy();
@@ -12,17 +11,18 @@ async function main() {
   await registry.waitForDeployment();
 
   const address = await registry.getAddress();
-  console.log("Contract Deployed at:", address);
+  console.log("ProposalRegistry deployed to:", address);
 
   fs.writeFileSync(
     "./deployed.json",
-    JSON.stringify({ address }, null, 2)
+    JSON.stringify({ address: address }, null, 2)
   );
-
-  console.log("Saved deployed address → deployed.json");
+  console.log("Saved deployed address to deployed.json");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
