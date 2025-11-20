@@ -1,14 +1,199 @@
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import ReactDatamaps from "react-india-states-map";
+import dynamic from 'next/dynamic';
+
+const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 export default function Home() {
   const [activeInfoTab, setActiveInfoTab] = useState('whats-new');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [currentResourceIndex, setCurrentResourceIndex] = useState(0);
   const [showCollaborateModal, setShowCollaborateModal] = useState(false);
   const [collaboratorEmail, setCollaboratorEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
+  const [selectedState, setSelectedState] = useState('West Bengal');
+  const [hoveredState, setHoveredState] = useState(null);
+  const [textWidth, setTextWidth] = useState(300);
+  const [showNavbar, setShowNavbar] = useState(false);
+  const textRef = useRef(null);
+
+  // Measure text width whenever selectedState changes
+  useEffect(() => {
+    if (textRef.current) {
+      setTextWidth(textRef.current.offsetWidth || 300);
+    }
+  }, [selectedState]);
+
+  // Handle navbar visibility on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 100) {
+        setShowNavbar(true);
+      } else {
+        setShowNavbar(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Mock data for research proposals by state (for demonstration purposes)
+  const stateProposalsData = {
+  "Jharkhand": { 
+    count: 44, 
+    history: [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44] 
+  },
+  "West Bengal": { 
+    count: 13, 
+    history: [1, 2, 3, 5, 6, 7, 8, 9, 10, 12, 13] 
+  },
+  "Maharashtra": { 
+    count: 15, 
+    history: [1, 3, 4, 5, 7, 8, 9, 11, 12, 14, 15] 
+  },
+  "Telangana": { 
+    count: 15, 
+    history: [1, 3, 4, 5, 7, 8, 9, 11, 12, 14, 15] 
+  },
+  "Tamil Nadu": { 
+    count: 8, 
+    history: [1, 1, 2, 3, 4, 4, 5, 6, 6, 7, 8] 
+  },
+  "Karnataka": { 
+    count: 8, 
+    history: [1, 1, 2, 3, 4, 4, 5, 6, 6, 7, 8] 
+  },
+  "Odisha": { 
+    count: 7, 
+    history: [1, 1, 2, 3, 3, 4, 4, 5, 6, 6, 7] 
+  },
+  "Uttar Pradesh": { 
+    count: 5, 
+    history: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5] 
+  },
+  "Andhra Pradesh": { 
+    count: 4, 
+    history: [0, 1, 1, 1, 2, 2, 3, 3, 3, 4, 4] 
+  },
+  "Kerala": { 
+    count: 2, 
+    history: [0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2] 
+  },
+  "Chhattisgarh": { 
+    count: 2, 
+    history: [0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2] 
+  },
+  "Madhya Pradesh": { 
+    count: 3, 
+    history: [0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3] 
+  },
+  "Chandigarh": { 
+    count: 2, 
+    history: [0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2] 
+  },
+  "Bihar": { 
+    count: 1, 
+    history: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] 
+  },
+  "Uttarakhand": { 
+    count: 1, 
+    history: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] 
+  },
+  "Rajasthan": { 
+    count: 1, 
+    history: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] 
+  },
+  "Puducherry": { 
+    count: 1, 
+    history: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] 
+  },
+  "Assam": { 
+    count: 2, 
+    history: [0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2] 
+  },
+  "Delhi": { 
+    count: 1, 
+    history: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] 
+  },
+  "Jammu and Kashmir": { 
+    count: 1, 
+    history: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] 
+  },
+
+  // ===========================
+  // All remaining states = zero
+  // ===========================
+  "Goa": { count: 0, history: Array(11).fill(0) },
+  "Haryana": { count: 0, history: Array(11).fill(0) },
+  "Himachal Pradesh": { count: 0, history: Array(11).fill(0) },
+  "Manipur": { count: 0, history: Array(11).fill(0) },
+  "Meghalaya": { count: 0, history: Array(11).fill(0) },
+  "Mizoram": { count: 0, history: Array(11).fill(0) },
+  "Nagaland": { count: 0, history: Array(11).fill(0) },
+  "Sikkim": { count: 0, history: Array(11).fill(0) },
+  "Tripura": { count: 0, history: Array(11).fill(0) },
+  "Arunachal Pradesh": { count: 0, history: Array(11).fill(0) },
+  "Ladakh": { count: 0, history: Array(11).fill(0) },
+  "Lakshadweep": { count: 0, history: Array(11).fill(0) },
+  "Andaman and Nicobar Islands": { count: 0, history: Array(11).fill(0) },
+  "Punjab": { count: 0, history: Array(11).fill(0) },
+  "Gujarat": { count: 0, history: Array(11).fill(0) }
+};
+
+
+
+  const resources = [
+    { 
+      icon: (
+        <svg className="w-10 h-10 text-blue-300" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M5 3h6v8H5V3zm8 0h6v5h-6V3zM5 13h6v8H5v-8zm8 0h6v8h-6v-8z" />
+        </svg>
+      ), 
+      value: "23+", 
+      label: "Webpage Templates" 
+    },
+    { 
+      icon: (
+        <svg className="w-10 h-10 text-blue-300" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4 5h16v14H4V5zm2 2v10h12V7H6zm2 2h8v2H8V9zm0 4h5v2H8v-2z" />
+        </svg>
+      ), 
+      value: "19+", 
+      label: "Bootstrap Templates" 
+    },
+    { 
+      icon: (
+        <svg className="w-10 h-10 text-blue-300" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 3.25 2.37 5.96 5.5 6.74V20h3v-4.26C16.63 14.96 19 12.25 19 9c0-3.87-3.13-7-7-7z" />
+        </svg>
+      ), 
+      value: "302+", 
+      label: "Logos" 
+    },
+    { 
+      icon: (
+        <svg className="w-10 h-10 text-blue-300" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M5 3h14l-1 6H6L5 3zm1 8h12v9H6v-9z" />
+        </svg>
+      ), 
+      value: "10+", 
+      label: "Presentation" 
+    }
+  ];
+
+  const handlePrevious = () => {
+    setCurrentResourceIndex((prev) => (prev === 0 ? resources.length - 1 : prev - 1));
+  };
+
+  const handleNext = () => {
+    setCurrentResourceIndex((prev) => (prev === resources.length - 1 ? 0 : prev + 1));
+  };
+
+  const currentResource = resources[currentResourceIndex];
 
   // Array of banner images
   const bannerImages = [
@@ -78,12 +263,145 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-white pt-16">
-      <Navbar />
+    <div className="min-h-screen bg-white">
+      {showNavbar && (
+        <div className="fixed top-0 left-0 right-0 z-50 animate-slide-down">
+          <Navbar />
+        </div>
+      )}
+      <style jsx>{`
+        @keyframes slideDown {
+          from {
+            transform: translateY(-100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        .animate-slide-down {
+          animation: slideDown 0.5s ease-out forwards;
+        }
+
+        @keyframes scroll {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
+        }
+        .animate-scroll {
+          animation: scroll 30s linear infinite;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slide-up {
+          animation: slideUp 0.7s ease-out forwards;
+        }
+
+        @keyframes countUp {
+          from {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .animate-count-up {
+          animation: countUp 0.8s ease-out forwards;
+        }
+
+        @keyframes drawLine {
+          from {
+            stroke-dashoffset: 1000;
+          }
+          to {
+            stroke-dashoffset: 0;
+          }
+        }
+
+        @keyframes ballmove {
+          0% { transform: translate(0px, 8.5px) scale(0.1); }
+          10% { transform: translateX(0px) scale(0.5); }
+          40% { transform: translateX(${textWidth - 40}px) scale(0.5); }
+          60% { transform: translate(${textWidth - 40}px, 8.5px) scale(0.1); }
+          70% { transform: translate(${textWidth - 40}px, 8.5px) scale(0.15); }
+          80% { transform: translate(${textWidth - 40}px, 8.5px) scale(0.1); }
+          90% { transform: translate(${textWidth - 40}px, 8.5px) scale(0.15); }
+          100% { transform: translate(${textWidth - 40}px, 8.5px) scale(0.1); }
+        }
+
+        @keyframes textreveal {
+          0% { width: 0; }
+          10% { width: 0; }
+          40% { width: ${textWidth}px; }
+          100% { width: ${textWidth}px; }
+        }
+
+        .ball {
+          position: absolute;
+          top: 0;
+          left: 0;
+          height: 30px;
+          width: 30px;
+          background-color: #f57724;
+          border-radius: 50%;
+          animation: ballmove 4s infinite alternate;
+          z-index: 2;
+          box-shadow: 0px 3px 12px rgba(0,0,0,0.25);
+        }
+
+        .state-text {
+          position: absolute;
+          font-size: 40px;
+          font-weight: bold;
+          white-space: nowrap;
+          overflow: hidden;
+          top: 8px;
+          left: 0;
+          width: 0;
+          color: #313131;
+          animation: textreveal 4s infinite alternate;
+          z-index: 1;
+        }
+
+        .real-text {
+          visibility: hidden;
+          white-space: nowrap;
+          position: absolute;
+          top: 8px;
+          left: 0;
+          font-size: 40px;
+          font-weight: bold;
+        }
+      `}</style>
       
-      {/* Hero Banner Section - Full Banner Display */}
-      <section className="relative bg-gray-50 border-b border-gray-200 h-96 md:h-[500px] overflow-hidden">
-        {/* Full Banner Image with Transition */}
+      {/* Hero Section - India.gov.in Style */}
+      <section className="relative min-h-screen overflow-hidden flex items-center justify-center">
+        {/* Background Images with Transition */}
         <div className="absolute inset-0 z-0">
           {bannerImages.map((image, index) => (
             <div
@@ -93,39 +411,18 @@ export default function Home() {
               }`}
             >
               <img 
-              src={image}   
-              alt={`Government Banner ${index + 1}`} 
-              className={`w-full h-full object-contain bg-gray-100`} 
-            />
-
+                src={image}   
+                alt={`Background ${index + 1}`} 
+                className="w-full h-full object-cover opacity-90"
+              />
             </div>
           ))}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+          {/* Dark Overlay for better text visibility */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-gray-900/75 to-black/80"></div>
         </div>
-
-        {/* Navigation Arrows */}
-        <button
-          onClick={goToPrevious}
-          className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-all duration-300 hover:scale-110"
-          aria-label="Previous image"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <button
-          onClick={goToNext}
-          className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-all duration-300 hover:scale-110"
-          aria-label="Next image"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-
+        
         {/* Image Indicators */}
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex space-x-2">
+        <div className="absolute bottom-8 right-8 z-20 flex space-x-2">
           {bannerImages.map((_, index) => (
             <button
               key={index}
@@ -140,23 +437,139 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Optional Banner Title Overlay */}
-        <div className="absolute bottom-8 left-8 right-8 z-10">
-          <div className="text-white max-w-2xl">
-            <h1 className="text-2xl md:text-4xl font-bold mb-2 drop-shadow-lg">
-              National Coal Committee for Environmental Research
+        <div className="relative z-10 max-w-[98%] mx-auto px-2 py-16 text-center">
+          {/* National Emblem */}
+          <div className="mb-12 flex justify-center">
+            <div className="w-48 h-48 bg-white/10 backdrop-blur-sm rounded-full p-6 flex items-center justify-center">
+              <img 
+                src="/images/goi logo.png" 
+                alt="Government of India Emblem" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
+
+          {/* Main Title */}
+          <div className="mb-8">
+            <h1 className="text-7xl md:text-9xl lg:text-[12rem] font-bold text-white mb-4 leading-none">
+              NaCCER
             </h1>
-            <p className="text-sm md:text-lg drop-shadow-md">
-              Advanced R&D Proposal Management System
-            </p>
+            <div className="inline-block bg-yellow-400 text-black px-6 py-3 rounded text-xl font-bold">
+              BETA
+            </div>
+          </div>
+
+          {/* Subtitle */}
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-semibold text-white mb-4">
+            National Research Portal of India
+          </h2>
+          <p className="text-2xl md:text-3xl lg:text-4xl text-gray-300 mb-8">
+            Where Research & Innovation Converges
+          </p>
+        </div>
+      </section>
+
+      {/* Statistics Bar - India.gov.in Style */}
+      <section className="bg-gray-100 py-6">
+        <div className="max-w-[95%] mx-auto px-2">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+            {/* Online Services */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer border-r border-gray-200 last:border-r-0">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">14237</div>
+              <div className="text-[10px] font-medium text-black leading-tight">Online<br/>Services</div>
+            </div>
+
+            {/* Govt. Schemes */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer border-r border-gray-200 last:border-r-0">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">4373</div>
+              <div className="text-[10px] font-medium text-black leading-tight">Govt.<br/>Schemes</div>
+            </div>
+
+            {/* Citizen Engagements */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer border-r border-gray-200 last:border-r-0">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">5424</div>
+              <div className="text-[10px] font-medium text-black leading-tight">Citizen<br/>Engagements</div>
+            </div>
+
+            {/* Tourist Places */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer border-r border-gray-200 last:border-r-0">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">3851</div>
+              <div className="text-[10px] font-medium text-black leading-tight">Tourist<br/>Places</div>
+            </div>
+
+            {/* ODOP Products */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer border-r border-gray-200 last:border-r-0">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36L15.38 12 17 10.83 14.92 8H20v6z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">1207</div>
+              <div className="text-[10px] font-medium text-black leading-tight">ODOP<br/>Products</div>
+            </div>
+
+            {/* Research Papers */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer border-r border-gray-200 last:border-r-0">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">2847</div>
+              <div className="text-[10px] font-medium text-black leading-tight">Research<br/>Papers</div>
+            </div>
+
+            {/* Active Researchers */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer border-r border-gray-200 last:border-r-0">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">1543</div>
+              <div className="text-[10px] font-medium text-black leading-tight">Active<br/>Researchers</div>
+            </div>
+
+            {/* Information Categories */}
+            <div className="flex flex-col items-center text-center p-3 hover:bg-gray-50 rounded-lg transition-all duration-300 cursor-pointer">
+              <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                <svg className="w-full h-full text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-1">18</div>
+              <div className="text-[10px] font-medium text-black leading-tight">Information<br/>Categories</div>
+            </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Content Section - All Elements Below Banner */}
-      <section className="py-12 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col lg:flex-row items-start gap-12">
+      <section className="py-6 bg-white">
+        <div className="w-full px-2 lg:px-4 xl:px-6">
+          <div className="flex flex-col lg:flex-row items-start justify-between gap-8 lg:gap-12">
             {/* Left Content */}
             <div className="flex-1 text-center lg:text-left">
               <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 mb-6">
@@ -294,7 +707,7 @@ export default function Home() {
 
       {/* Latest Updates Banner */}
       <section className="bg-yellow-400 py-3 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4">
+        <div className="max-w-[98%] mx-auto px-2">
           <div className="flex items-center gap-4 text-sm text-black">
             <span className="font-bold flex items-center gap-2 flex-shrink-0">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -309,21 +722,11 @@ export default function Home() {
             </div>
           </div>
         </div>
-        
-        <style jsx>{`
-          @keyframes scroll {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
-          }
-          .animate-scroll {
-            animation: scroll 30s linear infinite;
-          }
-        `}</style>
       </section>
 
       {/* Statistics Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
+      <section className="py-12 bg-gray-50">
+        <div className="max-w-[95%] mx-auto px-2">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow animate-fade-in-up">
               <div className="w-12 h-12 bg-blue-100 mx-auto mb-4 rounded flex items-center justify-center">
@@ -365,142 +768,130 @@ export default function Home() {
         </div>
       </section>
 
-      {/* About Ministry Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col lg:flex-row items-center gap-12">
-            <div className="flex-1">
-              <h2 className="text-4xl font-bold text-gray-900 mb-8 border-b-4 border-blue-600 pb-4">
+      {/* About Ministry & Vision/Mission Section */}
+      <section className="py-12 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div className="max-w-[95%] mx-auto px-2">
+          <div className="grid lg:grid-cols-2 gap-12">
+
+            {/* About Ministry/Department Component */}
+            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+              <h2 className="text-4xl font-bold text-gray-900 mb-8 border-b-4 border-blue-600 pb-4 inline-block">
                 About Ministry/Department
               </h2>
+
               <div className="text-lg text-gray-900 font-medium leading-relaxed space-y-4">
                 <p>
-                  We are dedicated to serving the public by advancing coal research and development initiatives in India. 
-                  The Ministry of Coal is committed to sustainable mining practices, environmental protection, and 
+                  We are dedicated to serving the public by advancing coal research and development initiatives in India.
+                  The Ministry of Coal is committed to sustainable mining practices, environmental protection, and
                   technological innovation in the coal sector.
                 </p>
                 <p>
-                  Our team of experienced professionals focuses on promoting clean coal technologies, 
-                  carbon capture and storage solutions, and supporting research initiatives that contribute to 
+                  Our team of experienced professionals focuses on promoting clean coal technologies,
+                  carbon capture and storage solutions, and supporting research initiatives that contribute to
                   India's energy security while maintaining environmental standards.
                 </p>
                 <p>
-                  We believe in transparency, innovation, and excellence in all our operations. 
-                  The NaCCER portal represents our commitment to streamlined research management and 
+                  We believe in transparency, innovation, and excellence in all our operations.
+                  The NaCCER portal represents our commitment to streamlined research management and
                   collaborative scientific advancement in the coal and mining sector.
                 </p>
               </div>
+
               <a href="https://www.coal.nic.in" target="_blank" rel="noopener noreferrer">
                 <button className="mt-8 border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-6 py-3 rounded-md font-medium transition-colors duration-200">
                   Know More
                 </button>
               </a>
             </div>
-            <div className="flex-shrink-0 space-y-6">
-              <div className="w-80 h-40 bg-gray-200 rounded-lg overflow-hidden">
-                <img 
-                  src="/images/coal mining image.webp" 
-                  alt="Coal Mining Operations" 
-                  className="w-full h-full object-cover"
-                />
+
+            {/* Vision & Mission Component */}
+            <div className="space-y-6">
+              {/* Vision Card - Flip */}
+              <div className="h-[240px] cursor-pointer [perspective:1200px] group">
+                <div className="relative w-full h-full duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
+                  
+                  {/* FRONT */}
+                  <div className="absolute inset-0 bg-white border border-gray-300 rounded-2xl flex items-center justify-center [backface-visibility:hidden] shadow-xl">
+                    <h2 className="text-5xl font-extrabold text-blue-700 tracking-wide">
+                      VISION
+                    </h2>
+                  </div>
+
+                  {/* BACK */}
+                  <div className="absolute inset-0 bg-blue-700 text-white rounded-2xl p-6 [transform:rotateY(180deg)] [backface-visibility:hidden] overflow-auto shadow-xl">
+                    <p className="text-base font-medium mb-4">
+                      To secure availability of coal in an eco-friendly, sustainable and cost-effective manner.
+                    </p>
+
+                    <p className="font-semibold text-lg mb-3">Ministry of Coal is committed to:</p>
+
+                    <ul className="space-y-3 text-sm">
+                      <li className="flex items-start">
+                        <span className="w-2 h-2 bg-white rounded-full mt-[6px] mr-3 flex-shrink-0"></span>
+                        <span>Augment production through advanced clean coal technologies ensuring productivity, safety, and ecology.</span>
+                      </li>
+
+                      <li className="flex items-start">
+                        <span className="w-2 h-2 bg-white rounded-full mt-[6px] mr-3 flex-shrink-0"></span>
+                        <span>Enhance the resource base by increasing exploration efforts focused on proven reserves.</span>
+                      </li>
+
+                      <li className="flex items-start">
+                        <span className="w-2 h-2 bg-white rounded-full mt-[6px] mr-3 flex-shrink-0"></span>
+                        <span>Facilitate development of infrastructure enabling rapid evacuation of coal.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </div>
-              <div className="w-40 h-40 bg-gray-200 rounded-full overflow-hidden ml-auto">
-                <img 
-                  src="/images/research image.jpg" 
-                  alt="Research Laboratory" 
-                  className="w-full h-full object-cover"
-                />
+
+              {/* Mission Card - Flip */}
+              <div className="h-[240px] cursor-pointer [perspective:1200px] group">
+                <div className="relative w-full h-full duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
+                  
+                  {/* FRONT */}
+                  <div className="absolute inset-0 bg-white border border-gray-300 rounded-2xl flex items-center justify-center [backface-visibility:hidden] shadow-xl">
+                    <h2 className="text-5xl font-extrabold text-green-700 tracking-wide">
+                      MISSION
+                    </h2>
+                  </div>
+
+                  {/* BACK */}
+                  <div className="absolute inset-0 bg-green-700 text-white rounded-2xl p-6 [transform:rotateY(180deg)] [backface-visibility:hidden] overflow-auto shadow-xl">
+                    <ul className="space-y-3 text-sm mb-6">
+                      <li className="flex items-start">
+                        <span className="w-2 h-2 bg-white rounded-full mt-[6px] mr-3 flex-shrink-0"></span>
+                        <span>Adopt clean coal technologies to improve productivity, safety, quality, and environmental sustainability.</span>
+                      </li>
+
+                      <li className="flex items-start">
+                        <span className="w-2 h-2 bg-white rounded-full mt-[6px] mr-3 flex-shrink-0"></span>
+                        <span>Enhance the resource base with extensive exploration to increase proven reserves.</span>
+                      </li>
+
+                      <li className="flex items-start">
+                        <span className="w-2 h-2 bg-white rounded-full mt-[6px] mr-3 flex-shrink-0"></span>
+                        <span>Develop infrastructure to ensure efficient and prompt evacuation of coal.</span>
+                      </li>
+                    </ul>
+
+                    <div className="p-4 bg-white/20 rounded-xl">
+                      <p className="text-sm font-medium">
+                        Driving sustainable development in India's coal sector through innovation, technology, and environmental responsibility.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
+
           </div>
         </div>
       </section>
-
-      {/* Our Ministers Section */}
-      <section className="py-20 bg-blue-900 text-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-center text-white mb-8 animate-fade-in-up border-b-4 border-yellow-500 pb-4 inline-block">Our Ministers</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Prime Minister */}
-            <div className="text-center animate-fade-in-up">
-              <div className="w-64 h-64 bg-gray-300 rounded-full mx-auto mb-6 flex items-center justify-center overflow-hidden">
-                <img 
-                  src="/images/narendra modi.jpg" 
-                  alt="Hon'ble Prime Minister Shri Narendra Modi"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <h3 className="text-2xl font-bold mb-2">Hon'ble Prime Minister</h3>
-              <p className="text-xl mb-4">Shri Narendra Modi</p>
-              
-              <div className="flex justify-center gap-4 mb-4">
-                <a href="https://www.pmindia.gov.in/en/" target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:text-white text-sm font-medium border border-blue-300 hover:border-white px-4 py-2 rounded transition-colors">
-                  Portfolio
-                </a>
-              </div>
-              
-              <div className="flex justify-center gap-4">
-                <a href="https://x.com/pmoindia" target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 cursor-pointer transition-colors">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                  </svg>
-                </a>
-                <a href="https://www.facebook.com/PMOIndia" target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 cursor-pointer transition-colors">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                </a>
-                <a href="https://www.youtube.com/pmoindia" target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 cursor-pointer transition-colors">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                  </svg>
-                </a>
-              </div>
-            </div>
-
-            {/* Other Ministers */}
-            <div className="space-y-8 animate-fade-in-up animation-delay-300">
-              <a href="https://www.coal.nic.in/index.php/minister/shri-g-kishan-reddy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-6 hover:bg-white/10 p-4 rounded-lg transition-colors">
-                <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
-                  <img 
-                    src="/images/kishan reddy.jpg" 
-                    alt="Shri G. Kishan Reddy"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div>
-                  <p className="text-lg font-medium text-blue-200">Hon'ble Union Minister</p>
-                  <h3 className="text-xl font-bold">Shri G. Kishan Reddy</h3>
-                  <p className="text-sm text-blue-200">Coal and Mines, Govt. of India</p>
-                </div>
-              </a>
-              
-              <a href="https://www.coal.nic.in/index.php/minister/shri-satish-chandra-dubey" target="_blank" rel="noopener noreferrer" className="flex items-center gap-6 hover:bg-white/10 p-4 rounded-lg transition-colors">
-                <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
-                  <img 
-                    src="/images/satish chandra dubey.jpg" 
-                    alt="Shri Satish Chandra Dubey"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div>
-                  <p className="text-lg font-medium text-blue-200">Hon'ble Minister of State</p>
-                  <h3 className="text-xl font-bold">Shri Satish Chandra Dubey</h3>
-                  <p className="text-sm text-blue-200">Coal and Mines, Govt. of India</p>
-                </div>
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Our Services Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-4xl font-bold text-center text-gray-900 mb-4 border-b-4 border-green-600 pb-4 inline-block">Our Services</h2>
+      <section className="py-12 bg-gray-50">
+        <div className="max-w-[95%] mx-auto px-2">
+          <h2 className="text-4xl font-bold text-center text-gray-900 mb-8 border-b-4 border-green-600 pb-4 inline-block">Our Services</h2>
           
           {/* Service Categories */}
           <div className="flex justify-center mb-12">
@@ -610,627 +1001,566 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Vision & Mission Section */}
-      <section className="py-16 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Vision Box */}
-            <div className="vision-mission-box group relative bg-white rounded-lg shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-700 cursor-pointer overflow-hidden h-64 hover:h-auto">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-              
-              <div className="relative z-10 h-full flex flex-col">
-                <div className="flex items-center justify-center h-full w-full px-4 py-8 group-hover:h-auto group-hover:justify-start group-hover:mb-6 group-hover:px-0 group-hover:py-0 transition-all duration-700">
-                  <h2 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-800 group-hover:text-white group-hover:text-3xl group-hover:bg-none transition-all duration-700 text-center tracking-wider leading-none">
-                    VISION
-                  </h2>
+      {/* Research Proposals by State Section */}
+      <section className="py-12 bg-gray-50">
+        <div className="max-w-[95%] mx-auto px-2">
+          {/* Header with India Map Icon */}
+          <div className="flex items-center justify-center gap-4 mb-12">
+            <svg className="w-12 h-12 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            <h2 className="text-4xl font-bold text-gray-900 border-b-4 border-orange-600 pb-4 inline-block">
+              NaCCER's Indian Footprint
+            </h2>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: State Info and Chart */}
+            <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-gray-200 transition-all duration-500 ease-in-out transform hover:scale-[1.02]">
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-black mb-2 transition-all duration-300">Research Proposals by State</h3>
+                <div className="relative" style={{ width: "100%", height: "100px", maxWidth: "600px" }}>
+                  {/* Ball Animation */}
+                  <div className="ball" key={selectedState + '-ball'}></div>
+
+                  {/* Animated Text */}
+                  <div className="state-text" key={selectedState + '-text'}>{selectedState}</div>
+
+                  {/* Hidden Real Text (to measure width) */}
+                  <div ref={textRef} className="real-text">{selectedState}</div>
                 </div>
-                
-                <div className="space-y-4 opacity-0 group-hover:opacity-100 transition-opacity duration-700 delay-200 overflow-hidden">
-                  <p className="text-lg font-semibold text-white">
-                    To Secure availability of Coal to meet the demand of various sectors of the economy in a eco-friendly, sustainable and cost effective manner.
-                  </p>
+                <div className="h-1 w-20 bg-red-500 mb-6 animate-pulse transition-all duration-300"></div>
+              </div>
+
+              <div className="mb-8 animate-fade-in" key={selectedState + '-count'}>
+                <p className="text-sm text-black mb-1 transition-opacity duration-300">As of November 2025</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-6xl font-bold bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent transition-all duration-700 animate-count-up">{stateProposalsData[selectedState].count}</span>
+                  <div className="text-sm text-black">
+                    <div>Research Proposals</div>
+                    <div>Submitted in India</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeline Chart */}
+              <div className="relative transition-all duration-700 animate-slide-up" key={selectedState + '-chart'}>
+                <ReactApexChart 
+                  options={{
+                    chart: {
+                      height: 350,
+                      type: 'line',
+                      zoom: {
+                        enabled: false
+                      },
+                      animations: {
+                        enabled: true,
+                        easing: 'easeinout',
+                        speed: 800,
+                        animateGradually: {
+                          enabled: true,
+                          delay: 150
+                        },
+                        dynamicAnimation: {
+                          enabled: true,
+                          speed: 350
+                        }
+                      }
+                    },
+                    dataLabels: {
+                      enabled: true,
+                      style: {
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        colors: ['#000']
+                      },
+                      background: {
+                        enabled: true,
+                        foreColor: '#fff',
+                        borderRadius: 2,
+                        padding: 4,
+                        opacity: 0.9,
+                        borderWidth: 1,
+                        borderColor: '#3b82f6'
+                      }
+                    },
+                    stroke: {
+                      curve: 'smooth',
+                      width: 3
+                    },
+                    title: {
+                      text: `Research Proposals Trend - ${selectedState}`,
+                      align: 'left',
+                      style: {
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        color: '#1f2937'
+                      }
+                    },
+                    grid: {
+                      row: {
+                        colors: ['#f3f4f6', 'transparent'],
+                        opacity: 0.5
+                      },
+                      borderColor: '#e5e7eb'
+                    },
+                    xaxis: {
+                      categories: ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'],
+                      labels: {
+                        style: {
+                          colors: '#2563eb',
+                          fontSize: '11px',
+                          fontWeight: 500
+                        }
+                      }
+                    },
+                    yaxis: {
+                      labels: {
+                        style: {
+                          colors: '#000',
+                          fontSize: '12px'
+                        }
+                      }
+                    },
+                    colors: ['#3b82f6'],
+                    markers: {
+                      size: 5,
+                      colors: ['#3b82f6'],
+                      strokeColors: '#fff',
+                      strokeWidth: 2,
+                      hover: {
+                        size: 7
+                      }
+                    },
+                    tooltip: {
+                      enabled: true,
+                      theme: 'dark',
+                      y: {
+                        formatter: function (val) {
+                          return val + " Proposals"
+                        }
+                      }
+                    }
+                  }} 
+                  series={[{
+                    name: "Research Proposals",
+                    data: stateProposalsData[selectedState].history
+                  }]} 
+                  type="line" 
+                  height={350} 
+                />
+              </div>
+
+              <p className="text-xs text-black mt-4 italic">
+                * Mock data for demonstration purposes only
+              </p>
+            </div>
+
+            {/* Right: India Map Visualization */}
+            <div className="relative">
+              <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl shadow-xl p-8 border-2 border-orange-200">
+                <div className="relative w-full max-w-2xl mx-auto" style={{ height: '600px' }}>
                   
-                  <div className="text-gray-100">
-                    <p className="font-medium mb-3 text-white">Ministry of Coal is committed to:</p>
-                    <ul className="space-y-2 text-sm">
-                      <li className="flex items-start">
-                        <span className="w-2 h-2 bg-white rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-gray-100">Augment production through Government companies as well as captive mining route by adopting state-of-the-art and clean coal technologies with a view to improve productivity, safety, quality and ecology.</span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="w-2 h-2 bg-white rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-gray-100">Augment the resource base by enhancing exploration efforts with thrust on increasing proved resources.</span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="w-2 h-2 bg-white rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-gray-100">Facilitate development of necessary infrastructure for prompt evacuation of coal.</span>
-                      </li>
-                    </ul>
+                  {/* India Map using ReactDatamaps */}
+                  <div className="absolute inset-0 flex items-center justify-center p-8">
+                    <div className="relative w-full h-full">
+                      <ReactDatamaps
+                        regionData={Object.keys(stateProposalsData).reduce((acc, state) => {
+                          acc[state] = {
+                            value: stateProposalsData[state].count,
+                            content: {
+                              txt: `${stateProposalsData[state].count} Research Proposals submitted from ${state}`
+                            }
+                          };
+                          return acc;
+                        }, {})}
+                        mapLayout={{
+                          title: "",
+                          legendTitle: "Proposals",
+                          startColor: "#FFF3E0",
+                          endColor: "#FF6B00",
+                          hoverTitle: "Research Proposals",
+                          noDataColor: "#FFE0B2",
+                          borderColor: "#8B4513",
+                          hoverColor: "#FF9933",
+                          hoverBorderColor: "#FF6B00",
+                          height: 550,
+                          weight: 550
+                        }}
+                        hoverComponent={({ value }) => {
+                          return (
+                            <div className="bg-slate-800 text-white px-4 py-3 rounded-lg shadow-2xl border-2 border-yellow-400 transition-all duration-300 ease-in-out pointer-events-none">
+                              <div className="font-bold text-yellow-400 text-lg mb-1 transition-all duration-200">{value.name}</div>
+                              <div className="text-2xl font-bold mb-1 transition-all duration-200">{value.value}</div>
+                              <div className="text-xs text-gray-300 transition-all duration-200">Research Proposals</div>
+                            </div>
+                          );
+                        }}
+                        onClick={(data, name) => {
+                          const matchedState = Object.keys(stateProposalsData).find(
+                            state => state.toLowerCase() === name.toLowerCase() ||
+                                     name.toLowerCase().includes(state.toLowerCase()) ||
+                                     state.toLowerCase().includes(name.toLowerCase())
+                          );
+                          if (matchedState) {
+                            setSelectedState(matchedState);
+                          }
+                        }}
+                        activeState={{
+                          data: stateProposalsData[selectedState] ? {
+                            value: stateProposalsData[selectedState].count,
+                            content: {
+                              txt: `${stateProposalsData[selectedState].count} Research Proposals`
+                            }
+                          } : {},
+                          name: selectedState
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Selected State Label */}
+                  <div className="absolute top-4 right-4 bg-gradient-to-r from-orange-600 to-red-600 text-white px-5 py-2 rounded-lg shadow-lg font-bold text-base z-10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                      {selectedState}
+                    </div>
+                  </div>
+
+                  {/* Proposal Count Badge */}
+                  <div className="absolute top-4 left-4 bg-white text-orange-600 px-5 py-2 rounded-lg shadow-lg border-2 border-orange-600 z-10">
+                    <div className="text-xs font-semibold">Total Proposals</div>
+                    <div className="text-2xl font-bold">{stateProposalsData[selectedState].count}</div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Mission Box */}
-            <div className="vision-mission-box group relative bg-white rounded-lg shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-700 cursor-pointer overflow-hidden h-64 hover:h-auto">
-              <div className="absolute inset-0 bg-gradient-to-br from-green-600 to-green-700 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-              
-              <div className="relative z-10 h-full flex flex-col">
-                <div className="flex items-center justify-center h-full w-full px-4 py-8 group-hover:h-auto group-hover:justify-start group-hover:mb-6 group-hover:px-0 group-hover:py-0 transition-all duration-700">
-                  <h2 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-green-800 group-hover:text-white group-hover:text-3xl group-hover:bg-none transition-all duration-700 text-center tracking-wider leading-none">
-                    MISSION
-                  </h2>
-                </div>
-                
-                <div className="space-y-4 opacity-0 group-hover:opacity-100 transition-opacity duration-700 delay-200 overflow-hidden">
-                  <div className="text-gray-100">
-                    <ul className="space-y-3">
-                      <li className="flex items-start">
-                        <span className="w-2 h-2 bg-white rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-sm text-gray-100">To augment production through Government companies as well as captive mining route by adopting state-of-the-art and clean coal technologies with a view to improve productivity, safety, quality and ecology.</span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="w-2 h-2 bg-white rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-sm text-gray-100">To augment the resource base by enhancing exploration efforts with thrust on increasing proved resources.</span>
-                      </li>
-                      <li className="flex items-start">
-                        <span className="w-2 h-2 bg-white rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                        <span className="text-sm text-gray-100">To facilitate development of necessary infrastructure for prompt evacuation of coal.</span>
-                      </li>
-                    </ul>
-                  </div>
-                  
-                  <div className="mt-6 p-4 bg-white/10 rounded-lg">
-                    <p className="text-sm text-gray-200 font-medium">
-                      Driving sustainable development in India's coal sector through innovation, technology, and environmental stewardship.
-                    </p>
-                  </div>
-                </div>
+          {/* Statistics Summary */}
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="bg-white rounded-xl shadow-lg p-6 text-center border-t-4 border-blue-600">
+              <div className="text-3xl font-bold text-black">{Object.keys(stateProposalsData).length}</div>
+              <div className="text-sm text-black mt-2">States Covered</div>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6 text-center border-t-4 border-green-600">
+              <div className="text-3xl font-bold text-black">
+                {Object.values(stateProposalsData).reduce((sum, state) => sum + state.count, 0)}
               </div>
+              <div className="text-sm text-black mt-2">Total Proposals</div>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6 text-center border-t-4 border-orange-600">
+              <div className="text-3xl font-bold text-black">
+                {Math.max(...Object.values(stateProposalsData).map(s => s.count))}
+              </div>
+              <div className="text-sm text-black mt-2">Highest (State)</div>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6 text-center border-t-4 border-purple-600">
+              <div className="text-3xl font-bold text-black">2014-2025</div>
+              <div className="text-sm text-black mt-2">Time Period</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Our Ministers Section */}
+      <section className="py-12 bg-blue-900 text-white">
+        <div className="max-w-[95%] mx-auto px-2">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold text-center text-white mb-8 border-b-4 border-yellow-500 pb-4 inline-block">Our Ministers</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Prime Minister */}
+            <div className="text-center animate-fade-in-up">
+              <div className="w-64 h-64 bg-gray-300 rounded-full mx-auto mb-6 flex items-center justify-center overflow-hidden">
+                <img 
+                  src="/images/narendra modi.jpg" 
+                  alt="Hon'ble Prime Minister Shri Narendra Modi"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <h3 className="text-2xl font-bold mb-2">Hon'ble Prime Minister</h3>
+              <p className="text-xl mb-4">Shri Narendra Modi</p>
+              
+              <div className="flex justify-center gap-4 mb-4">
+                <a href="https://www.pmindia.gov.in/en/" target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:text-white text-sm font-medium border border-blue-300 hover:border-white px-4 py-2 rounded transition-colors">
+                  Portfolio
+                </a>
+              </div>
+              
+              <div className="flex justify-center gap-4">
+                <a href="https://x.com/pmoindia" target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 cursor-pointer transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                  </svg>
+                </a>
+                <a href="https://www.facebook.com/PMOIndia" target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 cursor-pointer transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                </a>
+                <a href="https://www.youtube.com/pmoindia" target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 cursor-pointer transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+
+            {/* Other Ministers */}
+            <div className="space-y-8 animate-fade-in-up animation-delay-300">
+              <a href="https://www.coal.nic.in/index.php/minister/shri-g-kishan-reddy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-6 hover:bg-white/10 p-4 rounded-lg transition-colors">
+                <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
+                  <img 
+                    src="/images/kishan reddy.jpg" 
+                    alt="Shri G. Kishan Reddy"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-blue-200">Hon'ble Union Minister</p>
+                  <h3 className="text-xl font-bold">Shri G. Kishan Reddy</h3>
+                  <p className="text-sm text-blue-200">Coal and Mines, Govt. of India</p>
+                </div>
+              </a>
+              
+              <a href="https://www.coal.nic.in/index.php/minister/shri-satish-chandra-dubey" target="_blank" rel="noopener noreferrer" className="flex items-center gap-6 hover:bg-white/10 p-4 rounded-lg transition-colors">
+                <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
+                  <img 
+                    src="/images/satish chandra dubey.jpg" 
+                    alt="Shri Satish Chandra Dubey"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-blue-200">Hon'ble Minister of State</p>
+                  <h3 className="text-xl font-bold">Shri Satish Chandra Dubey</h3>
+                  <p className="text-sm text-blue-200">Coal and Mines, Govt. of India</p>
+                </div>
+              </a>
             </div>
           </div>
         </div>
       </section>
 
       {/* Gallery Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-4xl font-bold text-center text-gray-900 mb-12 animate-fade-in-up border-b-4 border-purple-600 pb-4 inline-block">Gallery</h2>
-          
-          {/* Gallery Categories */}
-          <div className="flex justify-start mb-8 gap-4">
-            <button 
-              id="research-projects-tab" 
-              className="gallery-main-tab active bg-amber-400 text-gray-900 px-6 py-2 rounded-full font-medium hover:bg-amber-500 transition-colors"
-            >
-              Research Projects
-            </button>
-            <button 
-              id="mining-operations-tab" 
-              className="gallery-main-tab bg-gray-100 text-black hover:bg-gray-200 px-6 py-2 rounded-full font-medium transition-colors"
-            >
-              Mining Operations
-            </button>
-          </div>
+      <section className="py-12 bg-white">
+  <div className="max-w-[95%] mx-auto px-2">
 
-          {/* Sub Categories */}
-          <div className="gallery-subcategories mb-8">
-            <div id="research-subs" className="flex gap-6 text-sm">
-              <button 
-                id="clean-coal-tab" 
-                className="gallery-sub-tab active text-blue-600 font-medium border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors"
-              >
-                Clean Coal Technology
-              </button>
-              <button 
-                id="environmental-research-tab" 
-                className="gallery-sub-tab text-gray-500 hover:text-black hover:border-b-2 hover:border-gray-300 pb-1 transition-all"
-              >
-                Environmental Research
-              </button>
-            </div>
-            <div id="mining-subs" className="hidden flex gap-6 text-sm">
-              <button 
-                id="sustainable-mining-tab" 
-                className="gallery-sub-tab active text-blue-600 font-medium border-b-2 border-blue-600 pb-1 hover:text-blue-800 transition-colors"
-              >
-                Sustainable Mining
-              </button>
-              <button 
-                id="operations-tab" 
-                className="gallery-sub-tab text-gray-500 hover:text-black hover:border-b-2 hover:border-gray-300 pb-1 transition-all"
-              >
-                Mining Operations
-              </button>
-            </div>
-          </div>
+    <h2 className="text-4xl font-bold text-center text-gray-900 mb-8 border-b-4 border-purple-600 pb-4 inline-block">
+      Gallery
+    </h2>
 
-          {/* Gallery Grid */}
-          <div id="gallery-content" className="animate-fade-in-up">
-            
-            {/* Clean Coal Technology Content */}
-            <div id="clean-coal-content" className="gallery-content-section">
-              <div className="grid md:grid-cols-2 gap-8 mb-8">
-                <div className="relative group cursor-pointer hover:transform hover:scale-105 transition-transform">
-                  <div className="w-full h-80 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg overflow-hidden">
-                    <img 
-                      src="/images/coal lab image.jpg" 
-                      alt="Coal Research Laboratory"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 rounded-b-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm">Coal Research Lab</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        +15
-                      </div>
-                    </div>
-                  </div>
-                </div>
+    <div className="grid md:grid-cols-3 gap-8">
 
-                <div className="relative group cursor-pointer hover:transform hover:scale-105 transition-transform">
-                  <div className="w-full h-80 bg-gradient-to-br from-green-100 to-green-200 rounded-lg overflow-hidden">
-                    <img 
-                      src="/images/research image.jpg" 
-                      alt="Research Facility"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 rounded-b-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm">Research Facility</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        +12
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* --- CONSISTENT CARD TEMPLATE (Three-Part Split) --- */}
 
-            {/* Environmental Research Content */}
-            <div id="environmental-research-content" className="hidden gallery-content-section">
-              <div className="grid md:grid-cols-2 gap-8 mb-8">
-                <div className="relative group cursor-pointer hover:transform hover:scale-105 transition-transform">
-                  <div className="w-full h-80 bg-gradient-to-br from-green-100 to-green-200 rounded-lg overflow-hidden">
-                    <img 
-                      src="/images/coal image3.jpg" 
-                      alt="Environmental Research"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 rounded-b-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm">Environmental Studies</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        +9
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="relative group cursor-pointer hover:transform hover:scale-105 transition-transform">
-                  <div className="w-full h-80 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg overflow-hidden">
-                    <img 
-                      src="/images/research image.jpg" 
-                      alt="Green Technology Research"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 rounded-b-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm">Green Technology</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        +6
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Mining Operations Content */}
-            <div id="mining-operations-content" className="hidden gallery-content-section">
-              <div className="grid md:grid-cols-2 gap-8 mb-8">
-                <div className="relative group cursor-pointer hover:transform hover:scale-105 transition-transform">
-                  <div className="w-full h-80 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg overflow-hidden">
-                    <img 
-                      src="/images/coal mining image.webp" 
-                      alt="Coal Mining Operations"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 rounded-b-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm">Mining Operations</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        +20
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="relative group cursor-pointer hover:transform hover:scale-105 transition-transform">
-                  <div className="w-full h-80 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg overflow-hidden">
-                    <img 
-                      src="/images/another coal mining image.jpg" 
-                      alt="Coal Mining Site"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 rounded-b-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm">Mining Site</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        +14
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Additional Gallery Items */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="h-40 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg overflow-hidden hover:transform hover:scale-105 transition-transform cursor-pointer">
-                <img 
-                  src="/images/coal mining image2.jpeg" 
-                  alt="Mining Technology"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="h-40 bg-gradient-to-br from-green-100 to-green-200 rounded-lg flex items-center justify-center hover:transform hover:scale-105 transition-transform cursor-pointer">
-                <div className="text-center text-green-600">
-                  <svg className="w-12 h-12 mx-auto mb-2" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                  </svg>
-                  <div className="text-sm font-medium">Project Reports</div>
-                </div>
-              </div>
-              <div className="h-40 bg-gradient-to-br from-purple-100 to-purple-200 rounded-lg flex items-center justify-center hover:transform hover:scale-105 transition-transform cursor-pointer">
-                <div className="text-center text-purple-600">
-                  <svg className="w-12 h-12 mx-auto mb-2" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                  </svg>
-                  <div className="text-sm font-medium">Innovation Hub</div>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Card 1: gallery1.jpeg */}
+      <div className="relative w-full h-80 overflow-hidden rounded-xl cursor-pointer group">
+        
+        {/* The Image (Starts Full, Moves to Bottom-Left on hover) */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-500 group-hover:h-1/2 group-hover:w-1/2 group-hover:translate-x-0 group-hover:translate-y-full"
+          style={{ backgroundImage: 'url("/images/gallery1.jpeg")' }}
+        >
         </div>
 
-        <script dangerouslySetInnerHTML={{
-          __html: `
-            document.addEventListener('DOMContentLoaded', function() {
-              // Service Tabs
-              const serviceTabs = document.querySelectorAll('.service-tab');
-              serviceTabs.forEach(tab => {
-                tab.addEventListener('click', function() {
-                  serviceTabs.forEach(t => {
-                    t.classList.remove('active', 'border-amber-500', 'text-black');
-                    t.classList.add('text-gray-500');
-                    t.style.borderBottom = 'none';
-                  });
-                  
-                  this.classList.add('active', 'text-black');
-                  this.classList.remove('text-gray-500');
-                  this.style.borderBottom = '4px solid rgb(245 158 11)';
-                  
-                  // Show/hide content
-                  if (this.id === 'rd-services-tab') {
-                    document.getElementById('rd-services-content').classList.remove('hidden');
-                    document.getElementById('research-support-content').classList.add('hidden');
-                  } else if (this.id === 'research-support-tab') {
-                    document.getElementById('rd-services-content').classList.add('hidden');
-                    document.getElementById('research-support-content').classList.remove('hidden');
-                  }
-                });
-              });
-
-              // Gallery Main Tabs
-              const galleryMainTabs = document.querySelectorAll('.gallery-main-tab');
-              galleryMainTabs.forEach(tab => {
-                tab.addEventListener('click', function() {
-                  galleryMainTabs.forEach(t => {
-                    t.classList.remove('active', 'bg-amber-400', 'text-gray-900');
-                    t.classList.add('bg-gray-100', 'text-black');
-                  });
-                  
-                  this.classList.add('active', 'bg-amber-400', 'text-gray-900');
-                  this.classList.remove('bg-gray-100', 'text-black');
-                  
-                  // Show/hide subcategories
-                  if (this.id === 'research-projects-tab') {
-                    document.getElementById('research-subs').classList.remove('hidden');
-                    document.getElementById('mining-subs').classList.add('hidden');
-                    // Show clean coal content by default
-                    showGalleryContent('clean-coal-content');
-                    // Reset sub-tab states
-                    resetSubTabs('research-subs');
-                  } else if (this.id === 'mining-operations-tab') {
-                    document.getElementById('research-subs').classList.add('hidden');
-                    document.getElementById('mining-subs').classList.remove('hidden');
-                    // Show mining operations content by default
-                    showGalleryContent('mining-operations-content');
-                    // Reset sub-tab states
-                    resetSubTabs('mining-subs');
-                  }
-                });
-              });
-              
-              // Gallery Sub Tabs
-              const gallerySubTabs = document.querySelectorAll('.gallery-sub-tab');
-              gallerySubTabs.forEach(tab => {
-                tab.addEventListener('click', function() {
-                  const parent = this.closest('#research-subs, #mining-subs');
-                  parent.querySelectorAll('.gallery-sub-tab').forEach(t => {
-                    t.classList.remove('active', 'text-blue-600');
-                    t.classList.add('text-gray-500');
-                    t.style.borderBottom = 'none';
-                  });
-                  
-                  this.classList.add('active', 'text-blue-600');
-                  this.classList.remove('text-gray-500');
-                  this.style.borderBottom = '2px solid #2563eb';
-                  
-                  // Show corresponding content
-                  if (this.id === 'clean-coal-tab') {
-                    showGalleryContent('clean-coal-content');
-                  } else if (this.id === 'environmental-research-tab') {
-                    showGalleryContent('environmental-research-content');
-                  } else if (this.id === 'sustainable-mining-tab') {
-                    showGalleryContent('mining-operations-content');
-                  } else if (this.id === 'operations-tab') {
-                    showGalleryContent('mining-operations-content');
-                  }
-                });
-              });
-              
-              function showGalleryContent(contentId) {
-                // Hide all gallery content sections
-                document.querySelectorAll('.gallery-content-section').forEach(section => {
-                  section.classList.add('hidden');
-                });
-                
-                // Show the selected content
-                const targetContent = document.getElementById(contentId);
-                if (targetContent) {
-                  targetContent.classList.remove('hidden');
-                }
-              }
-              
-              function resetSubTabs(parentId) {
-                const parent = document.getElementById(parentId);
-                const tabs = parent.querySelectorAll('.gallery-sub-tab');
-                tabs.forEach((tab, index) => {
-                  if (index === 0) {
-                    tab.classList.add('active', 'text-blue-600');
-                    tab.classList.remove('text-gray-500');
-                    tab.style.borderBottom = '2px solid #2563eb';
-                  } else {
-                    tab.classList.remove('active', 'text-blue-600');
-                    tab.classList.add('text-gray-500');
-                    tab.style.borderBottom = 'none';
-                  }
-                });
-              }
-            });
-          `
-        }} />
-      </section>
-
-      {/* Social Media Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col lg:flex-row items-center gap-12">
-            {/* Left Content */}
-            <div className="flex-1 animate-fade-in-up">
-              <h2 className="text-4xl font-bold text-gray-900 mb-6 border-b-4 border-red-600 pb-4 inline-block">Social Media</h2>
-              <p className="text-lg text-gray-900 font-semibold mb-8">
-                Explore our social media presence and stay updated with the latest developments 
-                in coal research and sustainable mining practices.
-              </p>
-              
-              <div className="flex gap-6">
-                <a href="https://www.youtube.com/@coalministry3323" target="_blank" rel="noopener noreferrer" className="w-16 h-16 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors hover:scale-110 transform">
-                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                  </svg>
-                </a>
-                
-                <a href="https://x.com/CoalMinistry" target="_blank" rel="noopener noreferrer" className="w-16 h-16 bg-black hover:bg-gray-800 rounded-full flex items-center justify-center text-white transition-colors hover:scale-110 transform">
-                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                  </svg>
-                </a>
-
-                <a href="https://linktr.ee/ministryofcoal" target="_blank" rel="noopener noreferrer" className="w-16 h-16 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center text-white transition-colors hover:scale-110 transform">
-                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M7.953 15.066c-.08.163-.08.324-.08.486.001.162.08.325.161.486.24.408.645.652 1.084.652.44 0 .845-.244 1.084-.652.08-.161.16-.324.16-.486 0-.162-.08-.323-.16-.486-.239-.408-.644-.652-1.084-.652-.439 0-.844.244-1.084.652l-.081-.001zm8.094 0c-.08.163-.08.324-.08.486.001.162.08.325.161.486.24.408.645.652 1.084.652.44 0 .845-.244 1.084-.652.08-.161.16-.324.16-.486 0-.162-.08-.323-.16-.486-.239-.408-.644-.652-1.084-.652-.439 0-.844.244-1.084.652l-.081-.001zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm3.5 6l-3.5 3.5L8.5 8 12 4.5 15.5 8zM8.5 16L12 12.5l3.5 3.5L12 19.5 8.5 16z"/>
-                  </svg>
-                </a>
-              </div>
-            </div>
-
-            {/* Right Content - Mobile Mockup */}
-            <div className="flex-shrink-0 animate-fade-in-up animation-delay-300">
-              <div className="relative">
-                <div className="w-80 h-96 bg-gray-100 rounded-2xl p-4 shadow-lg">
-                  <div className="w-full h-full bg-white rounded-xl shadow-sm flex flex-col">
-                    <div className="bg-black text-white p-4 rounded-t-xl">
-                      <div className="flex items-center gap-3">
-                        <img 
-                          src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Flag_of_India.svg/32px-Flag_of_India.svg.png" 
-                          alt="India Flag" 
-                          className="w-8 h-6 rounded"
-                        />
-                        <div>
-                          <h3 className="font-bold text-sm">Ministry of Coal</h3>
-                          <p className="text-xs text-gray-300">@CoalMinistry</p>
-                        </div>
-                        <a href="https://x.com/CoalMinistry" target="_blank" rel="noopener noreferrer" className="ml-auto bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-full text-xs transition-colors">
-                          Follow
-                        </a>
-                      </div>
-                    </div>
-                    <div className="p-4 flex-1">
-                      <p className="text-sm text-gray-900 mb-3 font-semibold">
-                        Latest updates on sustainable coal research and clean energy initiatives. 
-                        Building a greener future for India. 🇮🇳
-                      </p>
-                      <div className="text-xs text-gray-800 space-y-1">
-                        <div className="font-medium">📍 New Delhi, India</div>
-                        <div className="font-medium">🔗 <a href="https://www.coal.nic.in" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-bold">coal.nic.in</a></div>
-                        <div className="flex gap-4 mt-2 font-bold text-gray-900">
-                          <span>52 Following</span>
-                          <span>364.5K Followers</span>
-                        </div>
-                        
-                        {/* Ministry of Coal Banner */}
-                        <div className="mt-3 rounded-lg overflow-hidden">
-                          <img 
-                            src="/images/ministry of coal banner.jpeg" 
-                            alt="Ministry of Coal Banner"
-                            className="w-full h-24 object-cover"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* Black Box (Starts out of view, Moves to Top Half on hover) */}
+        <div className="absolute inset-0 w-full h-full bg-black transition-all duration-500 transform translate-y-full group-hover:h-1/2 group-hover:w-full group-hover:translate-y-0">
+          <div className="p-6 h-full flex flex-col justify-start">
+            <h3 className="text-white text-3xl font-bold mt-4">
+              Establishment of Geo-thermal energy
+            </h3>
+            <p className="text-white text-lg mt-2">
+              SCCL held at Sri Ram Institute on 8/2/2022
+            </p>
           </div>
         </div>
-      </section>
+        
+        {/* White 'MORE ->' Box (Starts out of view, Moves to Bottom-Right on hover) */}
+        <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-white transition-all duration-500 transform translate-x-full translate-y-full group-hover:translate-x-0 group-hover:translate-y-0">
+          {/* LINK ADDED HERE */}
+          <a href="https://scienceandtech.cmpdi.co.in/review_meeting_on_geothermal_energy_sccl.php" className="h-full w-full flex items-center justify-center" target="_blank" rel="noopener noreferrer">
+            <span className="text-lg font-semibold text-gray-900">
+              MORE &rarr;
+            </span>
+          </a>
+        </div>
+      </div>
 
-      {/* Collaboration Modal */}
-      {showCollaborateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Invite Collaborator</h2>
-              <button
-                onClick={() => setShowCollaborateModal(false)}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <div className="mb-6">
-              <label htmlFor="collaboratorEmail" className="block text-sm font-medium text-gray-700 mb-2">
-                Collaborator Email Address
-              </label>
-              <input
-                type="email"
-                id="collaboratorEmail"
-                value={collaboratorEmail}
-                onChange={(e) => setCollaboratorEmail(e.target.value)}
-                placeholder="Enter email address"
-                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isInviting}
-              />
-            </div>
-            
-            <div className="flex gap-4">
-              <button
-                onClick={() => setShowCollaborateModal(false)}
-                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-                disabled={isInviting}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCollaborateInvite}
-                disabled={!collaboratorEmail || isInviting}
-                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isInviting ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    Send Invitation
-                  </>
-                )}
-              </button>
-            </div>
-            
-            <div className="mt-4 p-3 bg-blue-50 rounded-md">
-              <p className="text-sm text-blue-700">
-                <strong>Note:</strong> An email invitation will be sent to the collaborator with instructions to join the NaCCER Research Portal.
-              </p>
-            </div>
+      {/* Card 2: gallery2.jpeg */}
+      <div className="relative w-full h-80 overflow-hidden rounded-xl cursor-pointer group">
+        
+        {/* The Image (Starts Full, Moves to Bottom-Left on hover) */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-500 group-hover:h-1/2 group-hover:w-1/2 group-hover:translate-x-0 group-hover:translate-y-full"
+          style={{ backgroundImage: 'url("/images/gallery2.jpeg")' }}
+        >
+        </div>
+
+        {/* Black Box (Starts out of view, Moves to Top Half on hover) */}
+        <div className="absolute inset-0 w-full h-full bg-black transition-all duration-500 transform translate-y-full group-hover:h-1/2 group-hover:w-full group-hover:translate-y-0">
+          <div className="p-6 h-full flex flex-col justify-start">
+            <h3 className="text-white text-3xl font-bold mt-4">
+              22nd Meeting of Tech. Sub-Committee of SSRC
+            </h3>
+            <p className="text-white text-lg mt-2">
+              Held on 16th, 21st & 22nd June 2021
+            </p>
           </div>
         </div>
-      )}
+        
+        {/* White 'MORE ->' Box (Starts out of view, Moves to Bottom-Right on hover) */}
+        <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-white transition-all duration-500 transform translate-x-full translate-y-full group-hover:translate-x-0 group-hover:translate-y-0">
+           {/* LINK ADDED HERE */}
+           <a href="https://scienceandtech.cmpdi.co.in/22nd_tech_ssrc_meeting.php" className="h-full w-full flex items-center justify-center" target="_blank" rel="noopener noreferrer">
+            <span className="text-lg font-semibold text-gray-900">
+              MORE &rarr;
+            </span>
+          </a>
+        </div>
+      </div>
+
+      {/* Card 3: gallery3.jpeg */}
+      <div className="relative w-full h-80 overflow-hidden rounded-xl cursor-pointer group">
+        
+        {/* The Image (Starts Full, Moves to Bottom-Left on hover) */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-500 group-hover:h-1/2 group-hover:w-1/2 group-hover:translate-x-0 group-hover:translate-y-full"
+          style={{ backgroundImage: 'url("/images/gallery3.jpeg")' }}
+        >
+        </div>
+
+        {/* Black Box (Starts out of view, Moves to Top Half on hover) */}
+        <div className="absolute inset-0 w-full h-full bg-black transition-all duration-500 transform translate-y-full group-hover:h-1/2 group-hover:w-full group-hover:translate-y-0">
+          <div className="p-6 h-full flex flex-col justify-start">
+            <h3 className="text-white text-3xl font-bold mt-4">
+              23rd SSRC Tech. Sub-Committee Meeting
+            </h3>
+            <p className="text-white text-lg mt-2">
+              Held on 25/10/2021
+            </p>
+          </div>
+        </div>
+        
+        {/* White 'MORE ->' Box (Starts out of view, Moves to Bottom-Right on hover) */}
+        <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-white transition-all duration-500 transform translate-x-full translate-y-full group-hover:translate-x-0 group-hover:translate-y-0">
+           {/* LINK ADDED HERE */}
+           <a href="https://scienceandtech.cmpdi.co.in/23rd_tech_ssrc_meeting.php" className="h-full w-full flex items-center justify-center" target="_blank" rel="noopener noreferrer">
+            <span className="text-lg font-semibold text-gray-900">
+              MORE &rarr;
+            </span>
+          </a>
+        </div>
+      </div>
+      
+      {/* Card 4: gallery4.jpg */}
+      <div className="relative w-full h-80 overflow-hidden rounded-xl cursor-pointer group">
+        
+        {/* The Image (Starts Full, Moves to Bottom-Left on hover) */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-500 group-hover:h-1/2 group-hover:w-1/2 group-hover:translate-x-0 group-hover:translate-y-full"
+          style={{ backgroundImage: 'url("/images/gallery4.jpg")' }}
+        >
+        </div>
+
+        {/* Black Box (Starts out of view, Moves to Top Half on hover) */}
+        <div className="absolute inset-0 w-full h-full bg-black transition-all duration-500 transform translate-y-full group-hover:h-1/2 group-hover:w-full group-hover:translate-y-0">
+          <div className="p-6 h-full flex flex-col justify-start">
+            <h3 className="text-white text-3xl font-bold mt-4">
+              Coal Bed Methane Recovery and Utilisation
+            </h3>
+            <p className="text-white text-lg mt-2">
+              Architecture detail
+            </p>
+          </div>
+        </div>
+        
+        {/* White 'MORE ->' Box (Starts out of view, Moves to Bottom-Right on hover) */}
+        <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-white transition-all duration-500 transform translate-x-full translate-y-full group-hover:translate-x-0 group-hover:translate-y-0">
+           {/* LINK ADDED HERE */}
+           <a href="https://scienceandtech.cmpdi.co.in/CBM-CE-27_photographs.php" className="h-full w-full flex items-center justify-center" target="_blank" rel="noopener noreferrer">
+            <span className="text-lg font-semibold text-gray-900">
+              MORE &rarr;
+            </span>
+          </a>
+        </div>
+      </div>
+
+      {/* Card 5: gallery5.jpg */}
+      <div className="relative w-full h-80 overflow-hidden rounded-xl cursor-pointer group">
+        
+        {/* The Image (Starts Full, Moves to Bottom-Left on hover) */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-500 group-hover:h-1/2 group-hover:w-1/2 group-hover:translate-x-0 group-hover:translate-y-full"
+          style={{ backgroundImage: 'url("/images/gallery5.jpg")' }}
+        >
+        </div>
+
+        {/* Black Box (Starts out of view, Moves to Top Half on hover) */}
+        <div className="absolute inset-0 w-full h-full bg-black transition-all duration-500 transform translate-y-full group-hover:h-1/2 group-hover:w-full group-hover:translate-y-0">
+          <div className="p-6 h-full flex flex-col justify-start">
+            <h3 className="text-white text-3xl font-bold mt-4">
+              Sustainable Development
+            </h3>
+            <p className="text-white text-lg mt-2">
+              Building a Greener, Smarter Future
+            </p>
+          </div>
+        </div>
+        
+        {/* White 'MORE ->' Box (Starts out of view, Moves to Bottom-Right on hover) */}
+        <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-white transition-all duration-500 transform translate-x-full translate-y-full group-hover:translate-x-0 group-hover:translate-y-0">
+           {/* LINK ADDED HERE */}
+           <a href="https://scienceandtech.cmpdi.co.in/sustainable_development-EE-44_photographs.php" className="h-full w-full flex items-center justify-center" target="_blank" rel="noopener noreferrer">
+            <span className="text-lg font-semibold text-gray-900">
+              MORE &rarr;
+            </span>
+          </a>
+        </div>
+      </div>
+
+      {/* Card 6: gallery6.jpg */}
+      <div className="relative w-full h-80 overflow-hidden rounded-xl cursor-pointer group">
+        
+        {/* The Image (Starts Full, Moves to Bottom-Left on hover) */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-500 group-hover:h-1/2 group-hover:w-1/2 group-hover:translate-x-0 group-hover:translate-y-full"
+          style={{ backgroundImage: 'url("/images/gallery6.jpg")' }}
+        >
+        </div>
+
+        {/* Black Box (Starts out of view, Moves to Top Half on hover) */}
+        <div className="absolute inset-0 w-full h-full bg-black transition-all duration-500 transform translate-y-full group-hover:h-1/2 group-hover:w-full group-hover:translate-y-0">
+          <div className="p-6 h-full flex flex-col justify-start">
+            <h3 className="text-white text-3xl font-bold mt-4">
+              Online Washability Analyzer
+            </h3>
+            <p className="text-white text-lg mt-2">
+              Real-Time Coal Washability Monitoring
+            </p>
+          </div>
+        </div>
+        
+        {/* White 'MORE ->' Box (Starts out of view, Moves to Bottom-Right on hover) */}
+        <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-white transition-all duration-500 transform translate-x-full translate-y-full group-hover:translate-x-0 group-hover:translate-y-0">
+           {/* LINK ADDED HERE */}
+           <a href="https://scienceandtech.cmpdi.co.in/online_washibility_analyzer-CP-47_photographs.php" className="h-full w-full flex items-center justify-center" target="_blank" rel="noopener noreferrer">
+            <span className="text-lg font-semibold text-gray-900">
+              MORE &rarr;
+            </span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
 
       <Footer />
     </div>
   );
 }
+

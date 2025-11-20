@@ -105,6 +105,13 @@ export default function Navbar({ variant = "default" }) {
     { code: 'pa', name: 'ਪੰਜਾਬੀ' }
   ];
 
+  const defaultUserAvatar = "/images/default-user.svg";
+  const userAvatar =
+    user?.avatarUrl ||
+    user?.profileImage ||
+    user?.photo ||
+    defaultUserAvatar;
+
   return (
     <>
       {/* Combined Government Header and Main Navbar */}
@@ -116,58 +123,57 @@ export default function Navbar({ variant = "default" }) {
           <div className="absolute top-0 -left-5 w-24 h-24 bg-white/5 rounded-full animate-float animation-delay-1000"></div>
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* (SIH ID badge moved near right controls) */}
-            {/* Combined Government & Logo Section */}
-            <Link href={user ? "/dashboard" : "/"}>
-              <div className="flex items-center gap-6 cursor-pointer group">
-                {/* Government Section */}
-                <div className={`flex items-center gap-4 text-sm font-semibold ${navStyles.text}`}>
-                  {/* SIH TEAM ID moved to corner badge */}
-                  <a href="https://www.india.gov.in/" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
-                    variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
-                  }`}>
-                    <img 
-                      src="/images/GOI logo.png" 
-                      alt="Government of India Logo" 
-                      className="w-6 h-10 rounded"
-                    />
-                    <div>
-                      <div className="font-medium">भारत सरकार</div>
-                      <div className="font-medium text-xs">Government of India</div>
+        <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10">
+          <div className="flex items-center justify-between h-16 gap-6">
+            {/* Left Section: Government & Logos (flush left) */}
+            <div className="flex items-center gap-6 min-w-0">
+              <Link href={user ? "/dashboard" : "/"}>
+                <div className="flex items-center gap-6 cursor-pointer group pl-0">
+                  <div className={`flex items-center gap-4 text-sm font-semibold ${navStyles.text}`}>
+                    <a href="https://www.india.gov.in/" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
+                      variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
+                    }`}>
+                      <img 
+                        src="/images/GOI logo.png" 
+                        alt="Government of India Logo" 
+                        className="w-6 h-10 rounded"
+                      />
+                      <div>
+                        <div className="font-medium">भारत सरकार</div>
+                        <div className="font-medium text-xs">Government of India</div>
+                      </div>
+                    </a>
+                    <div className={`w-px h-8 ${variant === "profile" ? 'bg-white/30' : (isScrolled ? 'bg-white/30' : 'bg-gray-600/60')}`}></div>
+                    <div className="flex items-center gap-3">
+                      <a href="https://www.coalindia.in/" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
+                        variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
+                      }`}>
+                        <img 
+                          src="/images/CoalLog4.png" 
+                          alt="Coal India Limited" 
+                          className="w-10 h-12 rounded bg-white object-cover"
+                        />
+                        <span className="font-medium text-xs">Coal India Limited</span>
+                      </a>
+                      <a href="https://www.cmpdi.co.in/en" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
+                        variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
+                      }`}>
+                        <img 
+                          src="/images/cmpdi logo.jpg" 
+                          alt="CMPDI" 
+                          className="w-20 h-12 rounded bg-white object-cover" 
+                        />
+                        <span className="font-medium text-xs">CMPDI</span>
+                      </a>
                     </div>
-                  </a>
-                  <div className={`w-px h-8 ${variant === "profile" ? 'bg-white/30' : (isScrolled ? 'bg-white/30' : 'bg-gray-600/60')}`}></div>
-                  <div className="flex items-center gap-3">
-                    <a href="https://www.coalindia.in/" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
-                      variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
-                    }`}>
-                      <img 
-                        src="/images/CoalLog4.png" 
-                        alt="Coal India Limited" 
-                        className="w-10 h-12 rounded bg-white object-cover"
-                      />
-                      <span className="font-medium text-xs">Coal India Limited</span>
-                    </a>
-                    <a href="https://www.cmpdi.co.in/en" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
-                      variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
-                    }`}>
-                      <img 
-                        src="/images/cmpdi logo.jpg" 
-                        alt="CMPDI" 
-                        className="w-20 h-12 rounded bg-white object-cover" 
-                      />
-                      <span className="font-medium text-xs">CMPDI</span>
-                    </a>
+                    <div className={`w-px h-8 mx-2 ${isScrolled ? 'bg-white/30' : 'bg-gray-600/60'}`}></div>
                   </div>
-                  <div className={`w-px h-8 mx-2 ${isScrolled ? 'bg-white/30' : 'bg-gray-600/60'}`}></div>
                 </div>
-              </div>
-            </Link>
-          
-            {/* Right Section: Font Controls, Language, and Navigation */}
-            <div className="hidden md:flex items-center gap-6">
+              </Link>
+            </div>
+
+            {/* Right Section: Controls & Status (flush right) */}
+            <div className="hidden md:flex items-center gap-6 justify-end flex-shrink-0">
               {/* Font Size Controls */}
               <div className="flex items-center gap-2">
                 <button 
@@ -241,9 +247,9 @@ export default function Navbar({ variant = "default" }) {
                 {loading ? (
                 // Loading state - show skeleton to prevent hydration mismatch
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-8 bg-orange-600 rounded animate-pulse"></div>
-                  <div className="w-16 h-8 bg-orange-600 rounded animate-pulse"></div>
-                  <div className="w-24 h-8 bg-orange-600 rounded animate-pulse"></div>
+                  <div className="w-20 h-8 bg-white rounded animate-pulse"></div>
+                  <div className="w-16 h-8 bg-black rounded animate-pulse"></div>
+                  <div className="w-24 h-8 bg-black rounded animate-pulse"></div>
                 </div>
               ) : user ? (
                 // Logged-in user navigation - only show role-specific links
@@ -273,20 +279,26 @@ export default function Navbar({ variant = "default" }) {
                   <div className="relative" ref={userMenuRef}>
                     <button
                       onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                      className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all duration-300 group ${
-                        isScrolled 
-                          ? 'bg-white/5 hover:bg-white/10 border-white/10 hover:border-white/20' 
-                          : 'bg-black/5 hover:bg-black/10 border-black/10 hover:border-black/20'
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium transition-all duration-300 group ${
+                        isScrolled
+                          ? 'bg-white/10 hover:bg-white/20 border-white/30 text-black'
+                          : 'bg-black/5 hover:bg-black/10 border-black/10 text-gray-900'
                       }`}
                     >
-                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                        <span className="text-black text-sm font-bold">
-                          {user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                        </span>
+                      <div className="w-8 h-8 rounded-full border border-black/10 overflow-hidden bg-white flex items-center justify-center">
+                        <img
+                          src={userAvatar}
+                          alt={`${user?.username || 'Portal user'} avatar`}
+                          className="w-full h-full object-cover"
+                          onError={(event) => {
+                            event.currentTarget.onerror = null;
+                            event.currentTarget.src = defaultUserAvatar;
+                          }}
+                        />
                       </div>
-                      <div className="text-left">
-                        <div className={`text-sm font-medium ${isScrolled ? 'text-black' : 'text-gray-900'}`}>{user?.username || 'User'}</div>
-                        <div className="text-xs px-2 py-1 rounded bg-black text-white font-medium">
+                      <div className="text-left leading-tight">
+                        <div className={`${isScrolled ? 'text-black' : 'text-gray-900'}`}>{user?.username || 'User'}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500">
                           {user?.role || 'Guest'}
                         </div>
                       </div>
@@ -366,10 +378,7 @@ export default function Navbar({ variant = "default" }) {
                 </div>
               )}
               </div>
-            </div>
 
-            {/* Badge placed to the right of the right-section (appears on md+ screens) */}
-            <div className="hidden md:flex items-center pl-2">
               <div
                 className="px-3 py-1 rounded-full bg-black text-white text-xs font-semibold shadow-lg border border-white/10 ml-2"
                 role="status"
