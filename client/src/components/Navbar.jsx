@@ -20,19 +20,19 @@ export default function Navbar({ variant = "default" }) {
     switch (variant) {
       case "profile":
         return {
-          bg: isScrolled 
-            ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 backdrop-blur-lg shadow-xl" 
-            : "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg",
+          bg: isScrolled
+            ? "bg-slate-900/90 backdrop-blur-md shadow-lg border-b border-slate-800"
+            : "bg-transparent",
           text: "text-white",
-          border: "border-white/20"
+          border: "border-transparent"
         };
       default:
         return {
-          bg: isScrolled 
-            ? "bg-gradient-to-r from-orange-500 to-orange-600 backdrop-blur-lg shadow-xl" 
-            : "bg-white shadow-lg",
-          text: isScrolled ? "text-black" : "text-gray-900",
-          border: isScrolled ? "border-orange-300" : "border-gray-200"
+          bg: isScrolled
+            ? "bg-slate-900/90 backdrop-blur-md shadow-lg border-b border-slate-800"
+            : "bg-transparent",
+          text: "text-white",
+          border: "border-transparent"
         };
     }
   };
@@ -66,15 +66,6 @@ export default function Navbar({ variant = "default" }) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-
-  const getRoleColor = (role) => {
-    switch (role?.toLowerCase()) {
-      case 'user': return 'from-blue-500 to-blue-600';
-      case 'reviewer': return 'from-purple-500 to-purple-600';
-      case 'staff': return 'from-green-500 to-green-600';
-      default: return 'from-slate-500 to-slate-600';
-    }
-  };
 
   const increaseFontSize = () => {
     if (fontSize < 20) {
@@ -115,277 +106,211 @@ export default function Navbar({ variant = "default" }) {
   return (
     <>
       {/* Combined Government Header and Main Navbar */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 shadow-2xl transition-all duration-500 ${navStyles.bg} ${navStyles.text} border-b ${navStyles.border}`}>
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full animate-float"></div>
-
-          <div className="absolute top-0 -left-5 w-24 h-24 bg-white/5 rounded-full animate-float animation-delay-1000"></div>
-        </div>
-
-        <div className="relative z-10 w-full px-4 sm:px-6 lg:px-10">
-          <div className="flex items-center justify-between h-16 gap-6">
-            {/* Left Section: Government & Logos (flush left) */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${navStyles.bg} ${navStyles.text}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20 gap-6">
+            {/* Left Section: Government & Logos */}
             <div className="flex items-center gap-6 min-w-0">
               <Link href={user ? "/dashboard" : "/"}>
-                <div className="flex items-center gap-6 cursor-pointer group pl-0">
-                  <div className={`flex items-center gap-4 text-sm font-semibold ${navStyles.text}`}>
-                    <a href="https://www.india.gov.in/" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
-                      variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
-                    }`}>
-                      <img 
-                        src="/images/GOI logo.png" 
-                        alt="Government of India Logo" 
-                        className="w-6 h-10 rounded"
-                      />
-                      <div>
-                        <div className="font-medium">भारत सरकार</div>
-                        <div className="font-medium text-xs">Government of India</div>
-                      </div>
-                    </a>
-                    <div className={`w-px h-8 ${variant === "profile" ? 'bg-white/30' : (isScrolled ? 'bg-white/30' : 'bg-gray-600/60')}`}></div>
-                    <div className="flex items-center gap-3">
-                      <a href="https://www.coalindia.in/" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
-                        variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
-                      }`}>
-                        <img 
-                          src="/images/CoalLog4.png" 
-                          alt="Coal India Limited" 
-                          className="w-10 h-12 rounded bg-white object-cover"
-                        />
-                        <span className="font-medium text-xs">Coal India Limited</span>
-                      </a>
-                      <a href="https://www.cmpdi.co.in/en" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${
-                        variant === "profile" ? 'hover:bg-white/20' : (isScrolled ? 'hover:bg-white/10' : 'hover:bg-black/20')
-                      }`}>
-                        <img 
-                          src="/images/cmpdi logo.jpg" 
-                          alt="CMPDI" 
-                          className="w-20 h-12 rounded bg-white object-cover" 
-                        />
-                        <span className="font-medium text-xs">CMPDI</span>
-                      </a>
+                <div className="flex items-center gap-4 cursor-pointer group">
+                  {/* GOI Logo */}
+                  <div className="flex items-center gap-3">
+                    <img
+                      src="/images/GOI logo.png"
+                      alt="Government of India"
+                      className="h-12 w-auto brightness-0 invert opacity-90 group-hover:opacity-100 transition-opacity"
+                    />
+                    <div className="hidden sm:block leading-tight">
+                      <div className="font-bold text-sm tracking-wide">भारत सरकार</div>
+                      <div className="font-medium text-xs opacity-80">Government of India</div>
                     </div>
-                    <div className={`w-px h-8 mx-2 ${isScrolled ? 'bg-white/30' : 'bg-gray-600/60'}`}></div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="h-8 w-px bg-white/20 mx-2"></div>
+
+                  {/* Ministry/Portal Logos */}
+                  <div className="flex items-center gap-4">
+                    <img
+                      src="/images/CoalLog4.png"
+                      alt="Coal India"
+                      className="h-10 w-auto bg-white/10 rounded p-1 backdrop-blur-sm"
+                    />
+                    <img
+                      src="/images/cmpdi logo.jpg"
+                      alt="CMPDI"
+                      className="h-10 w-auto bg-white/10 rounded p-1 backdrop-blur-sm hidden md:block"
+                    />
                   </div>
                 </div>
               </Link>
             </div>
 
-            {/* Right Section: Controls & Status (flush right) */}
+            {/* Right Section: Controls & Status */}
             <div className="hidden md:flex items-center gap-6 justify-end flex-shrink-0">
-              {/* Font Size Controls */}
-              <div className="flex items-center gap-2">
-                <button 
+              {/* Accessibility Tools */}
+              <div className="flex items-center gap-1 bg-white/5 rounded-full p-1 border border-white/10 backdrop-blur-sm">
+                <button
                   onClick={decreaseFontSize}
-                  className={`w-6 h-6 rounded flex items-center justify-center transition-colors font-semibold ${
-                    variant === "profile"
-                      ? 'bg-white/20 hover:bg-white/30 text-white'
-                      : (isScrolled 
-                        ? 'bg-white/20 hover:bg-white/30 text-white' 
-                        : 'bg-gray-900/30 hover:bg-gray-900/40 text-gray-900')
-                  }`}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors text-xs font-bold"
                   title="Decrease font size"
                 >
                   A-
                 </button>
-                <button 
+                <button
                   onClick={increaseFontSize}
-                  className={`w-6 h-6 rounded flex items-center justify-center transition-colors font-semibold ${
-                    variant === "profile"
-                      ? 'bg-white/20 hover:bg-white/30 text-white'
-                      : (isScrolled 
-                        ? 'bg-white/20 hover:bg-white/30 text-white' 
-                        : 'bg-gray-900/30 hover:bg-gray-900/40 text-gray-900')
-                  }`}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors text-xs font-bold"
                   title="Increase font size"
                 >
                   A+
                 </button>
               </div>
-              
+
               {/* Language Dropdown */}
               <div className="relative" ref={languageMenuRef}>
-                <button 
+                <button
                   onClick={() => setIsLanguageMenuOpen(!isLanguageMenuOpen)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded transition-colors font-medium ${
-                    variant === "profile"
-                      ? 'hover:bg-white/20 text-white'
-                      : (isScrolled 
-                        ? 'hover:bg-white/20 text-white' 
-                        : 'hover:bg-gray-900/20 text-gray-900')
-                  }`}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors text-sm font-medium border border-transparent hover:border-white/10"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
                   </svg>
-                  Language
-                  <svg className={`w-4 h-4 transition-transform ${isLanguageMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span>EN</span>
+                  <svg className={`w-3 h-3 transition-transform opacity-70 ${isLanguageMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                
+
                 {isLanguageMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-fade-in-up text-slate-900">
                     {languages.map((lang) => (
                       <button
                         key={lang.code}
-                        className="w-full text-left px-4 py-2 text-black hover:bg-gray-100 text-sm"
-                        onClick={() => setIsLanguageMenuOpen(false)}  
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-medium transition-colors flex items-center justify-between group"
+                        onClick={() => setIsLanguageMenuOpen(false)}
                       >
                         {lang.name}
+                        {lang.code === 'en' && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-              
-              <div className={`w-px h-6 ${isScrolled ? 'bg-white/30' : 'bg-gray-600/60'}`}></div>
 
               {/* Navigation Menu */}
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4">
                 {loading ? (
-                // Loading state - show skeleton to prevent hydration mismatch
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-8 bg-white rounded animate-pulse"></div>
-                  <div className="w-16 h-8 bg-black rounded animate-pulse"></div>
-                  <div className="w-24 h-8 bg-black rounded animate-pulse"></div>
-                </div>
-              ) : user ? (
-                // Logged-in user navigation - only show role-specific links
-                <>
-                  <div className="flex items-center gap-6">
-                    {/* Reviewer-specific navigation */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-8 bg-white/10 rounded animate-pulse"></div>
+                    <div className="w-24 h-8 bg-white/10 rounded animate-pulse"></div>
+                  </div>
+                ) : user ? (
+                  <>
+                    {/* Reviewer Link */}
                     {isReviewer() && (
-                      <Link 
-                        href="/proposal/review" 
-                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 font-medium ${
-                          variant === "profile"
-                            ? 'hover:bg-white/20 text-white'
-                            : (isScrolled 
-                              ? 'hover:bg-white/10 text-white' 
-                              : 'hover:bg-gray-900/20 text-gray-900')
-                        }`}
+                      <Link
+                        href="/proposal/review"
+                        className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-white/10 transition-all text-sm font-medium"
                       >
-                        <svg className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Review Proposals
+                        Review
                       </Link>
                     )}
-                  </div>
 
-                  {/* User Profile Menu */}
-                  <div className="relative" ref={userMenuRef}>
-                    <button
-                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium transition-all duration-300 group ${
-                        isScrolled
-                          ? 'bg-white/10 hover:bg-white/20 border-white/30 text-black'
-                          : 'bg-black/5 hover:bg-black/10 border-black/10 text-gray-900'
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-full border border-black/10 overflow-hidden bg-white flex items-center justify-center">
-                        <img
-                          src={userAvatar}
-                          alt={`${user?.username || 'Portal user'} avatar`}
-                          className="w-full h-full object-cover"
-                          onError={(event) => {
-                            event.currentTarget.onerror = null;
-                            event.currentTarget.src = defaultUserAvatar;
-                          }}
-                        />
-                      </div>
-                      <div className="text-left leading-tight">
-                        <div className={`${isScrolled ? 'text-black' : 'text-gray-900'}`}>{user?.username || 'User'}</div>
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500">
-                          {user?.role || 'Guest'}
+                    {/* User Profile Menu */}
+                    <div className="relative" ref={userMenuRef}>
+                      <button
+                        onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                        className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all duration-300"
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 border border-white/20">
+                          <img
+                            src={userAvatar}
+                            alt="User"
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.src = defaultUserAvatar; }}
+                          />
                         </div>
-                      </div>
-                      <svg className={`w-4 h-4 transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''} group-hover:scale-110 ${isScrolled ? 'text-black' : 'text-gray-900'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+                        <div className="text-left hidden lg:block">
+                          <div className="text-xs font-bold leading-none mb-0.5">{user?.username}</div>
+                          <div className="text-[10px] opacity-70 uppercase tracking-wider leading-none">{user?.role}</div>
+                        </div>
+                        <svg className={`w-4 h-4 transition-transform opacity-70 ${isUserMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
 
-                    {/* Dropdown Menu */}
-                    {isUserMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-fade-in-down">
-                        <div className="px-4 py-3 border-b border-slate-100">
-                          <p className="text-sm font-medium text-slate-900">{user?.username}</p>
-                          <p className="text-xs text-slate-500">{user?.email}</p>
-                        </div>
-                        
-                        <Link href="/profile">
-                          <div className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors duration-200">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            <span className="text-sm font-medium">Profile Settings</span>
+                      {/* Dropdown Menu */}
+                      {isUserMenuOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-fade-in-up text-slate-900 overflow-hidden">
+                          <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
+                            <p className="text-sm font-bold text-slate-900">{user?.username}</p>
+                            <p className="text-xs text-slate-500 truncate">{user?.email}</p>
                           </div>
-                        </Link>
-                        
-                        <Link href="/dashboard">
-                          <div className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors duration-200">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                            </svg>
-                            <span className="text-sm font-medium">Dashboard</span>
+
+                          <div className="p-2">
+                            <Link href="/profile">
+                              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer group">
+                                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                  </svg>
+                                </div>
+                                <span className="text-sm font-medium">Profile Settings</span>
+                              </div>
+                            </Link>
+
+                            <Link href="/dashboard">
+                              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer group">
+                                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                  </svg>
+                                </div>
+                                <span className="text-sm font-medium">Dashboard</span>
+                              </div>
+                            </Link>
                           </div>
-                        </Link>
-                        
-                        <div className="border-t border-slate-100 mt-2 pt-2">
-                          <button
-                            onClick={logout}
-                            className="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 cursor-pointer transition-colors duration-200 w-full text-left"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                            <span className="text-sm font-medium">Sign Out</span>
-                          </button>
+
+                          <div className="border-t border-slate-100 mt-1 p-2">
+                            <button
+                              onClick={logout}
+                              className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-red-50 text-red-600 transition-colors w-full text-left group"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center group-hover:bg-red-100 transition-colors">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                              </div>
+                              <span className="text-sm font-medium">Sign Out</span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  // Guest navigation
+                  <div className="flex items-center gap-3">
+                    <Link href="/login">
+                      <button className="px-5 py-2 rounded-full text-sm font-semibold text-white hover:bg-white/10 transition-colors">
+                        Sign In
+                      </button>
+                    </Link>
+                    <Link href="/register">
+                      <button className="px-5 py-2 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 transition-all hover:-translate-y-0.5">
+                        Register
+                      </button>
+                    </Link>
                   </div>
-                </>
-              ) : (
-                // Guest navigation
-                <div className="flex items-center gap-4">
-                  <Link href="/login">
-                    <button className={`group px-6 py-2 rounded-lg font-medium transition-all duration-300 flex items-center gap-2 hover:scale-105 ${
-                      isScrolled 
-                        ? 'bg-gradient-to-r from-orange-700 to-orange-800 hover:from-orange-800 hover:to-orange-900 text-white shadow-lg' 
-                        : 'bg-gray-900 hover:bg-gray-800 text-white shadow-lg'
-                    }`}>
-                      <svg className="w-4 h-4 group-hover:animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                      </svg>
-                      Sign In
-                    </button>
-                  </Link>
-                  <Link href="/register">
-                    <button className={`group border-2 px-6 py-2 rounded-lg font-medium transition-all duration-300 flex items-center gap-2 hover:scale-105 ${
-                      isScrolled 
-                        ? 'border-orange-700 hover:border-orange-800 text-orange-800 hover:bg-orange-700/10 bg-white/90' 
-                        : 'border-gray-900 hover:border-gray-700 text-gray-900 hover:bg-gray-900/20 shadow-md'
-                    }`}>
-                      <svg className="w-4 h-4 group-hover:animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                      </svg>
-                      Register
-                    </button>
-                  </Link>
-                </div>
-              )}
+                )}
               </div>
 
-              <div
-                className="px-3 py-1 rounded-full bg-black text-white text-xs font-semibold shadow-lg border border-white/10 ml-2"
-                role="status"
-                aria-label="SIH Team ID 72110"
-                title="SIH Team ID: 72110"
-              >
-                SIH ID: 72110
+              {/* SIH Badge */}
+              <div className="px-3 py-1 rounded-full bg-white/10 border border-white/10 text-[10px] font-bold tracking-wider text-white/80">
+                SIH 2025
               </div>
             </div>
 
@@ -393,9 +318,7 @@ export default function Navbar({ variant = "default" }) {
             <div className="md:hidden">
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className={`p-2 transition-colors duration-300 ${
-                  isScrolled ? 'text-black hover:text-gray-700' : 'text-gray-900 hover:text-gray-700'
-                }`}
+                className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   {isMenuOpen ? (
@@ -411,23 +334,28 @@ export default function Navbar({ variant = "default" }) {
 
         {/* Mobile Navigation Menu */}
         {isMenuOpen && (
-          <div className={`md:hidden absolute top-full left-0 right-0 shadow-2xl z-50 animate-fade-in-down transition-all duration-500 ${
-            isScrolled 
-              ? 'bg-orange-700 border-t border-orange-800' 
-              : 'bg-white/10 backdrop-blur-lg border-t border-white/20'
-          }`}>
-            <div className="px-4 py-6 space-y-4">
+          <div className="md:hidden absolute top-full left-0 right-0 bg-slate-900 border-t border-slate-800 shadow-2xl animate-fade-in-down">
+            <div className="p-4 space-y-4">
               {loading ? (
-                <div className="space-y-2">
-                  <div className={`w-full h-8 rounded animate-pulse ${isScrolled ? 'bg-orange-500' : 'bg-gray-300'}`}></div>
-                  <div className={`w-3/4 h-8 rounded animate-pulse ${isScrolled ? 'bg-orange-500' : 'bg-gray-300'}`}></div>
-                  <div className={`w-1/2 h-8 rounded animate-pulse ${isScrolled ? 'bg-orange-500' : 'bg-gray-300'}`}></div>
+                <div className="space-y-3">
+                  <div className="h-10 bg-white/10 rounded animate-pulse"></div>
+                  <div className="h-10 bg-white/10 rounded animate-pulse"></div>
                 </div>
               ) : user ? (
                 <>
+                  <div className="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-xl border border-white/5">
+                    <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden">
+                      <img src={userAvatar} alt="User" className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white">{user?.username}</div>
+                      <div className="text-xs text-slate-400">{user?.email}</div>
+                    </div>
+                  </div>
+
                   {isReviewer() && (
                     <Link href="/proposal/review">
-                      <div className="flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors duration-200">
+                      <div className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl transition-colors">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -435,46 +363,39 @@ export default function Navbar({ variant = "default" }) {
                       </div>
                     </Link>
                   )}
-                  
-                  <div className="border-t border-orange-800 pt-4">
-                    <div className="px-4 py-2">
-                      <p className="text-sm text-white/70">Signed in as</p>
-                      <p className="text-white font-medium">{user?.username}</p>
-                      <p className="inline-block text-xs px-2 py-1 rounded bg-blue-800 text-white font-medium mt-2">
-                        {user?.role}
-                      </p>
-                    </div>
-                    <button
-                      onClick={logout}
-                      className="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-red-500/20 rounded-lg transition-colors duration-200 w-full text-left"
-                    >
+
+                  <Link href="/dashboard">
+                    <div className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl transition-colors">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                       </svg>
-                      Sign Out
-                    </button>
-                  </div>
+                      Dashboard
+                    </div>
+                  </Link>
+
+                  <button
+                    onClick={logout}
+                    className="flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors w-full text-left"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Sign Out
+                  </button>
                 </>
               ) : (
-                <>
+                <div className="grid grid-cols-2 gap-3">
                   <Link href="/login">
-                    <div className="flex items-center gap-3 px-4 py-3 bg-blue-800 hover:bg-blue-900 text-white rounded-lg transition-colors duration-200">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                      </svg>
+                    <button className="w-full py-3 rounded-xl font-semibold text-white bg-white/10 hover:bg-white/20 transition-colors">
                       Sign In
-                    </div>
+                    </button>
                   </Link>
-                  
                   <Link href="/register">
-                    <div className="flex items-center gap-3 px-4 py-3 border-2 border-white/30 text-white hover:bg-white/10 rounded-lg transition-colors duration-200">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                      </svg>
+                    <button className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 transition-colors">
                       Register
-                    </div>
+                    </button>
                   </Link>
-                </>
+                </div>
               )}
             </div>
           </div>
