@@ -26,15 +26,8 @@ const nextConfig = {
     domains: ['localhost', 'sih25180.onrender.com'],
     formats: ['image/webp', 'image/avif'],
   },
-  // Fix CSS import errors for external modules like KaTeX
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /\.css$/,
-      use: ['style-loader', 'css-loader'],
-    });
-    return config;
-  },
-  transpilePackages: ['@platejs/math', 'katex'],
+  // Transpile packages that need it
+  transpilePackages: ['@udecode/plate-math'],
 };
 
 export default nextConfig;
