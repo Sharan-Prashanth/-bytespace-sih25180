@@ -207,38 +207,7 @@ function CollaborateContent() {
         }
     ]);
 
-    // Inline comments state
-    const [inlineComments, setInlineComments] = useState([
-        {
-            id: 1,
-            type: 'ai',
-            position: { x: 750, y: 280 },
-            author: 'AI Assistant',
-            content: 'Consider adding specific efficiency metrics here. Current coal plants achieve 35-40%, your target of 60-65% needs justification.',
-            timestamp: '2 hours ago',
-            resolved: false
-        },
-        {
-            id: 2,
-            type: 'reviewer',
-            position: { x: 650, y: 420 },
-            author: 'Prof. Michael Chen',
-            content: 'The carbon capture percentage of 45% seems ambitious. Do you have preliminary studies supporting this figure?',
-            timestamp: '1 hour ago',
-            resolved: false
-        },
-        {
-            id: 3,
-            type: 'reviewer',
-            position: { x: 580, y: 580 },
-            author: 'Dr. Sarah Kumar',
-            content: 'Excellent methodology outline. Consider adding timeline estimates for each testing phase.',
-            timestamp: '30 mins ago',
-            resolved: false
-        }
-    ]);
-
-    const [selectedComment, setSelectedComment] = useState(null);
+    // Note: Inline comments are now handled by Plate.js built-in comment feature
 
     const [suggestions] = useState([
         {
@@ -287,41 +256,37 @@ function CollaborateContent() {
         ]
     };
 
-    // Initial proposal content
-    const initialContent = `
-    <h1 style="color: black; text-align: center; font-size: 1.8em; margin-bottom: 1.5em;">Advanced Coal Gasification Technology for Enhanced Energy Production</h1>
-    
-    <h2 style="color: black; font-weight: bold; font-size: 1.4em; margin: 1.5em 0 1em 0;">1. Problem Statement</h2>
-    <p style="color: black; line-height: 1.6; margin-bottom: 1em;">The coal sector faces significant challenges in optimizing energy extraction while minimizing environmental impact. Traditional coal combustion methods result in only 35-40% energy efficiency, with substantial CO2 emissions and particulate matter release. There is an urgent need for innovative gasification technologies that can improve energy output to 60-65% efficiency while reducing harmful emissions by 40-50%.</p>
-    
-    <p style="color: black; line-height: 1.6; margin-bottom: 1.5em;">Current coal processing facilities in India operate with outdated equipment that struggles to meet environmental compliance standards set by the Ministry of Coal. The lack of advanced gasification infrastructure limits the country's ability to maximize coal utilization for power generation and industrial applications.</p>
-    
-    <h2 style="color: black; font-weight: bold; font-size: 1.4em; margin: 1.5em 0 1em 0;">2. Research Objectives</h2>
-    <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Primary Objectives:</p>
-    <ul style="color: black; line-height: 1.6; margin-bottom: 1em; padding-left: 2em;">
-      <li style="margin-bottom: 0.5em;">Develop an integrated coal gasification system achieving 60%+ energy efficiency</li>
-      <li style="margin-bottom: 0.5em;">Design carbon capture mechanisms reducing CO2 emissions by 45%</li>
-      <li style="margin-bottom: 0.5em;">Create automated monitoring systems for real-time process optimization</li>
-      <li style="margin-bottom: 0.5em;">Establish economic viability models for large-scale implementation</li>
-    </ul>
-    
-    <h2 style="color: black; font-weight: bold; font-size: 1.4em; margin: 1.5em 0 1em 0;">3. Methodology & Approach</h2>
-    <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Phase 1: Laboratory Testing (Months 1-8)</p>
-    <ul style="color: black; line-height: 1.6; margin-bottom: 1em; padding-left: 2em;">
-      <li style="margin-bottom: 0.5em;">Coal characterization using X-ray fluorescence and thermogravimetric analysis</li>
-      <li style="margin-bottom: 0.5em;">Gasification reactor design using computational fluid dynamics modeling</li>
-      <li style="margin-bottom: 0.5em;">Catalyst development for enhanced reaction efficiency</li>
-      <li style="margin-bottom: 0.5em;">Small-scale prototype testing under controlled conditions</li>
-    </ul>
-    
-    <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Phase 2: Pilot Plant Development (Months 9-18)</p>
-    <ul style="color: black; line-height: 1.6; margin-bottom: 1.5em; padding-left: 2em;">
-      <li style="margin-bottom: 0.5em;">Construction of pilot-scale gasification facility</li>
-      <li style="margin-bottom: 0.5em;">Integration of carbon capture systems</li>
-      <li style="margin-bottom: 0.5em;">Performance testing with various coal grades</li>
-      <li style="margin-bottom: 0.5em;">Environmental impact assessment and monitoring</li>
-    </ul>
-  `;
+    // Initial proposal content in Plate.js format
+    const initialContent = [
+        { type: 'h1', children: [{ text: 'Advanced Coal Gasification Technology for Enhanced Energy Production' }] },
+        { type: 'p', children: [{ text: '' }] },
+        { type: 'h2', children: [{ text: '1. Problem Statement' }] },
+        { type: 'p', children: [{ text: 'The coal sector faces significant challenges in optimizing energy extraction while minimizing environmental impact. Traditional coal combustion methods result in only 35-40% energy efficiency, with substantial CO2 emissions and particulate matter release. There is an urgent need for innovative gasification technologies that can improve energy output to 60-65% efficiency while reducing harmful emissions by 40-50%.' }] },
+        { type: 'p', children: [{ text: 'Current coal processing facilities in India operate with outdated equipment that struggles to meet environmental compliance standards set by the Ministry of Coal. The lack of advanced gasification infrastructure limits the country\'s ability to maximize coal utilization for power generation and industrial applications.' }] },
+        { type: 'h2', children: [{ text: '2. Research Objectives' }] },
+        { type: 'p', children: [{ text: 'Primary Objectives:', bold: true }] },
+        { type: 'ul', children: [
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Develop an integrated coal gasification system achieving 60%+ energy efficiency' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Design carbon capture mechanisms reducing CO2 emissions by 45%' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Create automated monitoring systems for real-time process optimization' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Establish economic viability models for large-scale implementation' }] }] },
+        ]},
+        { type: 'h2', children: [{ text: '3. Methodology & Approach' }] },
+        { type: 'p', children: [{ text: 'Phase 1: Laboratory Testing (Months 1-8)', bold: true }] },
+        { type: 'ul', children: [
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Coal characterization using X-ray fluorescence and thermogravimetric analysis' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Gasification reactor design using computational fluid dynamics modeling' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Catalyst development for enhanced reaction efficiency' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Small-scale prototype testing under controlled conditions' }] }] },
+        ]},
+        { type: 'p', children: [{ text: 'Phase 2: Pilot Plant Development (Months 9-18)', bold: true }] },
+        { type: 'ul', children: [
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Construction of pilot-scale gasification facility' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Integration of carbon capture systems' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Performance testing with various coal grades' }] }] },
+            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Environmental impact assessment and monitoring' }] }] },
+        ]},
+    ];
 
     useEffect(() => {
         const fetchProposal = async () => {
@@ -831,181 +796,31 @@ function CollaborateContent() {
                     {/* Advanced Proposal Editor */}
                     <div className="relative mb-6 animate-slideInUp" style={{ animationDelay: '0.6s' }}>
                         <AdvancedProposalEditor
-                            content={editorContent}
-                            onChange={handleEditorContentChange}
+                            initialContent={editorContent}
+                            onContentChange={handleEditorContentChange}
                             onWordCountChange={handleWordCountChange}
                             onCharacterCountChange={handleCharacterCountChange}
-                            isCollaborative={true}
+                            proposalTitle={proposal?.title || 'Research Proposal'}
+                            showStats={true}
                         />
 
-                        {/* Inline Comments */}
-                        {inlineComments.map((comment) => (
-                            <div
-                                key={comment.id}
-                                className="absolute cursor-pointer z-10"
-                                style={{ left: comment.position.x, top: comment.position.y }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedComment(selectedComment === comment.id ? null : comment.id);
-                                }}
-                            >
-                                <div className={`w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold ${comment.type === 'ai' ? 'bg-purple-600' : 'bg-blue-600'
-                                    } hover:scale-110 transition-transform ${comment.resolved ? 'opacity-30' : ''}`}>
-                                    {comment.type === 'ai' ? (
-                                        <img
-                                            src="/images/AI assistant logo.png"
-                                            alt="AI Assistant"
-                                            className="w-3 h-3 object-contain"
-                                        />
-                                    ) : (
-                                        <span className="text-xs font-bold">
-                                            {comment.author.split(' ').map(n => n.charAt(0)).join('').substring(0, 2)}
-                                        </span>
-                                    )}
-                                </div>
+                        {/* Inline Comments - Now handled by Plate.js built-in comment feature */}
+                        {/* Use the comment button in the toolbar to add comments directly in the editor */}
+                    </div>
 
-                                {selectedComment === comment.id && (
-                                    <div
-                                        className="absolute top-full left-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-xl p-4 z-50"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        {comment.resolved ? (
-                                            // Resolved comment display
-                                            <div>
-                                                <div className="flex items-start gap-3 mb-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${comment.type === 'ai' ? 'bg-purple-600' : 'bg-blue-600'
-                                                        }`}>
-                                                        {comment.type === 'ai' ? (
-                                                            <img
-                                                                src="/images/AI assistant logo.png"
-                                                                alt="AI Assistant"
-                                                                className="w-4 h-4 object-contain"
-                                                            />
-                                                        ) : (
-                                                            comment.author.charAt(0)
-                                                        )}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="font-semibold text-black text-sm">{comment.author}</span>
-                                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${comment.type === 'ai' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                                                                }`}>
-                                                                {comment.type === 'ai' ? 'AI' : 'Reviewer'}
-                                                            </span>
-                                                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-                                                                RESOLVED
-                                                            </span>
-                                                        </div>
-                                                        <div className="text-xs text-gray-500">{comment.timestamp}</div>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setSelectedComment(null)}
-                                                        className="text-gray-500 hover:text-gray-500"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <p className="text-sm text-gray-500 mb-3">{comment.content}</p>
-                                                <div className="text-xs text-gray-500 bg-green-50 p-2 rounded border-l-2 border-green-200">
-                                                    Resolved by {comment.resolvedBy || user?.name || 'You'} • {comment.resolvedAt || 'Just now'}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            // Active comment display
-                                            <div>
-                                                <div className="flex items-start gap-3 mb-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${comment.type === 'ai' ? 'bg-purple-600' : 'bg-blue-600'
-                                                        }`}>
-                                                        {comment.type === 'ai' ? (
-                                                            <img
-                                                                src="/images/AI assistant logo.png"
-                                                                alt="AI Assistant"
-                                                                className="w-4 h-4 object-contain"
-                                                            />
-                                                        ) : (
-                                                            comment.author.charAt(0)
-                                                        )}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="font-semibold text-black text-sm">{comment.author}</span>
-                                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${comment.type === 'ai' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                                                                }`}>
-                                                                {comment.type === 'ai' ? 'AI' : 'Reviewer'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="text-xs text-gray-500">{comment.timestamp}</div>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setSelectedComment(null)}
-                                                        className="text-gray-500 hover:text-gray-500"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <p className="text-sm text-black mb-3">{comment.content}</p>
-
-                                                {/* Reply Window */}
-                                                {replyWindows[comment.id] && (
-                                                    <div className="mb-3 p-3 bg-gray-50 rounded-lg border">
-                                                        <textarea
-                                                            value={replyMessages[comment.id] || ''}
-                                                            onChange={(e) => handleReplyChange(comment.id, e.target.value)}
-                                                            placeholder="Type your reply..."
-                                                            className="w-full p-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                            rows="3"
-                                                            autoFocus
-                                                        />
-                                                        <div className="flex gap-2 mt-2">
-                                                            <button
-                                                                onClick={() => handleReplySubmit(comment.id)}
-                                                                className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs rounded-lg font-semibold"
-                                                            >
-                                                                Send Reply
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleReplyWindow(comment.id);
-                                                                }}
-                                                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-500 text-xs rounded-lg font-semibold"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleResolveComment(comment.id);
-                                                        }}
-                                                        className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-800 text-xs rounded-lg font-semibold"
-                                                    >
-                                                        Resolve
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            toggleReplyWindow(comment.id);
-                                                        }}
-                                                        className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-500 text-xs rounded-lg font-semibold"
-                                                    >
-                                                        Reply
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                    {/* Note: Plate.js has built-in commenting feature accessible from the toolbar */}
+                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                            <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                                <h4 className="font-semibold text-blue-900 mb-1">Collaborative Commenting</h4>
+                                <p className="text-sm text-blue-700">
+                                    Use the <strong>comment button</strong> in the editor toolbar to add inline comments and collaborate with your team members directly within the document.
+                                </p>
                             </div>
-                        ))}
+                        </div>
                     </div>
 
                     {/* Save Changes Button - Separate from Editor */}
