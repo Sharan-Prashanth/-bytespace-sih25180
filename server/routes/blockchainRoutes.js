@@ -4,7 +4,7 @@ import {
   computeFileHash,
   uploadFileToIPFS,
   storeOnChain
-} from "../../blockchain/utils/blockchainClient.js";
+} from "../utils/blockchainShim.js";
 
 const router = express.Router();
 

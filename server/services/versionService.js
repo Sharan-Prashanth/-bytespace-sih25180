@@ -8,7 +8,7 @@ import {
   getRecordsByProposal,
   getRecord,
   getRecordCount
-} from '../../blockchain/utils/blockchainClient.js';
+} from '../utils/blockchainShim.js';
 
 // Save draft version: compute hash, duplicate-detect, upload and store on-chain
 export async function saveDraftVersion({ proposalId, content, note = 'Draft Version', uploadToIpfs = true, user = {} }) {

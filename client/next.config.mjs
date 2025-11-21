@@ -26,6 +26,8 @@ const nextConfig = {
     domains: ['localhost', 'sih25180.onrender.com'],
     formats: ['image/webp', 'image/avif'],
   },
+  // Transpile packages that need it
+  transpilePackages: ['@udecode/plate-math'],
 };
 
 export default nextConfig;

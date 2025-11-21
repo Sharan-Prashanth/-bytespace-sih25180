@@ -1,7 +1,6 @@
 import { AuthProvider } from "../context/AuthContext";
 import LoadingScreen from "../components/LoadingScreen";
 import "../styles/globals.css";
-import "../styles/editor.css";
 import { useState, useEffect } from "react";
 import Script from 'next/script';
 

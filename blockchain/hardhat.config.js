@@ -1,16 +1,17 @@
-import "@nomicfoundation/hardhat-toolbox";
-import path from "path";
-import url from "url";
 
-const __filename = url.fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
-export default {
+/** @type import('hardhat/config').HardhatUserConfig */
+module.exports = {
   solidity: "0.8.20",
   networks: {
     localhost: {
       url: "http://127.0.0.1:8545",
-      chainId: 31337
-    }
-  }
+    },
+    sepolia: {
+      url: process.env.SEPOLIA_RPC_URL || "",
+      accounts: process.env.WALLET_PRIVATE_KEY ? [process.env.WALLET_PRIVATE_KEY] : [],
+    },
+  },
 };
