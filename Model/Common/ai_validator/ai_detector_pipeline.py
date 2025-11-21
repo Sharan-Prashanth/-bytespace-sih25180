@@ -57,7 +57,7 @@ WORKER_COUNT = min(int(os.getenv("WORKER_COUNT", str(max(1, cpu_count() - 1)))),
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash-lite")
 # Optional trained validator model (joblib file). If present, use it to score sentences.
-MODEL_JOBLIB_PATH = r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\ai_validator\pre-trained\my_trained_model.joblib"
+MODEL_JOBLIB_PATH = r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\Common\ai_validator\pre-trained\my_trained_model.joblib"
 AI_VALIDATOR_MODEL = None
 AI_VALIDATOR_AVAILABLE = False
 try:
