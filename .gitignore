@@ -55,3 +55,6 @@ Thumbs.db
 # Ensure npm lockfiles are tracked (don't ignore package-lock.json)
 !package-lock.json
 !client/package-lock.json
+
+# Ignore pre-trained model directories and their artifacts
+**/pre-trained/
