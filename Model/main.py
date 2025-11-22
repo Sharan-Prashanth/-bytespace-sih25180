@@ -11,13 +11,8 @@ from RAG import timeline
 from Json_extraction import extractor
 import uvicorn
 from data_files import file_storage
-<<<<<<< HEAD
 from Common.ai_validator import ai_detector_pipeline
-from Model.Report import report_gen
-=======
-from ai_validator import ai_detector_pipeline
-from RAG import report_gen
->>>>>>> 694690a0870dec395c19d2d2221e8c7afb3c97af
+from Report import report_gen
 app = FastAPI()
 
 # Allow CORS for frontend
