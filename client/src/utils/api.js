@@ -1,28 +1,46 @@
+import axios from 'axios';
+
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://sih25180.onrender.com';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
-// API Endpoints
-export const API_ENDPOINTS = {
-  // Auth endpoints
-  LOGIN: `${API_BASE_URL}/api/auth/login`,
-  REGISTER: `${API_BASE_URL}/api/auth/register`,
-  ME: `${API_BASE_URL}/api/auth/me`,
-  PROFILE: `${API_BASE_URL}/api/auth/profile`,
-  
-  // Proposal endpoints
-  PROPOSALS: `${API_BASE_URL}/api/proposals`,
-  UPLOAD: `${API_BASE_URL}/api/upload`,
-  
-  // Collaboration endpoints
-  INVITE_COLLABORATOR: `${API_BASE_URL}/api/collaboration/invite`,
-};
+// Create axios instance
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-// Helper function to build proposal-specific URLs
-export const getProposalUrl = (id, action = '') => {
-  if (action) {
-    return `${API_BASE_URL}/api/proposals/${id}/${action}`;
+// Request interceptor to add auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return `${API_BASE_URL}/api/proposals/${id}`;
-};
+);
 
-export default API_BASE_URL;
+// Response interceptor for error handling
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Handle unauthorized access
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;

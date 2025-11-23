@@ -1,4 +1,6 @@
-﻿import { useState } from "react";
+﻿'use client';
+
+import { useState } from "react";
 import { useRouter } from "next/router";
 import { useAuth, ROLES } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
@@ -8,16 +10,43 @@ export default function Register() {
   const router = useRouter();
   const { register } = useAuth();
   const [form, setForm] = useState({
-    name: "",
+    fullName: "",
     email: "", 
     password: "",
-    role: ROLES.USER,
-    department: ""
+    phoneNumber: "",
+    designation: "",
+    organisationName: "",
+    organisationType: "INDIAN_ACADEMIC_RESEARCH",
+    country: "India",
+    address: {
+      line1: "",
+      line2: "",
+      city: "",
+      state: "",
+      postalCode: ""
+    },
+    expertiseDomains: ""
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    // Handle nested address fields
+    if (name.startsWith('address.')) {
+      const addressField = name.split('.')[1];
+      setForm({
+        ...form,
+        address: {
+          ...form.address,
+          [addressField]: value
+        }
+      });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,15 +54,15 @@ export default function Register() {
     setError("");
 
     try {
-      // Add minimum loading time for better UX
-      const registerPromise = register(form.name, form.email, form.password, form.role, form.department);
-      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2500));
+      // Prepare form data
+      const registrationData = {
+        ...form,
+        expertiseDomains: form.expertiseDomains ? form.expertiseDomains.split(',').map(e => e.trim()).filter(e => e) : []
+      };
       
-      await Promise.all([registerPromise, minLoadingTime]);
+      await register(registrationData);
       router.push("/dashboard");
     } catch (err) {
-      // Even on error, maintain minimum loading time
-      await new Promise(resolve => setTimeout(resolve, 1500));
       setError(err.message);
       setLoading(false);
     }
@@ -89,21 +118,22 @@ export default function Register() {
               </div>
             )}
 
+            {/* Personal Information */}
             <div className="mb-4 animate-fade-in-up animation-delay-400">
-              <label className="block text-slate-700 text-xs font-semibold mb-2">Full Name</label>
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Full Name *</label>
               <input 
                 type="text" 
-                name="name" 
+                name="fullName" 
                 placeholder="Enter your full name"
-                value={form.name} 
+                value={form.fullName} 
                 onChange={handleChange} 
                 className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
                 required 
               />
             </div>
 
-            <div className="mb-4 animate-fade-in-up animation-delay-500">
-              <label className="block text-slate-700 text-xs font-semibold mb-2">Email Address</label>
+            <div className="mb-4 animate-fade-in-up animation-delay-450">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Email Address *</label>
               <input 
                 type="email" 
                 name="email" 
@@ -115,13 +145,53 @@ export default function Register() {
               />
             </div>
 
-            <div className="mb-4 animate-fade-in-up animation-delay-600">
-              <label className="block text-slate-700 text-xs font-semibold mb-2">Password</label>
+            <div className="mb-4 animate-fade-in-up animation-delay-500">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Password *</label>
               <input 
                 type="password" 
                 name="password" 
-                placeholder="Create a strong password"
+                placeholder="Create a strong password (min 6 characters)"
                 value={form.password} 
+                onChange={handleChange} 
+                className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
+                required 
+                minLength={6}
+              />
+            </div>
+
+            <div className="mb-4 animate-fade-in-up animation-delay-550">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Phone Number</label>
+              <input 
+                type="tel" 
+                name="phoneNumber" 
+                placeholder="Enter your phone number"
+                value={form.phoneNumber} 
+                onChange={handleChange} 
+                className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
+              />
+            </div>
+
+            {/* Professional Information */}
+            <div className="mb-4 animate-fade-in-up animation-delay-600">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Designation *</label>
+              <input 
+                type="text" 
+                name="designation" 
+                placeholder="e.g., Research Scholar, Professor, Scientist"
+                value={form.designation} 
+                onChange={handleChange} 
+                className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
+                required 
+              />
+            </div>
+
+            <div className="mb-4 animate-fade-in-up animation-delay-650">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Organisation Name *</label>
+              <input 
+                type="text" 
+                name="organisationName" 
+                placeholder="Enter your organisation/institution name"
+                value={form.organisationName} 
                 onChange={handleChange} 
                 className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
                 required 
@@ -129,37 +199,91 @@ export default function Register() {
             </div>
 
             <div className="mb-4 animate-fade-in-up animation-delay-700">
-              <label className="block text-slate-700 text-xs font-semibold mb-2">Department</label>
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Organisation Type *</label>
+              <select 
+                name="organisationType" 
+                value={form.organisationType} 
+                onChange={handleChange} 
+                className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs"
+                required
+              >
+                <option value="INDIAN_ACADEMIC_RESEARCH">Indian Academic/Research Institution</option>
+                <option value="INDIAN_GOVT_ORGANISATION">Indian Government Organisation</option>
+                <option value="PUBLIC_SECTOR_SUBSIDIARY">Public Sector Subsidiary</option>
+                <option value="FOREIGN_INSTITUTE">Foreign Institute</option>
+                <option value="CMPDI">CMPDI</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+
+            <div className="mb-4 animate-fade-in-up animation-delay-750">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Country *</label>
               <input 
                 type="text" 
-                name="department" 
-                placeholder="e.g., Computer Science, Engineering"
-                value={form.department} 
+                name="country" 
+                placeholder="Enter your country"
+                value={form.country} 
                 onChange={handleChange} 
                 className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
                 required 
               />
             </div>
 
-            <div className="mb-6 animate-fade-in-up animation-delay-800">
-              <label className="block text-slate-700 text-xs font-semibold mb-2">Role</label>
-              <select 
-                name="role" 
-                value={form.role} 
+            {/* Address (Optional) */}
+            <div className="mb-4 animate-fade-in-up animation-delay-800">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Address Line 1</label>
+              <input 
+                type="text" 
+                name="address.line1" 
+                placeholder="Street address, P.O. Box"
+                value={form.address.line1} 
                 onChange={handleChange} 
-                className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs"
-                required
-              >
-                <option value={ROLES.USER} className="text-xs">User (Research Proposal Submitter)</option>
-                <option value={ROLES.REVIEWER} className="text-xs">Reviewer (Proposal Evaluator)</option>
-                <option value={ROLES.STAFF} className="text-xs">Staff (Research Assistant)</option>
-              </select>
+                className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4 animate-fade-in-up animation-delay-850">
+              <div>
+                <label className="block text-slate-700 text-xs font-semibold mb-2">City</label>
+                <input 
+                  type="text" 
+                  name="address.city" 
+                  placeholder="City"
+                  value={form.address.city} 
+                  onChange={handleChange} 
+                  className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-700 text-xs font-semibold mb-2">State</label>
+                <input 
+                  type="text" 
+                  name="address.state" 
+                  placeholder="State"
+                  value={form.address.state} 
+                  onChange={handleChange} 
+                  className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="mb-6 animate-fade-in-up animation-delay-900">
+              <label className="block text-slate-700 text-xs font-semibold mb-2">Expertise Domains</label>
+              <input 
+                type="text" 
+                name="expertiseDomains" 
+                placeholder="e.g., Coal Mining, Environmental Science (comma-separated)"
+                value={form.expertiseDomains} 
+                onChange={handleChange} 
+                className="w-full px-3 py-2.5 border border-orange-200/60 rounded-lg focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 focus:outline-none text-slate-900 bg-white/70 backdrop-blur-sm font-medium transition-all duration-300 hover:border-orange-300 text-xs placeholder:text-xs"
+              />
+              <p className="text-xs text-slate-500 mt-1">Separate multiple domains with commas</p>
             </div>
 
             <button 
               type="submit" 
               disabled={loading} 
-              className="w-full group bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-3 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 hover:scale-102 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none animate-fade-in-up animation-delay-900 flex items-center justify-center gap-2"
+              className="w-full group bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-3 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 hover:scale-102 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none animate-fade-in-up animation-delay-950 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -199,15 +323,15 @@ export default function Register() {
               <div className="text-xs text-orange-700 space-y-1.5">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-orange-400 rounded-full"></div>
-                  <span><strong>User:</strong> Submit and manage research proposals</span>
+                  <span><strong>Note:</strong> All users register with USER role</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-orange-600 rounded-full"></div>
-                  <span><strong>Reviewer:</strong> Review and evaluate proposals</span>
+                  <span>Committee members are created by Super Admin</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                  <span><strong>Staff:</strong> Work on assigned research projects</span>
+                  <span>Submit research proposals after registration</span>
                 </div>
               </div>
               </div>

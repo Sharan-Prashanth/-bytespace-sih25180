@@ -13,6 +13,14 @@ export default function Document() {
         <link rel="apple-touch-icon" href="/favicon.ico" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
         
+        {/* KaTeX CSS for math equations */}
+        <link 
+          rel="stylesheet" 
+          href="https://cdn.jsdelivr.net/npm/katex@0.16.18/dist/katex.min.css" 
+          integrity="sha384-9PvLvaiSKCPkFKB1ZsEoTjgnJn+O3KvEwtsz37/XrkYft3DTk2gHdYvd9oWgW3tV" 
+          crossOrigin="anonymous"
+        />
+        
         {/* Meta tags for better SEO */}
         <meta name="theme-color" content="#ea580c" />
         <meta name="description" content="NaCCER Portal - National Centre for Coal & Energy Research" />

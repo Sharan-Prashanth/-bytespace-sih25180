@@ -11,7 +11,6 @@ export const protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
     }
 
-
     if (!token) {
       return res.status(401).json({ 
         success: false, 
@@ -24,8 +23,7 @@ export const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       // Get user from token
-      const user = await User.findById(decoded.id).select('-password');
-
+      const user = await User.findById(decoded.id).select('-passwordHash');
       
       if (!user) {
         return res.status(401).json({ 
@@ -68,10 +66,13 @@ export const authorize = (...roles) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    // Check if user has any of the required roles
+    const hasRequiredRole = roles.some(role => req.user.roles.includes(role));
+    
+    if (!hasRequiredRole) {
       return res.status(403).json({ 
         success: false, 
-        message: `Role ${req.user.role} is not authorized to access this resource` 
+        message: `Your role(s) [${req.user.roles.join(', ')}] are not authorized to access this resource` 
       });
     }
 
@@ -90,7 +91,8 @@ export const authorizeOwnerOrRole = (...roles) => {
     }
 
     // Allow if user has one of the specified roles
-    if (roles.includes(req.user.role)) {
+    const hasRequiredRole = roles.some(role => req.user.roles.includes(role));
+    if (hasRequiredRole) {
       return next();
     }
 

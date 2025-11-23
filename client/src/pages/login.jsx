@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "../context/AuthContext";
@@ -20,15 +22,9 @@ export default function Login() {
     setError("");
 
     try {
-      // Add minimum loading time for better UX
-      const loginPromise = login(form.email, form.password);
-      const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000));
-      
-      await Promise.all([loginPromise, minLoadingTime]);
+      await login(form.email, form.password);
       router.push("/dashboard");
     } catch (err) {
-      // Even on error, maintain minimum loading time
-      await new Promise(resolve => setTimeout(resolve, 1500));
       setError(err.message);
       setLoading(false);
     }
@@ -150,18 +146,30 @@ export default function Login() {
                 </svg>
                 <h3 className="text-xs font-bold text-orange-800">Test Credentials</h3>
               </div>
-              <div className="text-xs text-orange-700 space-y-1.5">
+              <div className="text-xs text-orange-700 space-y-1.5 max-h-48 overflow-y-auto pr-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-orange-400 rounded-full"></div>
-                  <span><strong>User:</strong> a@gmail.com / password</span>
+                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0"></div>
+                  <span><strong>Admin:</strong> bytespacesih@gmail.com / adminpass</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-orange-600 rounded-full"></div>
-                  <span><strong>Reviewer:</strong> b@gmail.com / password</span>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                  <span><strong>User:</strong> user-bs@gmail.com / userpass</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                  <span><strong>Staff:</strong> c@gmail.com / password</span>
+                  <div className="w-1.5 h-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
+                  <span><strong>CMPDI:</strong> cmpdi-bs@gmail.com / cmpdipass</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+                  <span><strong>Expert:</strong> expert-bs@gmail.com / expertpass</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                  <span><strong>TSSRC:</strong> tssrc-bs@gmail.com / tssrcpass</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full flex-shrink-0"></div>
+                  <span><strong>SSRC:</strong> ssrc-bs@gmail.com / ssrcpass</span>
                 </div>
               </div>
               </div>

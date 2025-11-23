@@ -1,3 +1,5 @@
+'use client';
+
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Profile from "../components/Profile";

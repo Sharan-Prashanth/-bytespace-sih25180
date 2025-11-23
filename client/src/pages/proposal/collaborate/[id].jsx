@@ -1,13 +1,23 @@
+'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import LoadingScreen from '../../../components/LoadingScreen';
-import AdvancedProposalEditor from '../../../components/AdvancedProposalEditor';
-import Chatbot from '../../../components/Chatbot';
+import AdvancedProposalEditor from '../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
+import Chatbot from '../../../components/Saarthi';
 import VersionHistory from '../../../components/VersionHistory';
 import ChatWindow from '../../../components/ChatWindow';
 import { createPortal } from 'react-dom';
+import apiClient from '../../../utils/api';
+import { 
+  getCollaborators, 
+  getActiveCollaborators, 
+  inviteCollaborator,
+  removeCollaborator,
+  updateCollaborator 
+} from '../../../utils/collaborationApi';
 
 // Custom CSS animations for the collaborate page
 const collaborateAnimationStyles = `
@@ -155,8 +165,15 @@ function CollaborateContent() {
     const [characterCount, setCharacterCount] = useState(0);
     const [editorContent, setEditorContent] = useState('');
 
+    // Real collaboration state
+    const [collaborators, setCollaborators] = useState([]);
+    const [activeCollaborators, setActiveCollaborators] = useState([]);
+    const [author, setAuthor] = useState(null);
+    const [loadingCollaborators, setLoadingCollaborators] = useState(false);
+
     // Collaboration modal state
     const [showCollaborateModal, setShowCollaborateModal] = useState(false);
+    const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
     const [collaboratorEmail, setCollaboratorEmail] = useState('');
     const [collaboratorRole, setCollaboratorRole] = useState('');
     const [collaboratorDescription, setCollaboratorDescription] = useState('');
@@ -288,27 +305,78 @@ function CollaborateContent() {
         ]},
     ];
 
+    // Load collaborators
+    const loadCollaborators = async () => {
+        if (!id) return;
+        
+        try {
+            setLoadingCollaborators(true);
+            const collabData = await getCollaborators(id);
+            setCollaborators(collabData.collaborators || []);
+            setAuthor(collabData.author);
+            console.log('✅ Collaborators loaded:', collabData);
+        } catch (error) {
+            console.error('❌ Failed to load collaborators:', error);
+        } finally {
+            setLoadingCollaborators(false);
+        }
+    };
+
+    // Load active collaborators
+    const loadActiveCollaborators = async () => {
+        if (!id) return;
+        
+        try {
+            const activeData = await getActiveCollaborators(id);
+            setActiveCollaborators(activeData.users || []);
+        } catch (error) {
+            console.error('❌ Failed to load active collaborators:', error);
+        }
+    };
+
     useEffect(() => {
-        const fetchProposal = async () => {
+        const loadProposal = async () => {
             try {
                 if (id) {
+                    console.log('📖 Loading proposal for collaboration:', id);
                     setLoading(true);
-                    // Simulate API call
-                    setTimeout(() => {
+                    
+                    try {
+                        const response = await apiClient.get(`/api/proposals/${id}`);
+                        const proposalData = response.data.proposal || response.data;
+                        setProposal(proposalData);
+                        console.log('✅ Proposal loaded for collaboration');
+                        
+                        // Load collaborators
+                        await loadCollaborators();
+                        await loadActiveCollaborators();
+                    } catch (error) {
+                        console.warn('⚠️  Using sample data as fallback:', error.message);
+                        // Fallback to sample data for demo
                         setProposal(sampleProposal);
                         setEditorContent(initialContent);
+                    } finally {
                         setLoading(false);
-                    }, 1000);
+                    }
                 }
             } catch (error) {
-                console.error("Error fetching proposal:", error);
+                console.error("❌ Error in loadProposal:", error);
                 setProposal(sampleProposal);
                 setEditorContent(initialContent);
                 setLoading(false);
             }
         };
 
-        fetchProposal();
+        loadProposal();
+
+        // Poll for active collaborators every 10 seconds
+        const interval = setInterval(() => {
+            if (id) {
+                loadActiveCollaborators();
+            }
+        }, 10000);
+
+        return () => clearInterval(interval);
     }, [id]);
 
     // Handle editor content changes
@@ -329,7 +397,7 @@ function CollaborateContent() {
         const newMessage = {
             type: 'user',
             sender: user?.name || 'Current User',
-            role: user?.role || 'Collaborator',
+            role: user?.role || 'user',
             content: messageText,
             time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
         };
@@ -438,36 +506,41 @@ function CollaborateContent() {
 
         setIsInviting(true);
         try {
-            // Here you would typically make an API call to send the invitation
-            const response = await fetch('/api/invite-collaborator', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email: collaboratorEmail,
-                    role: collaboratorRole,
-                    description: collaboratorDescription,
-                    proposalId: id,
-                    inviteType: 'collaboration',
-                    platform: 'NaCCER Research Portal'
-                }),
+            const result = await inviteCollaborator(id, {
+                email: collaboratorEmail,
+                role: collaboratorRole,
+                description: collaboratorDescription
             });
 
-            if (response.ok) {
-                alert(`Collaboration invitation sent to ${collaboratorEmail} as ${collaboratorRole}!`);
+            if (result.success) {
+                alert(`✅ Collaboration invitation sent to ${collaboratorEmail}!`);
                 setCollaboratorEmail('');
                 setCollaboratorRole('');
                 setCollaboratorDescription('');
                 setShowCollaborateModal(false);
-            } else {
-                throw new Error('Failed to send invitation');
+                
+                // Reload collaborators
+                await loadCollaborators();
             }
         } catch (error) {
             console.error('Error sending invitation:', error);
-            alert('Failed to send invitation. Please try again.');
+            alert(`❌ Failed to send invitation: ${error.message}`);
         } finally {
             setIsInviting(false);
+        }
+    };
+
+    // Handle removing a collaborator
+    const handleRemoveCollaborator = async (collaboratorId) => {
+        if (!confirm('Are you sure you want to remove this collaborator?')) return;
+
+        try {
+            await removeCollaborator(id, collaboratorId);
+            alert('✅ Collaborator removed successfully');
+            await loadCollaborators();
+        } catch (error) {
+            console.error('Error removing collaborator:', error);
+            alert(`❌ Failed to remove collaborator: ${error.message}`);
         }
     };
 
@@ -551,7 +624,7 @@ function CollaborateContent() {
         );
     }
 
-    const onlineCollaborators = proposal.collaborators.filter(c => c.status === 'online').length;
+    const onlineCollaborators = proposal.collaborators?.filter(c => c.status === 'online').length || 0;
 
     return (
         <>
@@ -664,33 +737,69 @@ function CollaborateContent() {
 
                         {/* Collaborator Status */}
                         <div className="flex items-center gap-4 animate-fadeIn">
-                            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                            {/* View All Collaborators Button */}
+                            <button
+                                onClick={() => setShowCollaboratorsList(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-all cursor-pointer"
+                            >
                                 <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                 </svg>
-                                <span className="text-blue-800 font-semibold text-sm">{onlineCollaborators} online collaborators</span>
-                            </div>
+                                <span className="text-blue-800 font-semibold text-sm">
+                                    {activeCollaborators.length} online • {(collaborators.length + 1)} total
+                                </span>
+                            </button>
 
                             {/* Active Collaborators Display */}
                             <div className="flex -space-x-2">
-                                {proposal.collaborators.map((collaborator, index) => (
-                                    <div key={index} className="relative">
+                                {/* Show author first */}
+                                {author && (
+                                    <div className="relative">
                                         <div
-                                            className={`w-10 h-10 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-sm font-bold cursor-pointer transition-transform hover:scale-110 ${collaborator.role === 'Principal Investigator' ? 'bg-blue-600' :
-                                                    collaborator.role === 'Technical Reviewer' ? 'bg-purple-600' :
-                                                        collaborator.role === 'Research Coordinator' ? 'bg-green-600' :
-                                                            'bg-gray-600'
-                                                }`}
-                                            onMouseEnter={(e) => handleMouseEnter(collaborator, e)}
+                                            className="w-10 h-10 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-sm font-bold cursor-pointer transition-transform hover:scale-110 bg-blue-600"
+                                            onMouseEnter={(e) => handleMouseEnter({
+                                                name: author.user?.name || 'Author',
+                                                role: 'Principal Investigator',
+                                                status: author.isActiveNow ? 'online' : 'offline'
+                                            }, e)}
                                             onMouseLeave={handleMouseLeave}
                                         >
-                                            {collaborator.avatar}
+                                            {(author.user?.name || 'A').substring(0, 2).toUpperCase()}
                                         </div>
-                                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border border-white ${collaborator.status === 'online' ? 'bg-green-500' :
-                                                collaborator.status === 'away' ? 'bg-yellow-500' : 'bg-gray-400'
-                                            }`}></div>
+                                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border border-white ${author.isActiveNow ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
                                     </div>
-                                ))}
+                                )}
+                                
+                                {/* Show collaborators */}
+                                {collaborators.slice(0, 5).map((collab, index) => {
+                                    const getRoleBgColor = (role) => {
+                                        switch(role) {
+                                            case 'principal_investigator': return 'bg-blue-600';
+                                            case 'admin': return 'bg-purple-600';
+                                            case 'reviewer': return 'bg-orange-600';
+                                            case 'collaborator': return 'bg-green-600';
+                                            case 'observer': return 'bg-gray-600';
+                                            default: return 'bg-indigo-600';
+                                        }
+                                    };
+                                    
+                                    return (
+                                        <div key={collab._id || index} className="relative">
+                                            <div
+                                                className={`w-10 h-10 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-sm font-bold cursor-pointer transition-transform hover:scale-110 ${getRoleBgColor(collab.role)}`}
+                                                onMouseEnter={(e) => handleMouseEnter({
+                                                    name: collab.user?.name || 'Collaborator',
+                                                    role: collab.role,
+                                                    status: collab.isActiveNow ? 'online' : 'offline'
+                                                }, e)}
+                                                onMouseLeave={handleMouseLeave}
+                                            >
+                                                {(collab.user?.name || 'C').substring(0, 2).toUpperCase()}
+                                            </div>
+                                            <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border border-white ${collab.isActiveNow ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                                        </div>
+                                    );
+                                })}
 
                                 {/* Add Collaborator Button */}
                                 <div className="relative">
@@ -727,7 +836,7 @@ function CollaborateContent() {
                             </div>
                             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                                 <div className="text-blue-600 text-sm font-semibold mb-1">Principal Investigator</div>
-                                <div className="text-black font-semibold">{proposal.author}</div>
+                                <div className="text-black font-semibold">{proposal.author?.name || author?.user?.name || 'Unknown'}</div>
                             </div>
                             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                                 <div className="text-green-600 text-sm font-semibold mb-1">Status</div>
@@ -1059,14 +1168,11 @@ function CollaborateContent() {
                                         disabled={isInviting}
                                     >
                                         <option value="">Select a role</option>
-                                        <option value="Technical Reviewer">Technical Reviewer</option>
-                                        <option value="Research Coordinator">Research Coordinator</option>
-                                        <option value="Environmental Specialist">Environmental Specialist</option>
-                                        <option value="Data Analyst">Data Analyst</option>
-                                        <option value="Subject Matter Expert">Subject Matter Expert</option>
-                                        <option value="Project Manager">Project Manager</option>
-                                        <option value="Quality Assurance">Quality Assurance</option>
-                                        <option value="External Reviewer">External Reviewer</option>
+                                        <option value="principal_investigator">Principal Investigator</option>
+                                        <option value="admin">Administrator</option>
+                                        <option value="reviewer">Reviewer</option>
+                                        <option value="collaborator">Collaborator</option>
+                                        <option value="observer">Observer</option>
                                     </select>
                                 </div>
 
@@ -1127,6 +1233,154 @@ function CollaborateContent() {
                                 <p className="text-sm text-blue-700">
                                     <strong>Note:</strong> An email invitation will be sent to the collaborator with their assigned role and instructions to join this collaborative workspace.
                                 </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Collaborators List Modal */}
+                {showCollaboratorsList && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    All Collaborators
+                                </h2>
+                                <button
+                                    onClick={() => setShowCollaboratorsList(false)}
+                                    className="text-gray-500 hover:text-gray-700 transition-colors"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="mb-4 flex items-center justify-between">
+                                <div className="text-sm text-gray-600">
+                                    <span className="font-semibold">{activeCollaborators.length}</span> active now • <span className="font-semibold">{collaborators.length + 1}</span> total members
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowCollaboratorsList(false);
+                                        setShowCollaborateModal(true);
+                                    }}
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Invite New
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                {/* Author */}
+                                {author && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="relative">
+                                                    <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                                                        {(author.user?.name || 'A').substring(0, 2).toUpperCase()}
+                                                    </div>
+                                                    {author.isActiveNow && (
+                                                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <div className="font-semibold text-gray-900">{author.user?.name}</div>
+                                                    <div className="text-sm text-gray-600">{author.user?.email}</div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                                                            Principal Investigator
+                                                        </span>
+                                                        {author.isActiveNow && (
+                                                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded-full flex items-center gap-1">
+                                                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                                                                Online
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Collaborators */}
+                                {collaborators.map((collab) => {
+                                    const getRoleColor = (role) => {
+                                        switch(role) {
+                                            case 'admin': return 'bg-purple-100 text-purple-800';
+                                            case 'reviewer': return 'bg-orange-100 text-orange-800';
+                                            case 'collaborator': return 'bg-green-100 text-green-800';
+                                            case 'observer': return 'bg-gray-100 text-gray-800';
+                                            default: return 'bg-indigo-100 text-indigo-800';
+                                        }
+                                    };
+                                    
+                                    const getRoleBgColor = (role) => {
+                                        switch(role) {
+                                            case 'admin': return 'bg-purple-600';
+                                            case 'reviewer': return 'bg-orange-600';
+                                            case 'collaborator': return 'bg-green-600';
+                                            case 'observer': return 'bg-gray-600';
+                                            default: return 'bg-indigo-600';
+                                        }
+                                    };
+
+                                    return (
+                                        <div key={collab._id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="relative">
+                                                        <div className={`w-12 h-12 rounded-full ${getRoleBgColor(collab.role)} flex items-center justify-center text-white font-bold text-lg`}>
+                                                            {(collab.user?.name || 'C').substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                        {collab.isActiveNow && (
+                                                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-semibold text-gray-900">{collab.user?.name}</div>
+                                                        <div className="text-sm text-gray-600">{collab.user?.email}</div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getRoleColor(collab.role)}`}>
+                                                                {collab.role.replace('_', ' ')}
+                                                            </span>
+                                                            {collab.isActiveNow && (
+                                                                <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded-full flex items-center gap-1">
+                                                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                                                                    Online
+                                                                </span>
+                                                            )}
+                                                            {collab.status === 'pending' && (
+                                                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">
+                                                                    Pending
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            Invited {collab.invitedAt ? new Date(collab.invitedAt).toLocaleDateString() : 'recently'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {(user?._id === proposal?.author?._id || user?._id === proposal?.author || author?.user?._id === user?._id) && (
+                                                    <button
+                                                        onClick={() => handleRemoveCollaborator(collab._id)}
+                                                        className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors text-sm font-medium"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
