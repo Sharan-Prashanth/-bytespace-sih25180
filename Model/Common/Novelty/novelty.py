@@ -16,6 +16,9 @@ from fastapi.responses import JSONResponse
 
 from supabase import create_client, Client
 from dotenv import load_dotenv
+import joblib
+import numpy as np
+from pathlib import Path
 
 load_dotenv()
 
@@ -36,6 +39,120 @@ MODEL_NAME = "gemini-2.5-flash-lite"
 
 RAW_BUCKET = "Coal-research-files"
 JSON_BUCKET = "novelty-json"
+PRETRAIN_DIR = os.path.join(os.path.dirname(__file__), "pre-trained")
+os.makedirs(PRETRAIN_DIR, exist_ok=True)
+NOVELTY_JOBLIB_PATH = os.path.join(PRETRAIN_DIR, "novelty_embeddings.joblib")
+
+# lazy SBERT embedder (initialized on demand)
+_SBERT_EMBEDDER = None
+def get_sbert_embedder(model_name: str = "all-MiniLM-L6-v2"):
+    global _SBERT_EMBEDDER
+    if _SBERT_EMBEDDER is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _SBERT_EMBEDDER = SentenceTransformer(model_name)
+        except Exception:
+            _SBERT_EMBEDDER = None
+    return _SBERT_EMBEDDER
+
+# In-memory cache of precomputed embeddings/texts
+_NOVELTY_STORE = {"texts": [], "embs": None}
+
+def load_novelty_joblib():
+    """Load precomputed novelty embeddings/texts from joblib if available.
+    If not present, attempt to build from DB/stored JSONs and persist.
+    """
+    global _NOVELTY_STORE
+    if os.path.exists(NOVELTY_JOBLIB_PATH):
+        try:
+            data = joblib.load(NOVELTY_JOBLIB_PATH)
+            texts = data.get("texts", [])
+            embs = data.get("embs", None)
+            if embs is not None:
+                embs = np.asarray(embs)
+            _NOVELTY_STORE = {"texts": texts, "embs": embs}
+            return _NOVELTY_STORE
+        except Exception:
+            pass
+    # build from DB/JSON entries
+    past = load_all_past_novelty_json()
+    texts = []
+    for p in past:
+        # prefer unique_sections then raw
+        for s in (p.get("unique_sections") or [])[:5]:
+            if s and s not in texts:
+                texts.append(s)
+        raw = (p.get("raw") or "").strip()
+        if raw and raw not in texts:
+            texts.append(raw[:800])
+    # compute embeddings if possible
+    embedder = get_sbert_embedder()
+    if embedder and texts:
+        try:
+            embs = embedder.encode(texts, convert_to_tensor=False, show_progress_bar=False)
+            embs = [np.array(e).astype(np.float32) for e in embs]
+            _NOVELTY_STORE = {"texts": texts, "embs": np.vstack(embs)}
+            try:
+                joblib.dump({"texts": texts, "embs": np.vstack(embs)}, NOVELTY_JOBLIB_PATH)
+            except Exception:
+                pass
+            return _NOVELTY_STORE
+        except Exception:
+            pass
+    # fallback: store texts only
+    _NOVELTY_STORE = {"texts": texts, "embs": None}
+    try:
+        joblib.dump({"texts": texts, "embs": None}, NOVELTY_JOBLIB_PATH)
+    except Exception:
+        pass
+    return _NOVELTY_STORE
+
+def save_novelty_joblib():
+    global _NOVELTY_STORE
+    try:
+        data = {"texts": _NOVELTY_STORE.get("texts", []), "embs": _NOVELTY_STORE.get("embs")}
+        # convert numpy array to list for joblib portability
+        if isinstance(data["embs"], np.ndarray):
+            data["embs"] = data["embs"].tolist()
+        joblib.dump(data, NOVELTY_JOBLIB_PATH)
+    except Exception:
+        pass
+
+def update_novelty_store_with_texts(new_texts: List[str]):
+    """Embed new_texts and append to in-memory store and persist to joblib."""
+    global _NOVELTY_STORE
+    if not new_texts:
+        return
+    texts = _NOVELTY_STORE.get("texts", []) or []
+    embs = _NOVELTY_STORE.get("embs", None)
+    to_add = [t for t in new_texts if t and t not in texts]
+    if not to_add:
+        return
+    embedder = get_sbert_embedder()
+    if embedder:
+        try:
+            new_embs = embedder.encode(to_add, convert_to_tensor=False, show_progress_bar=False)
+            new_embs = [np.array(e).astype(np.float32) for e in new_embs]
+            if embs is None:
+                embs_arr = np.vstack(new_embs)
+            else:
+                embs_arr = np.vstack([embs, np.vstack(new_embs)]) if isinstance(embs, np.ndarray) else np.vstack(new_embs)
+            texts.extend(to_add)
+            _NOVELTY_STORE = {"texts": texts, "embs": embs_arr}
+            save_novelty_joblib()
+            return
+        except Exception:
+            pass
+    # fallback: just append texts and save
+    texts.extend(to_add)
+    _NOVELTY_STORE = {"texts": texts, "embs": embs}
+    save_novelty_joblib()
+
+# initialize store at import
+try:
+    load_novelty_joblib()
+except Exception:
+    pass
 
 router = APIRouter()
 
@@ -129,12 +246,34 @@ def chunk_text(text: str, min_lines: int = 60) -> List[str]:
 # LOAD PAST JSONS FROM STORAGE
 # ---------------------------
 def load_all_past_novelty_json() -> List[Dict[str, Any]]:
+    # Prefer reading from the Supabase table `novelty_reports` when available.
+    json_list: List[Dict[str, Any]] = []
+    try:
+        res = supabase.table('novelty_reports').select('filename,result').order('created_at', desc=True).limit(1000).execute()
+        rows = getattr(res, 'data', []) or []
+        for r in rows:
+            try:
+                content = r.get('result') or {}
+                json_list.append({
+                    'filename': r.get('filename'),
+                    'data': content,
+                    'raw': content.get('raw_text', ''),
+                    'unique_sections': content.get('unique_sections', []) or []
+                })
+            except Exception:
+                continue
+        if json_list:
+            return json_list
+    except Exception as e:
+        # DB read failed; fall back to storage bucket
+        print('Warning: failed to read novelty_reports from DB:', e)
+
+    # Fallback: read from JSON storage bucket
     try:
         files = supabase.storage.from_(JSON_BUCKET).list()
     except Exception as e:
         print("Error listing JSON bucket:", e)
-        return []
-    json_list = []
+        return json_list
     for f in files or []:
         try:
             if not f.get("name", "").endswith(".json"):
@@ -260,6 +399,30 @@ def run_self_validation(full_text: str, final_json: Dict[str, Any]) -> Dict[str,
 # ---------------------------
 def compare_innovation_against_past(innovation: str, past_jsons: List[Dict[str, Any]], sim_threshold: float = 0.55) -> List[Dict[str, Any]]:
     matches = []
+    # 0) Fast path: check against precomputed embeddings store if available
+    try:
+        store_texts = _NOVELTY_STORE.get("texts", []) or []
+        store_embs = _NOVELTY_STORE.get("embs", None)
+        embedder = get_sbert_embedder()
+        if store_embs is not None and embedder is not None:
+            try:
+                inv_emb = np.array(embedder.encode([innovation], convert_to_tensor=False))[0].astype(np.float32)
+                # compute cosine similarity
+                norms = np.linalg.norm(store_embs, axis=1) * (np.linalg.norm(inv_emb) + 1e-12)
+                sims = (store_embs @ inv_emb) / (norms + 1e-12)
+                for idx, s in enumerate(sims.tolist()):
+                    if s >= sim_threshold:
+                        matches.append({
+                            "file": "pretrained_store",
+                            "similarity": round(float(s), 3),
+                            "matched_sections": [store_texts[idx][:300]]
+                        })
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 1) Also perform canonical check against past JSONs (to return real filenames)
     for past in past_jsons:
         # compare against unique_sections first
         best_sim = 0.0
@@ -440,31 +603,81 @@ async def process_innovations(file: UploadFile = File(...)):
         except Exception:
             public_url = None
 
-        # 10) Insert into DB
+        # 10) Upsert into DB: update existing row by filename or insert new
         try:
-            supabase.table("novelty_reports").insert({
-                "filename": result_record["filename"],
+            # Attempt update first
+            upd = supabase.table("novelty_reports").update({
                 "file_path": result_record["file_path"],
                 "novelty_percentage": result_record["result"]["novelty_percentage"],
                 "result": result_record["result"]
-            }).execute()
+            }).eq("filename", result_record["filename"]).execute()
+            rows = getattr(upd, 'data', []) or []
+            # If update did not affect rows, insert
+            if not rows:
+                supabase.table("novelty_reports").insert({
+                    "filename": result_record["filename"],
+                    "file_path": result_record["file_path"],
+                    "novelty_percentage": result_record["result"]["novelty_percentage"],
+                    "result": result_record["result"]
+                }).execute()
         except Exception as e:
-            print("Warning: DB insert failed:", e)
+            print("Warning: DB upsert failed:", e)
 
-        # 11) Return final JSON payload to user (clear, structured)
-        response_payload = {
-            "filename": result_record["filename"],
-            "novelty_percentage": result_record["result"]["novelty_percentage"],
-            "total_innovations": result_record["result"]["total_innovations"],
-            "truly_new_count": result_record["result"]["truly_new_count"],
-            "truly_new_innovations": result_record["result"]["truly_new_innovations"],
-            "already_existing_innovations": result_record["result"]["already_existing_innovations"],
-            "unique_sections": result_record["result"]["unique_sections"],
-            "self_validation": result_record["result"]["self_validation"],
-            "suggestions": result_record["result"]["suggestions"],
-            "json_url": public_url
-        }
-        return JSONResponse(response_payload)
+        # 11) Update the persisted novelty joblib store with truly new innovations (if any)
+        try:
+            update_novelty_store_with_texts(truly_new)
+        except Exception:
+            pass
+
+        # 11) Minimal response: return only the novelty score and a short improvement comment
+        novelty_score = int(result_record["result"]["novelty_percentage"])
+
+        # If novelty is low, ask Gemini for concise improvement suggestions (3 short suggestions)
+        def build_novelty_improvement_prompt(score: int, truly_new: List[str], already_existing: List[Dict[str, Any]], context: str) -> str:
+            sample_existing = ", ".join([m.get("file","") for m in (already_existing or [])[:5]])
+            return f"""
+You are an expert research advisor. A document scored {score}/100 for novelty.
+Task: If the score is low, return 3 short, actionable suggestions (one per line) the authors can apply to increase novelty and reduce similarity to past work. Use the provided context and matched filenames to be specific.
+
+Score: {score}
+Truly-new-ideas-count: {len(truly_new)}
+Some matched files: {sample_existing}
+Context (short): {context[:600]}
+
+Return exactly 3 short lines (each <=140 chars). If the score is high, return 1 short congratulatory line.
+"""
+
+        def call_gemini_improvements(prompt: str) -> str:
+            try:
+                model = genai.GenerativeModel(MODEL_NAME)
+                resp = model.generate_content(prompt)
+                raw = resp.text or ""
+                lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+                if novelty_score >= 70:
+                    # keep a single line
+                    return (lines[0] if lines else "Novelty score looks strong; continue with clear validation and dissemination.")
+                # need exactly 3 lines
+                if len(lines) >= 3:
+                    return "\n".join(lines[:3])
+                # fallback to splitting sentences
+                import re as _re
+                sents = _re.split(r'(?<=[.?!])\s+', raw.strip()) if raw else []
+                sents = [s.strip() for s in sents if s.strip()]
+                if len(sents) >= 3:
+                    return "\n".join(sents[:3])
+            except Exception:
+                pass
+            # heuristic fallback
+            if novelty_score >= 70:
+                return "Novelty score strong; focus on validating and documenting the innovations."
+            return "Add more specific, domain-level details. Emphasize unique methodology or datasets. Cite and compare to closest works."
+
+        improvement_comment = call_gemini_improvements(build_novelty_improvement_prompt(novelty_score, truly_new, already_existing, detailed_context))
+
+        return JSONResponse({
+            "novelty_percentage": novelty_score,
+            "improvement_comment": improvement_comment
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()

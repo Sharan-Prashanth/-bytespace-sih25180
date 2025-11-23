@@ -57,11 +57,7 @@ WORKER_COUNT = min(int(os.getenv("WORKER_COUNT", str(max(1, cpu_count() - 1)))),
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash-lite")
 # Optional trained validator model (joblib file). If present, use it to score sentences.
-<<<<<<<< HEAD:Model/Common/ai_validator/ai_detector_pipeline.py
 MODEL_JOBLIB_PATH = r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\Common\ai_validator\pre-trained\my_trained_model.joblib"
-========
-MODEL_JOBLIB_PATH = r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\ai_validator\pre-trained\my_trained_model.joblib"
->>>>>>>> 694690a0870dec395c19d2d2221e8c7afb3c97af:Model/ai_validator/ai_detector_pipeline.py
 AI_VALIDATOR_MODEL = None
 AI_VALIDATOR_AVAILABLE = False
 try:
@@ -396,7 +392,7 @@ def build_gemini_sentence_validation_prompt(sentence: str, ai_prob: float, past_
         if preview:
             past_preview += f"--- {r.get('filename','<file>')} ---\n{preview[:600]}\n\n"
     # Escape braces in JSON example by doubling them if using .format elsewhere; here we use f-string so OK.
-    prompt = f"""
+        prompt = f"""
 You are an expert auditor specializing in detecting AI-generated text.
 
 Input:
@@ -408,16 +404,19 @@ TASKS:
 1) Confirm or adjust the probability (0.0-1.0).
 2) Decide: "ai", "human", or "uncertain".
 3) Provide a one-line comment with reasons and confidence.
-4) If similar to any past preview, include filename and approximate similarity (0.0-1.0).
+4) Provide a short explanation (2-3 sentences) describing WHY the model decided as it did (e.g. formulaic phrasing, repetition, unusual token sequences, lack of personal details).
+5) Provide 2-5 actionable recommendations to make this sentence/readable content appear more human (if decision is "ai" or high probability) or to improve clarity/credibility (if "human").
+6) If similar to any past preview, include filename and approximate similarity (0.0-1.0).
 
 Return ONLY valid JSON with keys:
-{{
-  "validated_ai_probability": 0.0,
-  "decision": "ai"|"human"|"uncertain",
-  "comment": "one-line comment | reasons | confidence:<0.0-1.0>",
-  "Lines": "the detected sentence are needed to be shown one by one in point wise and they needed to be highlighted in bold format",
-  "matched_past_files": [ {{ "filename": "...", "similarity": 0.0 }} ]
-}}
+{
+    "validated_ai_probability": 0.0,
+    "decision": "ai"|"human"|"uncertain",
+    "comment": "one-line comment | reasons | confidence:<0.0-1.0>",
+    "explanation": "short explanation why this appears ai/human",
+    "recommendations": ["short actionable suggestion", ...],
+    "matched_past_files": [ { "filename": "...", "similarity": 0.0 } ]
+}
 
 Past previews:
 {past_preview}
@@ -437,12 +436,37 @@ def call_gemini_validate_sentence(sentence: str, ai_prob: float, past_reports_sa
         pass
     # fallback auto-decision heuristics if model fails
     decision = "ai" if ai_prob >= 0.9 else ("human" if ai_prob < 0.45 else "uncertain")
-    return {
+    fallback = {
         "validated_ai_probability": float(round(ai_prob, 6)),
         "decision": decision,
         "comment": f"Auto-validated: detector-only decision ({decision}) | confidence:{round(ai_prob,3)}",
+        "explanation": "Model unavailable — heuristic fallback used. High detector score indicates formulaic phrasing or short token patterns.",
+        "recommendations": [] ,
         "matched_past_files": []
     }
+    # provide minimal recommendations heuristically when AI-like
+    try:
+        if decision == "ai":
+            fallback["recommendations"] = [
+                "Add personal anecdotes or first-person observations.",
+                "Use varied sentence lengths and more colloquial phrasing.",
+                "Include concrete facts, citations, and domain-specific details.",
+            ]
+        elif decision == "uncertain":
+            fallback["recommendations"] = [
+                "Increase specificity and add references.",
+                "Avoid repetitive or templated sentence openings.",
+            ]
+        else:
+            fallback["recommendations"] = ["No major changes suggested; consider adding citations if appropriate."]
+    except Exception:
+        pass
+    return fallback
+
+
+# Note: the document-level Gemini recommendation function has been removed to keep
+# the pipeline lightweight for PDF/batch runs. A simple heuristic sentence is
+# produced below in the main endpoint instead of calling an external LLM.
 
 # -------------------- DB & Storage helpers --------------------
 def load_existing_report_by_hash(file_hash: str) -> Optional[Dict[str, Any]]:
@@ -672,6 +696,19 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         agg["combined_score_pct"] = combined_score
         agg["file_verdict"] = file_verdict
 
+        # 9.2) Produce a compact improvement sentence (no external LLM calls)
+        # - If verdict is fully human, display score should be 100.
+        # - If verdict is fully ai, display score should be 0.
+        # - Otherwise display = 100 - combined_score (so lower AI-likeness => higher displayed score).
+        if file_verdict == "human":
+            improvement_sentence = "Document appears human-authored; consider adding citations or more domain-specific examples only if needed."
+        elif file_verdict == "ai":
+            improvement_sentence = "Document shows signs of AI-generation; add personal anecdotes, concrete citations, and vary sentence length and tone to increase human-likeness."
+        else:
+            improvement_sentence = "Document shows mixed signals; add specific examples, citations and vary phrasing to improve human-likeness."
+
+        agg["document_recommendations"] = {"why": improvement_sentence, "recommendations": [], "confidence": round(min(0.99, combined_score / 100.0), 3)}
+
         # 10) build report
         report = {
             "original_filename": filename_raw,
@@ -723,25 +760,19 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         except Exception:
             pass
 
-        # 14) return compact response
+        # 14) return compact response suitable for PDF/UI rendering
+        # Transform combined_score (AI-likeness 0..100) into display score where higher == more human.
+        display_score = int(round(100 - combined_score))
+        display_score = max(0, min(100, display_score))
+
+        # Map file_verdict to simple classification output
+        classification = file_verdict if file_verdict in ("human", "ai") else "mixed"
+
         response = {
-            "status": "processed",
-            "filename": uploaded_name,
-            "stored_raw_file": stored_raw,
-            "json_report_name": json_name,
-            "ai_sentences_percentage": agg.get("ai_sentences_percentage_by_gemini"),
-            "total_sentences": agg.get("total_sentences"),
-            "flagged_sentences_sample": agg.get("flagged_sentences")[:8],
-            "report_summary": {
-                "avg_detector_sentence_prob": agg.get("avg_detector_sentence_prob"),
-                "gemini_ai_count": agg.get("gemini_ai_count")
-            }
+            "classification": classification,
+            "model_score_pct": display_score,
+            "improvement_comment": improvement_sentence
         }
-        # include model/LLM/combined scores in top-level response for quick view
-        response["model_score_pct"] = agg.get("model_score_pct")
-        response["llm_score_pct"] = agg.get("llm_score_pct")
-        response["combined_score_pct"] = agg.get("combined_score_pct")
-        response["file_verdict"] = agg.get("file_verdict")
         return JSONResponse(response)
 
     except Exception as e:
