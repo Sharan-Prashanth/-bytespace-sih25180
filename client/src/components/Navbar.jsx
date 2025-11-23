@@ -1,9 +1,11 @@
+'use client';
+
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAuth, ROLES } from "../context/AuthContext";
 
 export default function Navbar({ variant = "default" }) {
-  const { user, logout, isUser, isReviewer, isStaff, loading } = useAuth();
+  const { user, logout, isExpertReviewer, isCMPDIMember, isTSSRCMember, isSSRCMember, isSuperAdmin, hasAnyRole, loading } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
@@ -97,11 +99,9 @@ export default function Navbar({ variant = "default" }) {
   ];
 
   const defaultUserAvatar = "/images/default-user.svg";
-  const userAvatar =
-    user?.avatarUrl ||
-    user?.profileImage ||
-    user?.photo ||
-    defaultUserAvatar;
+  const userAvatar = defaultUserAvatar;
+  const displayName = user?.fullName || user?.email?.split('@')[0] || 'User';
+  const displayRoles = user?.roles?.join(', ').replace(/_/g, ' ') || 'USER';
 
   return (
     <>
@@ -206,8 +206,8 @@ export default function Navbar({ variant = "default" }) {
                   </div>
                 ) : user ? (
                   <>
-                    {/* Reviewer Link */}
-                    {isReviewer() && (
+                    {/* Reviewer Link - for Expert Reviewers and Committee Members */}
+                    {hasAnyRole([ROLES.EXPERT_REVIEWER, ROLES.CMPDI_MEMBER, ROLES.TSSRC_MEMBER, ROLES.SSRC_MEMBER]) && (
                       <Link
                         href="/proposal/review"
                         className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-white/10 transition-all text-sm font-medium"
@@ -234,8 +234,8 @@ export default function Navbar({ variant = "default" }) {
                           />
                         </div>
                         <div className="text-left hidden lg:block">
-                          <div className="text-xs font-bold leading-none mb-0.5">{user?.username}</div>
-                          <div className="text-[10px] opacity-70 uppercase tracking-wider leading-none">{user?.role}</div>
+                          <div className="text-xs font-bold leading-none mb-0.5">{displayName}</div>
+                          <div className="text-[10px] opacity-70 uppercase tracking-wider leading-none">{displayRoles}</div>
                         </div>
                         <svg className={`w-4 h-4 transition-transform opacity-70 ${isUserMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -246,8 +246,15 @@ export default function Navbar({ variant = "default" }) {
                       {isUserMenuOpen && (
                         <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-fade-in-up text-slate-900 overflow-hidden">
                           <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
-                            <p className="text-sm font-bold text-slate-900">{user?.username}</p>
+                            <p className="text-sm font-bold text-slate-900">{user?.fullName}</p>
                             <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {user?.roles?.map((role, index) => (
+                                <span key={index} className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-semibold">
+                                  {role.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
                           </div>
 
                           <div className="p-2">
@@ -344,16 +351,17 @@ export default function Navbar({ variant = "default" }) {
               ) : user ? (
                 <>
                   <div className="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-xl border border-white/5">
-                    <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden">
-                      <img src={userAvatar} alt="User" className="w-full h-full object-cover" />
+                    <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center text-white font-bold">
+                      {user?.fullName?.charAt(0)?.toUpperCase() || 'U'}
                     </div>
-                    <div>
-                      <div className="font-bold text-white">{user?.username}</div>
-                      <div className="text-xs text-slate-400">{user?.email}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-white truncate">{user?.fullName}</div>
+                      <div className="text-xs text-slate-400 truncate">{user?.email}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">{displayRoles}</div>
                     </div>
                   </div>
 
-                  {isReviewer() && (
+                  {hasAnyRole([ROLES.EXPERT_REVIEWER, ROLES.CMPDI_MEMBER, ROLES.TSSRC_MEMBER, ROLES.SSRC_MEMBER]) && (
                     <Link href="/proposal/review">
                       <div className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl transition-colors">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

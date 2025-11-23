@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
@@ -6,6 +8,7 @@ import LoadingScreen from '../../../components/LoadingScreen';
 import jsPDF from 'jspdf';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Header } from 'docx';
+import apiClient from '../../../utils/api';
 
 // Custom CSS animations for the view page
 const viewAnimationStyles = `
@@ -70,168 +73,95 @@ function ViewProposalContent() {
   const [exportProgress, setExportProgress] = useState(0);
 
   useEffect(() => {
-    const fetchProposal = async () => {
+    const loadProposal = async () => {
       try {
         if (id) {
-          // Mock data for coal R&D proposal
-          const mockProposal = {
-            id: id,
-            title: "Advanced Coal Gasification Technology for Enhanced Energy Production",
-            researcher: "Dr. Raj Patel",
-            institution: "Indian Institute of Technology, Delhi",
-            description: "Development of an innovative coal gasification system achieving 60%+ energy efficiency with integrated carbon capture mechanisms for sustainable coal utilization in power generation and industrial applications.",
-            domain: "Coal Technology & Energy Systems",
-            budget: 20000000,
-            status: "under_review",
-            submittedDate: "2025-09-20",
-            createdAt: "2025-09-20T10:00:00Z",
-            duration: "24 months",
-            keywords: ["Coal Gasification", "Energy Efficiency", "Carbon Capture", "Sustainable Mining", "Clean Coal Technology"],
-            projectLeader: "Dr. Raj Patel",
-            implementingAgency: "Indian Institute of Technology, Delhi",
-            coInvestigators: "Dr. Priya Sharma, Prof. Michael Chen, Dr. Anjali Verma",
-            richContent: `
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">1. Problem Statement</h2>
-              <p style="color: black; line-height: 1.6; margin-bottom: 1em;">The coal sector faces significant challenges in optimizing energy extraction while minimizing environmental impact. Traditional coal combustion methods result in only 35-40% energy efficiency, with substantial CO2 emissions and particulate matter release. There is an urgent need for innovative gasification technologies that can improve energy output to 60-65% efficiency while reducing harmful emissions by 40-50%.</p>
-              
-              <p style="color: black; line-height: 1.6; margin-bottom: 1.5em;">Current coal processing facilities in India operate with outdated equipment that struggles to meet environmental compliance standards set by the Ministry of Coal. The lack of advanced gasification infrastructure limits the country's ability to maximize coal utilization for power generation and industrial applications.</p>
-              
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">2. Research Objectives</h2>
-              <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Primary Objectives:</p>
-              <ul style="color: black; line-height: 1.6; margin-bottom: 1em; padding-left: 2em;">
-                <li style="margin-bottom: 0.5em;">Develop an integrated coal gasification system achieving 60%+ energy efficiency</li>
-                <li style="margin-bottom: 0.5em;">Design carbon capture mechanisms reducing CO2 emissions by 45%</li>
-                <li style="margin-bottom: 0.5em;">Create automated monitoring systems for real-time process optimization</li>
-                <li style="margin-bottom: 0.5em;">Establish economic viability models for large-scale implementation</li>
-              </ul>
-              
-              <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Secondary Objectives:</p>
-              <ul style="color: black; line-height: 1.6; margin-bottom: 1.5em; padding-left: 2em;">
-                <li style="margin-bottom: 0.5em;">Develop safety protocols for gasification operations</li>
-                <li style="margin-bottom: 0.5em;">Create training modules for technical personnel</li>
-                <li style="margin-bottom: 0.5em;">Establish environmental compliance frameworks</li>
-              </ul>
-              
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">3. Justification & Significance</h2>
-              <p style="color: black; line-height: 1.6; margin-bottom: 1em;">Coal remains India's primary energy source, accounting for 70% of electricity generation. However, traditional combustion methods are inefficient and environmentally problematic. This research addresses critical national energy security concerns while advancing clean coal technologies.</p>
-              
-              <p style="color: black; line-height: 1.6; margin-bottom: 1.5em;">The proposed gasification technology aligns with India's commitment to reducing carbon emissions while maintaining energy independence. Successful implementation could revolutionize the coal industry, creating jobs while meeting environmental targets.</p>
-              
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">4. Expected Outcomes & Benefits</h2>
-              <p style="color: black; line-height: 1.6; margin-bottom: 1em;">The expected outcomes include a 60%+ efficiency coal gasification system with integrated carbon capture, reducing environmental impact while maximizing energy output. The technology will be scalable for both existing and new coal facilities.</p>
-              
-              <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Quantifiable Benefits:</p>
-              <ul style="color: black; line-height: 1.6; margin-bottom: 1.5em; padding-left: 2em;">
-                <li style="margin-bottom: 0.5em;">25% reduction in coal consumption for same energy output</li>
-                <li style="margin-bottom: 0.5em;">45% reduction in CO2 emissions compared to traditional methods</li>
-                <li style="margin-bottom: 0.5em;">Creation of 500+ skilled jobs in coal technology sector</li>
-                <li style="margin-bottom: 0.5em;">Annual cost savings of ₹50 crores for medium-scale operations</li>
-              </ul>
-              
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">5. Research Methodology</h2>
-              <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Phase 1: Laboratory Testing (Months 1-8)</p>
-              <ul style="color: black; line-height: 1.6; margin-bottom: 1em; padding-left: 2em;">
-                <li style="margin-bottom: 0.5em;">Coal characterization using X-ray fluorescence and thermogravimetric analysis</li>
-                <li style="margin-bottom: 0.5em;">Gasification reactor design using computational fluid dynamics modeling</li>
-                <li style="margin-bottom: 0.5em;">Catalyst development for enhanced reaction efficiency</li>
-                <li style="margin-bottom: 0.5em;">Small-scale prototype testing under controlled conditions</li>
-              </ul>
-              
-              <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Phase 2: Pilot Plant Development (Months 9-18)</p>
-              <ul style="color: black; line-height: 1.6; margin-bottom: 1.5em; padding-left: 2em;">
-                <li style="margin-bottom: 0.5em;">Construction of pilot-scale gasification facility</li>
-                <li style="margin-bottom: 0.5em;">Integration of carbon capture systems</li>
-                <li style="margin-bottom: 0.5em;">Performance testing with various coal grades</li>
-                <li style="margin-bottom: 0.5em;">Environmental impact assessment and monitoring</li>
-              </ul>
-              
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">6. Work Plan & Implementation</h2>
-              <p style="color: black; line-height: 1.6; margin-bottom: 1em;">The project follows a systematic approach from laboratory-scale testing to pilot plant implementation. Each phase includes rigorous testing, data collection, and validation processes to ensure technology readiness for industrial deployment.</p>
-              
-              <p style="color: black; line-height: 1.6; margin-bottom: 1.5em;">Implementation will be coordinated with coal mining companies and power generation facilities to ensure practical applicability and industry adoption of the developed technology.</p>
-              
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">7. Budget Breakdown</h2>
-              <table style="width: 100%; border-collapse: collapse; margin: 1.5em 0; color: black;">
-                <thead>
-                  <tr style="background-color: #f3f4f6;">
-                    <th style="border: 1px solid #d1d5db; padding: 12px; text-align: left;">Category</th>
-                    <th style="border: 1px solid #d1d5db; padding: 12px; text-align: left;">Amount (₹ Cr)</th>
-                    <th style="border: 1px solid #d1d5db; padding: 12px; text-align: left;">Percentage</th>
-                    <th style="border: 1px solid #d1d5db; padding: 12px; text-align: left;">Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Equipment & Infrastructure</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">120</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">60%</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Gasification reactors, monitoring systems</td>
-                  </tr>
-                  <tr>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Personnel & Consulting</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">50</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">25%</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Research staff, technical consultants</td>
-                  </tr>
-                  <tr>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Materials & Testing</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">20</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">10%</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Coal samples, catalysts, chemicals</td>
-                  </tr>
-                  <tr>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Contingency</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">10</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">5%</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Unforeseen expenses, equipment maintenance</td>
-                  </tr>
-                  <tr style="background-color: #f9fafb; font-weight: bold;">
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Total Project Cost</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">200</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">100%</td>
-                    <td style="border: 1px solid #d1d5db; padding: 12px;">Complete project implementation</td>
-                  </tr>
-                </tbody>
-              </table>
-              
-              <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">8. Project Timeline</h2>
-              <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Year 1 (Months 1-12): Research & Development Phase</p>
-              <ul style="color: black; line-height: 1.6; margin-bottom: 1em; padding-left: 2em;">
-                <li style="margin-bottom: 0.5em;">Months 1-3: Coal characterization and catalyst development</li>
-                <li style="margin-bottom: 0.5em;">Months 4-8: Laboratory-scale gasification testing</li>
-                <li style="margin-bottom: 0.5em;">Months 9-12: Pilot plant design and construction initiation</li>
-              </ul>
-              
-              <p style="color: black; font-weight: bold; margin-bottom: 0.5em;">Year 2 (Months 13-24): Pilot Testing & Validation</p>
-              <ul style="color: black; line-height: 1.6; margin-bottom: 1.5em; padding-left: 2em;">
-                <li style="margin-bottom: 0.5em;">Months 13-18: Pilot plant construction and commissioning</li>
-                <li style="margin-bottom: 0.5em;">Months 19-22: Performance testing and optimization</li>
-                <li style="margin-bottom: 0.5em;">Months 23-24: Technology validation and documentation</li>
-              </ul>
-            `
-          };
-          setProposal(mockProposal);
+          console.log('📖 Loading proposal for view:', id);
+          setLoading(true);
+          
+          const response = await apiClient.get(`/api/proposals/${id}`);
+          setProposal(response.data.proposal || response.data);
+          console.log('✅ Proposal loaded for view');
         }
       } catch (error) {
-        console.error("Error fetching proposal:", error);
-      } finally {
+        console.error('❌ Error loading proposal for view:', error);
+        alert('Failed to load proposal: ' + error.message);
+      } finally{
         setLoading(false);
       }
     };
 
-    fetchProposal();
+    loadProposal();
   }, [id]);
 
+  // Helper function to render proposal content safely
+  const getProposalContent = () => {
+    if (!proposal) return '';
+    
+    // If proposal has forms array (new structure from backend)
+    if (proposal.forms && proposal.forms.length > 0) {
+      const mainForm = proposal.forms.find(f => f.formId === 'main') || proposal.forms[0];
+      if (mainForm && mainForm.editorContent) {
+        // Convert Plate.js content to HTML for display
+        return convertPlateToHTML(mainForm.editorContent);
+      }
+    }
+    
+    // Fallback to richContent if available
+    if (proposal.richContent) {
+      return proposal.richContent;
+    }
+    
+    // Generate basic content from proposal data
+    return generateBasicContent(proposal);
+  };
+
+  // Convert Plate.js editor content to HTML
+  const convertPlateToHTML = (content) => {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    
+    return content.map(node => {
+      if (node.type === 'h1') return `<h1 style="color: black; font-size: 2em; font-weight: bold; margin: 1em 0;">${node.children.map(c => c.text || '').join('')}</h1>`;
+      if (node.type === 'h2') return `<h2 style="color: black; font-size: 1.5em; font-weight: bold; margin: 1em 0;">${node.children.map(c => c.text || '').join('')}</h2>`;
+      if (node.type === 'h3') return `<h3 style="color: black; font-size: 1.25em; font-weight: bold; margin: 0.75em 0;">${node.children.map(c => c.text || '').join('')}</h3>`;
+      if (node.type === 'p') return `<p style="color: black; line-height: 1.6; margin-bottom: 1em;">${node.children.map(c => c.text || '').join('')}</p>`;
+      if (node.type === 'ul') return `<ul style="color: black; margin-left: 2em; margin-bottom: 1em;">${node.children.map(li => `<li>${li.children.map(c => c.text || '').join('')}</li>`).join('')}</ul>`;
+      if (node.type === 'ol') return `<ol style="color: black; margin-left: 2em; margin-bottom: 1em;">${node.children.map(li => `<li>${li.children.map(c => c.text || '').join('')}</li>`).join('')}</ol>`;
+      return `<p style="color: black;">${node.children ? node.children.map(c => c.text || '').join('') : ''}</p>`;
+    }).join('');
+  };
+
+  // Generate basic content from proposal metadata
+  const generateBasicContent = (prop) => {
+    return `
+      <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">Project Overview</h2>
+      <p style="color: black; line-height: 1.6; margin-bottom: 1em;">${prop.description || 'No description available.'}</p>
+      
+      <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">Project Details</h2>
+      <p style="color: black; line-height: 1.6;"><strong>Domain:</strong> ${prop.domain || 'N/A'}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Budget:</strong> ₹${(prop.budget || 0).toLocaleString()}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Status:</strong> ${(prop.status || 'draft').replace('_', ' ').toUpperCase()}</p>
+      
+      <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">Research Team</h2>
+      <p style="color: black; line-height: 1.6;"><strong>Principal Investigator:</strong> ${prop.author?.name || prop.projectLeader || 'N/A'}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Institution:</strong> ${prop.implementingAgency || 'N/A'}</p>
+    `;
+  };
+
   const handleExport = async (type) => {
+    console.log(`📄 Starting export as ${type.toUpperCase()}`);
     setIsExporting(true);
     setExportType(type);
     setExportProgress(0);
     
     try {
+      const proposalContent = getProposalContent();
+      const filename = `${(proposal.title || 'Proposal').replace(/\s+/g, '_')}_Proposal.${type}`;
+      
       if (type === 'pdf') {
         // Generate professionally formatted PDF
         const pdf = new jsPDF();
-        const filename = `${proposal.title.replace(/\s+/g, '_')}_Proposal.pdf`;
         let yPosition = 20;
         const pageWidth = pdf.internal.pageSize.width;
         const margin = 20;
@@ -239,7 +169,7 @@ function ViewProposalContent() {
         
         setExportProgress(10);
         
-        // Header with logo space and title
+        // Title
         pdf.setFontSize(20);
         pdf.setFont(undefined, 'bold');
         const titleLines = pdf.splitTextToSize(proposal.title, maxWidth);
@@ -248,7 +178,7 @@ function ViewProposalContent() {
         
         setExportProgress(20);
         
-        // Proposal Information Section
+        // Proposal Information
         pdf.setFontSize(16);
         pdf.setFont(undefined, 'bold');
         pdf.text('PROPOSAL INFORMATION', margin, yPosition);
@@ -257,16 +187,14 @@ function ViewProposalContent() {
         pdf.setFontSize(11);
         pdf.setFont(undefined, 'normal');
         
-        // Create info table
         const infoItems = [
-          [`Project Leader:`, proposal.projectLeader],
-          [`Implementing Agency:`, proposal.implementingAgency],
-          [`Co-Investigators:`, proposal.coInvestigators],
-          [`Research Domain:`, proposal.domain],
-          [`Budget:`, `₹${proposal.budget.toLocaleString()}`],
-          [`Duration:`, proposal.duration],
-          [`Status:`, proposal.status.replace('_', ' ').toUpperCase()],
-          [`Submitted Date:`, proposal.submittedDate]
+          [`Project Leader:`, proposal.author?.name || proposal.projectLeader || 'N/A'],
+          [`Implementing Agency:`, proposal.implementingAgency || proposal.author?.institution || 'N/A'],
+          [`Research Domain:`, proposal.domain || 'N/A'],
+          [`Budget:`, `₹${(proposal.budget || 0).toLocaleString()}`],
+          [`Duration:`, proposal.duration || '24 months'],
+          [`Status:`, (proposal.status || 'draft').replace('_', ' ').toUpperCase()],
+          [`Submitted Date:`, proposal.submittedDate || new Date(proposal.createdAt).toLocaleDateString() || 'N/A']
         ];
         
         infoItems.forEach(([label, value]) => {
@@ -295,21 +223,18 @@ function ViewProposalContent() {
         pdf.text('PROPOSAL CONTENT', margin, yPosition);
         yPosition += 15;
         
-        // Process HTML content with proper formatting
-        const htmlContent = proposal.richContent;
-        const contentSections = htmlContent.split(/<h2[^>]*>/);
+        // Process HTML content
+        const contentSections = proposalContent.split(/<h2[^>]*>/);
         
         contentSections.forEach((section, index) => {
           if (index === 0 && !section.trim()) return;
           
           setExportProgress(40 + (index * 30 / contentSections.length));
           
-          // Extract heading and content
           const headingMatch = section.match(/^([^<]+)/);
           const heading = headingMatch ? headingMatch[1].trim() : '';
           
           if (heading) {
-            // Add heading
             if (yPosition > 260) {
               pdf.addPage();
               yPosition = 20;
@@ -320,7 +245,6 @@ function ViewProposalContent() {
             yPosition += 10;
           }
           
-          // Extract and format content
           const contentPart = section.replace(/^[^<]*<\/h2>/, '');
           let cleanContent = contentPart
             .replace(/<\/h2>/g, '')
@@ -332,7 +256,7 @@ function ViewProposalContent() {
             .replace(/<\/li>/g, '\n')
             .replace(/<strong[^>]*>/g, '')
             .replace(/<\/strong>/g, '')
-            .replace(/<table[^>]*>[\s\S]*?<\/table>/g, '[TABLE CONTENT - See online version for detailed table]')
+            .replace(/<table[^>]*>[\s\S]*?<\/table>/g, '[TABLE CONTENT]')
             .replace(/<[^>]*>/g, '')
             .replace(/\s+/g, ' ')
             .replace(/\n\s+/g, '\n')
@@ -357,26 +281,24 @@ function ViewProposalContent() {
         
         setExportProgress(90);
         
-        // Add footer to all pages
+        // Add footer
         const pageCount = pdf.internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
           pdf.setPage(i);
           pdf.setFontSize(8);
           pdf.setFont(undefined, 'normal');
           pdf.text(`Page ${i} of ${pageCount}`, pageWidth - 40, pdf.internal.pageSize.height - 10);
-          pdf.text('Generated by PRISM - NaCCER Research Portal', margin, pdf.internal.pageSize.height - 10);
+          pdf.text('PRISM - NaCCER Research Portal', margin, pdf.internal.pageSize.height - 10);
         }
         
         setExportProgress(100);
+        console.log('✅ PDF export complete');
         pdf.save(filename);
         
       } else if (type === 'docx') {
         setExportProgress(10);
         
-        // Parse HTML content to extract structured data
-        const htmlContent = proposal.richContent;
-        const contentSections = htmlContent.split(/<h2[^>]*>/);
-        
+        const contentSections = proposalContent.split(/<h2[^>]*>/);
         const docChildren = [];
         
         // Title
@@ -391,7 +313,7 @@ function ViewProposalContent() {
         
         setExportProgress(20);
         
-        // Proposal Information
+        // Info section
         docChildren.push(
           new Paragraph({
             text: 'PROPOSAL INFORMATION',
@@ -401,14 +323,12 @@ function ViewProposalContent() {
         );
         
         const infoItems = [
-          [`Project Leader:`, proposal.projectLeader],
-          [`Implementing Agency:`, proposal.implementingAgency],
-          [`Co-Investigators:`, proposal.coInvestigators],
-          [`Research Domain:`, proposal.domain],
-          [`Budget:`, `₹${proposal.budget.toLocaleString()}`],
-          [`Duration:`, proposal.duration],
-          [`Status:`, proposal.status.replace('_', ' ').toUpperCase()],
-          [`Submitted Date:`, proposal.submittedDate]
+          [`Project Leader:`, proposal.author?.name || proposal.projectLeader || 'N/A'],
+          [`Implementing Agency:`, proposal.implementingAgency || 'N/A'],
+          [`Research Domain:`, proposal.domain || 'N/A'],
+          [`Budget:`, `₹${(proposal.budget || 0).toLocaleString()}`],
+          [`Duration:`, proposal.duration || '24 months'],
+          [`Status:`, (proposal.status || 'draft').replace('_', ' ').toUpperCase()]
         ];
         
         infoItems.forEach(([label, value]) => {
@@ -425,7 +345,7 @@ function ViewProposalContent() {
         
         setExportProgress(40);
         
-        // Content sections
+        // Content
         docChildren.push(
           new Paragraph({
             text: 'PROPOSAL CONTENT',
@@ -439,7 +359,6 @@ function ViewProposalContent() {
           
           setExportProgress(40 + (index * 40 / contentSections.length));
           
-          // Extract heading
           const headingMatch = section.match(/^([^<]+)/);
           const heading = headingMatch ? headingMatch[1].trim() : '';
           
@@ -453,75 +372,30 @@ function ViewProposalContent() {
             );
           }
           
-          // Process content
           const contentPart = section.replace(/^[^<]*<\/h2>/, '');
           let cleanContent = contentPart
-            .replace(/<\/h2>/g, '')
-            .replace(/<p[^>]*>/g, '\n\n')
-            .replace(/<\/p>/g, '')
-            .replace(/<ul[^>]*>/g, '\n')
-            .replace(/<\/ul>/g, '\n')
-            .replace(/<li[^>]*>/g, '\n• ')
-            .replace(/<\/li>/g, '')
-            .replace(/<strong[^>]*>(.*?)<\/strong>/g, '$1')
-            .replace(/<table[^>]*>[\s\S]*?<\/table>/g, '\n[TABLE CONTENT - Detailed budget and timeline information available in the online version]\n')
-            .replace(/<[^>]*>/g, '')
+            .replace(/<[^>]*>/g, ' ')
             .replace(/\s+/g, ' ')
-            .replace(/\n\s+/g, '\n')
             .trim();
           
           if (cleanContent) {
-            // Split content into paragraphs
-            const paragraphs = cleanContent.split('\n\n').filter(p => p.trim());
-            
-            paragraphs.forEach(paragraphText => {
-              if (paragraphText.includes('•')) {
-                // Handle bullet points
-                const bullets = paragraphText.split('\n').filter(b => b.trim());
-                bullets.forEach(bullet => {
-                  if (bullet.trim().startsWith('•')) {
-                    docChildren.push(
-                      new Paragraph({
-                        text: bullet.replace('•', '').trim(),
-                        bullet: { level: 0 },
-                        spacing: { after: 100 }
-                      })
-                    );
-                  } else if (bullet.trim()) {
-                    docChildren.push(
-                      new Paragraph({
-                        children: [new TextRun({ text: bullet.trim(), bold: true })],
-                        spacing: { before: 100, after: 50 }
-                      })
-                    );
-                  }
-                });
-              } else if (paragraphText.trim()) {
-                docChildren.push(
-                  new Paragraph({
-                    text: paragraphText.trim(),
-                    spacing: { after: 150 }
-                  })
-                );
-              }
-            });
+            docChildren.push(
+              new Paragraph({
+                text: cleanContent,
+                spacing: { after: 150 }
+              })
+            );
           }
         });
         
         setExportProgress(80);
         
-        // Create document
         const doc = new Document({
           sections: [{
             properties: {
               page: {
-                margin: {
-                  top: 1440,
-                  right: 1440,
-                  bottom: 1440,
-                  left: 1440,
-                },
-              },
+                margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }
+              }
             },
             headers: {
               default: new Header({
@@ -541,14 +415,17 @@ function ViewProposalContent() {
         setExportProgress(90);
         
         const buffer = await Packer.toBuffer(doc);
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const blob = new Blob([buffer], { 
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+        });
         
         setExportProgress(100);
+        console.log('✅ DOCX export complete');
         saveAs(blob, filename);
       }
       
     } catch (error) {
-      console.error('Export failed:', error);
+      console.error('❌ Export failed:', error);
       alert('Export failed. Please try again.');
     } finally {
       setTimeout(() => {
@@ -558,6 +435,8 @@ function ViewProposalContent() {
       }, 1000);
     }
   };
+
+
 
   if (loading) {
     return <LoadingScreen />;

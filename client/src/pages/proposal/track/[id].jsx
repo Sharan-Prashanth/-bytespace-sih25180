@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
@@ -159,20 +161,24 @@ function TrackProposalContent() {
   });
 
   useEffect(() => {
-    const fetchProposal = async () => {
+    const loadProposalTracking = async () => {
       try {
-        // Simulate API call
+        console.log('📊 Initializing tracking view for proposal:', id);
+        setLoading(true);
+        
+        // Simulate API call for tracking data
         setTimeout(() => {
+          console.log('✅ Tracking view loaded successfully');
           setLoading(false);
         }, 1000);
       } catch (error) {
-        console.error("Error fetching proposal:", error);
+        console.error('❌ Error loading tracking view:', error);
         setLoading(false);
       }
     };
 
     if (id) {
-      fetchProposal();
+      loadProposalTracking();
     }
   }, [id]);
 

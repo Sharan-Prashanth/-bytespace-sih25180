@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 import { createSlateEditor, nanoid } from 'platejs';
 import { z } from 'zod';
 
-import { BaseEditorKit } from '@/components/editor/editor-base-kit';
+import { BaseEditorKit } from '@/components/ProposalEditor/editor (plate files)/editor-base-kit';
 import { markdownJoinerTransform } from '@/lib/markdown-joiner-transform';
 
 import {

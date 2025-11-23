@@ -5,20 +5,12 @@ import { useState, useEffect } from "react";
 import Script from 'next/script';
 
 export default function MyApp({ Component, pageProps }) {
-  const [loading, setLoading] = useState(true);
-
+  // Import KaTeX CSS only on client-side
   useEffect(() => {
-    // Simulate initial app loading
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 3000);
-
-    return () => clearTimeout(timer);
+    if (typeof window !== 'undefined') {
+      import('katex/dist/katex.min.css');
+    }
   }, []);
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
 
   return (
     <>

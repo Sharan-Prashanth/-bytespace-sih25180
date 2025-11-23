@@ -528,6 +528,147 @@ class EmailService {
     return await this.sendEmail(inviteeEmail, subject, htmlContent);
   }
 
+  // Send proposal submitted email
+  async sendProposalSubmittedEmail(userEmail, userName, proposalTitle, proposalId) {
+    const subject = `✅ Proposal Submitted: ${proposalTitle}`;
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+          .header { background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .button { background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
+          .footer { background: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>✅ Proposal Submitted Successfully</h1>
+          </div>
+          <div class="content">
+            <h2>Dear ${userName},</h2>
+            <p>Your proposal <strong>${proposalTitle}</strong> has been successfully submitted and is now under review.</p>
+            <p><strong>Proposal ID:</strong> ${proposalId}</p>
+            <p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
+            <h3>Next Steps:</h3>
+            <ul>
+              <li>AI evaluation will be performed automatically</li>
+              <li>CMPDI will conduct first-level scrutiny</li>
+              <li>Domain experts may be assigned for technical review</li>
+              <li>You will receive notifications at each stage</li>
+            </ul>
+            <p>Track your proposal status anytime through your dashboard.</p>
+            <p>Best regards,<br><strong>NaCCER Portal Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>© 2025 National Centre for Clean Energy Research. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    return await this.sendEmail(userEmail, subject, htmlContent);
+  }
+
+  // Send expert assignment email
+  async sendExpertAssignmentEmail(expertEmail, expertName, proposalTitle, proposalId) {
+    const subject = `🔬 New Proposal for Expert Review: ${proposalTitle}`;
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+          .header { background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .button { background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
+          .footer { background: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔬 Expert Review Assignment</h1>
+          </div>
+          <div class="content">
+            <h2>Dear ${expertName},</h2>
+            <p>You have been assigned as a domain expert to review the following proposal:</p>
+            <p><strong>Proposal:</strong> ${proposalTitle}</p>
+            <p><strong>Proposal ID:</strong> ${proposalId}</p>
+            <p><strong>Assigned:</strong> ${new Date().toLocaleString()}</p>
+            <h3>Your Task:</h3>
+            <ul>
+              <li>Review the technical specifications and feasibility</li>
+              <li>Evaluate the innovation and scientific merit</li>
+              <li>Provide a rating (1-5) and detailed review report</li>
+              <li>Submit your review within the specified timeframe</li>
+            </ul>
+            <p>Please log in to access the proposal and submit your review.</p>
+            <p>Best regards,<br><strong>NaCCER Portal Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>© 2025 National Centre for Clean Energy Research. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    return await this.sendEmail(expertEmail, subject, htmlContent);
+  }
+
+  // Send new user credentials email
+  async sendUserCredentialsEmail(userEmail, userName, password, role) {
+    const subject = `🔑 Your NaCCER Portal Account Credentials`;
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+          .header { background: linear-gradient(135deg, #EA580C 0%, #F97316 100%); color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background: #f9f9f9; }
+          .credentials-box { background: #FEF3C7; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #EA580C; }
+          .footer { background: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Welcome to NaCCER Portal</h1>
+          </div>
+          <div class="content">
+            <h2>Dear ${userName},</h2>
+            <p>Your account has been created on the NaCCER Portal. Below are your login credentials:</p>
+            <div class="credentials-box">
+              <h3 style="margin-top: 0;">🔐 Login Credentials</h3>
+              <p><strong>Email:</strong> ${userEmail}</p>
+              <p><strong>Temporary Password:</strong> <code>${password}</code></p>
+              <p><strong>Role:</strong> ${role.replace('_', ' ').toUpperCase()}</p>
+            </div>
+            <p><strong>⚠️ Important:</strong> Please change your password after your first login for security reasons.</p>
+            <h3>Next Steps:</h3>
+            <ol>
+              <li>Visit the NaCCER Portal login page</li>
+              <li>Enter your email and temporary password</li>
+              <li>Change your password in Account Settings</li>
+              <li>Complete your profile</li>
+            </ol>
+            <p>If you have any questions, please contact the system administrator.</p>
+            <p>Best regards,<br><strong>NaCCER Portal Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>© 2025 National Centre for Clean Energy Research. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    return await this.sendEmail(userEmail, subject, htmlContent);
+  }
+
   // Test email connectivity
   async testConnection() {
     // Check if email service is properly configured

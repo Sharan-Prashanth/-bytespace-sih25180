@@ -1,17 +1,29 @@
+'use client';
+
 import { useState, useEffect } from "react";
 import { useAuth, ROLES } from "../context/AuthContext";
 import LoadingScreen from "./LoadingScreen";
-import { API_ENDPOINTS } from "../utils/api";
+import apiClient from "../utils/api";
 
 export default function Profile() {
   const { user, loading } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
+    fullName: "",
     email: "",
-    department: "",
-    expertise: [],
-    profilePicture: ""
+    phoneNumber: "",
+    designation: "",
+    organisationName: "",
+    organisationType: "",
+    country: "",
+    address: {
+      line1: "",
+      line2: "",
+      city: "",
+      state: "",
+      postalCode: ""
+    },
+    expertiseDomains: []
   });
   const [newExpertise, setNewExpertise] = useState("");
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -21,28 +33,51 @@ export default function Profile() {
   useEffect(() => {
     if (user) {
       setFormData({
-        name: user.name || "",
+        fullName: user.fullName || "",
         email: user.email || "",
-        department: user.department || "",
-        expertise: user.expertise || [],
-        profilePicture: user.profilePicture || ""
+        phoneNumber: user.phoneNumber || "",
+        designation: user.designation || "",
+        organisationName: user.organisationName || "",
+        organisationType: user.organisationType || "",
+        country: user.country || "",
+        address: user.address || {
+          line1: "",
+          line2: "",
+          city: "",
+          state: "",
+          postalCode: ""
+        },
+        expertiseDomains: user.expertiseDomains || []
       });
     }
   }, [user]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // Handle nested address fields
+    if (name.startsWith('address.')) {
+      const addressField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          [addressField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const addExpertise = () => {
-    if (newExpertise.trim() && !formData.expertise.includes(newExpertise.trim())) {
+    if (newExpertise.trim() && !formData.expertiseDomains.includes(newExpertise.trim())) {
       setFormData(prev => ({
         ...prev,
-        expertise: [...prev.expertise, newExpertise.trim()]
+        expertiseDomains: [...prev.expertiseDomains, newExpertise.trim()]
       }));
       setNewExpertise("");
     }
@@ -51,7 +86,7 @@ export default function Profile() {
   const removeExpertise = (expertiseToRemove) => {
     setFormData(prev => ({
       ...prev,
-      expertise: prev.expertise.filter(exp => exp !== expertiseToRemove)
+      expertiseDomains: prev.expertiseDomains.filter(exp => exp !== expertiseToRemove)
     }));
   };
 
@@ -60,8 +95,8 @@ export default function Profile() {
     console.log('Form submitted with data:', formData);
     
     // Basic validation
-    if (!formData.name?.trim()) {
-      setMessage({ type: "error", text: "Name is required" });
+    if (!formData.fullName?.trim()) {
+      setMessage({ type: "error", text: "Full name is required" });
       return;
     }
     
@@ -70,77 +105,82 @@ export default function Profile() {
       return;
     }
     
+    if (!formData.designation?.trim()) {
+      setMessage({ type: "error", text: "Designation is required" });
+      return;
+    }
+    
+    if (!formData.organisationName?.trim()) {
+      setMessage({ type: "error", text: "Organisation name is required" });
+      return;
+    }
+    
     setUpdateLoading(true);
     setMessage({ type: "", text: "" });
 
     try {
-      const token = localStorage.getItem("token");
-      console.log('Token found:', !!token);
-      
-      if (!token) {
-        setMessage({ type: "error", text: "Please log in again to update your profile" });
-        setUpdateLoading(false);
-        return;
-      }
-      
-      const response = await fetch(API_ENDPOINTS.PROFILE, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
-      
-      const data = await response.json();
-      console.log('Response received:', response.status, data);
+      const response = await apiClient.put('/api/auth/profile', formData);
+      console.log('Response received:', response.status, response.data);
 
-      if (response.ok) {
-        setMessage({ type: "success", text: "Profile updated successfully!" });
-        setIsEditing(false);
-        // Update user context without reload
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
-      } else {
-        console.error('Update failed:', data.message);
-        setMessage({ type: "error", text: data.message || "Failed to update profile" });
-      }
+      setMessage({ type: "success", text: "Profile updated successfully!" });
+      setIsEditing(false);
+      // Update user context without reload
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (error) {
-      console.error('Network error:', error);
-      setMessage({ type: "error", text: "Network error. Please check your connection and try again." });
+      console.error('Error updating profile:', error);
+      if (error.response?.status === 401) {
+        setMessage({ type: "error", text: "Please log in again to update your profile" });
+      } else {
+        setMessage({ 
+          type: "error", 
+          text: error.response?.data?.message || "Failed to update profile. Please try again." 
+        });
+      }
     } finally {
       setUpdateLoading(false);
     }
   };
 
-  const getRoleColor = (role) => {
-    switch (role?.toLowerCase()) {
-      case 'user': return 'from-blue-500 to-indigo-600';
-      case 'reviewer': return 'from-purple-500 to-violet-600';
-      case 'staff': return 'from-emerald-500 to-teal-600';
+  const getRoleColor = (roles) => {
+    if (!roles || roles.length === 0) return 'from-blue-500 to-blue-600';
+    // Use first role for color
+    const role = roles[0];
+    switch (role) {
+      case 'USER': return 'from-blue-500 to-indigo-600';
+      case 'EXPERT_REVIEWER': return 'from-purple-500 to-violet-600';
+      case 'CMPDI_MEMBER': return 'from-emerald-500 to-teal-600';
+      case 'TSSRC_MEMBER': return 'from-orange-500 to-red-600';
+      case 'SSRC_MEMBER': return 'from-pink-500 to-rose-600';
+      case 'SUPER_ADMIN': return 'from-red-500 to-rose-600';
       default: return 'from-blue-500 to-blue-600';
     }
   };
 
-  const getRoleIcon = (role) => {
-    switch (role?.toLowerCase()) {
-      case 'user':
+  const getRoleIcon = (roles) => {
+    if (!roles || roles.length === 0) return null;
+    const role = roles[0];
+    switch (role) {
+      case 'USER':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
         );
-      case 'reviewer':
+      case 'EXPERT_REVIEWER':
+      case 'CMPDI_MEMBER':
+      case 'TSSRC_MEMBER':
+      case 'SSRC_MEMBER':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         );
-      case 'staff':
+      case 'SUPER_ADMIN':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
         );
       default:
@@ -200,19 +240,11 @@ export default function Profile() {
               {/* Avatar Section */}
               <div className="relative group">
                 <div className="relative">
-                  <div className={`w-32 h-32 bg-gradient-to-br ${getRoleColor(user.role)} rounded-2xl flex items-center justify-center text-white text-4xl font-bold shadow-2xl transform group-hover:scale-105 transition-all duration-300`}>
-                    {user.profilePicture ? (
-                      <img 
-                        src={user.profilePicture} 
-                        alt={user.name} 
-                        className="w-full h-full rounded-2xl object-cover"
-                      />
-                    ) : (
-                      user.name?.charAt(0)?.toUpperCase()
-                    )}
+                  <div className={`w-32 h-32 bg-gradient-to-br ${getRoleColor(user.roles)} rounded-2xl flex items-center justify-center text-white text-4xl font-bold shadow-2xl transform group-hover:scale-105 transition-all duration-300`}>
+                    {user.fullName?.charAt(0)?.toUpperCase()}
                   </div>
-                  <div className={`absolute -bottom-3 -right-3 w-12 h-12 bg-gradient-to-br ${getRoleColor(user.role)} rounded-xl flex items-center justify-center text-white shadow-lg`}>
-                    {getRoleIcon(user.role)}
+                  <div className={`absolute -bottom-3 -right-3 w-12 h-12 bg-gradient-to-br ${getRoleColor(user.roles)} rounded-xl flex items-center justify-center text-white shadow-lg`}>
+                    {getRoleIcon(user.roles)}
                   </div>
                 </div>
                 
@@ -224,33 +256,35 @@ export default function Profile() {
               <div className="flex-1 text-center lg:text-left">
                 <div className="mb-4">
                   <h1 className="text-4xl md:text-5xl font-bold text-black mb-2">
-                    {user.name}
+                    {user.fullName}
                   </h1>
                   <p className="text-xl text-black font-bold">{user.email}</p>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-4 items-center lg:items-start lg:justify-start justify-center mb-6">
-                  <span className={`inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r ${getRoleColor(user.role)} text-white rounded-full font-semibold shadow-lg`}>
-                    {getRoleIcon(user.role)}
-                    {user.role?.toUpperCase()}
-                  </span>
+                <div className="flex flex-wrap gap-3 items-center lg:items-start lg:justify-start justify-center mb-6">
+                  {user.roles && user.roles.map((role, index) => (
+                    <span key={index} className={`inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r ${getRoleColor([role])} text-white rounded-full font-semibold shadow-lg`}>
+                      {getRoleIcon([role])}
+                      {role.replace('_', ' ')}
+                    </span>
+                  ))}
                   
-                  {user.department && (
+                  {user.designation && (
                     <span className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-full font-bold shadow-lg">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2-2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
-                      {user.department}
+                      {user.designation}
                     </span>
                   )}
                 </div>
 
                 {/* Expertise Tags */}
-                {user.expertise && user.expertise.length > 0 && (
+                {user.expertiseDomains && user.expertiseDomains.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-sm font-bold text-black mb-3 uppercase tracking-wide">Areas of Expertise</h3>
                     <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
-                      {user.expertise.slice(0, 5).map((exp, index) => (
+                      {user.expertiseDomains.slice(0, 5).map((exp, index) => (
                         <span
                           key={index}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold border border-blue-700 hover:bg-blue-700 transition-colors shadow-md"
@@ -258,9 +292,9 @@ export default function Profile() {
                           {exp}
                         </span>
                       ))}
-                      {user.expertise.length > 5 && (
+                      {user.expertiseDomains.length > 5 && (
                         <span className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-bold shadow-md">
-                          +{user.expertise.length - 5} more
+                          +{user.expertiseDomains.length - 5} more
                         </span>
                       )}
                     </div>
@@ -344,13 +378,14 @@ export default function Profile() {
               
               {isEditing ? (
                 <form onSubmit={handleSubmit} className="space-y-8">
+                  {/* Personal Information */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Full Name</label>
+                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Full Name *</label>
                       <input
                         type="text"
-                        name="name"
-                        value={formData.name}
+                        name="fullName"
+                        value={formData.fullName}
                         onChange={handleInputChange}
                         className="w-full px-4 py-4 border-2 border-blue-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-black font-bold"
                         required
@@ -358,7 +393,7 @@ export default function Profile() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Email Address</label>
+                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Email Address *</label>
                       <input
                         type="email"
                         name="email"
@@ -370,27 +405,119 @@ export default function Profile() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Phone Number</label>
+                      <input
+                        type="tel"
+                        name="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={handleInputChange}
+                        placeholder="Enter your phone number"
+                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-900 font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Designation *</label>
+                      <input
+                        type="text"
+                        name="designation"
+                        value={formData.designation}
+                        onChange={handleInputChange}
+                        placeholder="e.g., Research Scholar, Professor"
+                        className="w-full px-4 py-4 border-2 border-blue-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-black font-bold"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Organisation Name *</label>
+                      <input
+                        type="text"
+                        name="organisationName"
+                        value={formData.organisationName}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-4 border-2 border-blue-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-black font-bold"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-black uppercase tracking-wide">Organisation Type *</label>
+                      <select
+                        name="organisationType"
+                        value={formData.organisationType}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-4 border-2 border-blue-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-black font-bold"
+                        required
+                      >
+                        <option value="INDIAN_ACADEMIC_RESEARCH">Indian Academic/Research Institution</option>
+                        <option value="INDIAN_GOVT_ORGANISATION">Indian Government Organisation</option>
+                        <option value="PUBLIC_SECTOR_SUBSIDIARY">Public Sector Subsidiary</option>
+                        <option value="FOREIGN_INSTITUTE">Foreign Institute</option>
+                        <option value="CMPDI">CMPDI</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <label className="block text-sm font-bold text-black uppercase tracking-wide">Department</label>
+                    <label className="block text-sm font-bold text-black uppercase tracking-wide">Country *</label>
                     <input
                       type="text"
-                      name="department"
-                      value={formData.department}
+                      name="country"
+                      value={formData.country}
                       onChange={handleInputChange}
-                      placeholder="e.g., Computer Science, Mechanical Engineering"
-                      className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-900 font-bold"
+                      className="w-full px-4 py-4 border-2 border-blue-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-black font-bold"
+                      required
                     />
+                  </div>
+
+                  {/* Address Fields */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold text-black">Address (Optional)</h3>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        name="address.line1"
+                        value={formData.address.line1}
+                        onChange={handleInputChange}
+                        placeholder="Address Line 1"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-900 font-bold"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input
+                        type="text"
+                        name="address.city"
+                        value={formData.address.city}
+                        onChange={handleInputChange}
+                        placeholder="City"
+                        className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-900 font-bold"
+                      />
+                      <input
+                        type="text"
+                        name="address.state"
+                        value={formData.address.state}
+                        onChange={handleInputChange}
+                        placeholder="State"
+                        className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-900 font-bold"
+                      />
+                    </div>
                   </div>
 
                   {/* Enhanced Expertise Section */}
                   <div className="space-y-4">
-                    <label className="block text-sm font-bold text-gray-900 uppercase tracking-wide">Areas of Expertise</label>
+                    <label className="block text-sm font-bold text-gray-900 uppercase tracking-wide">Expertise Domains</label>
                     <div className="flex gap-3">
                       <input
                         type="text"
                         value={newExpertise}
                         onChange={(e) => setNewExpertise(e.target.value)}
-                        placeholder="Add your expertise area..."
+                        placeholder="Add your expertise domain..."
                         className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-900 font-bold"
                         onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addExpertise())}
                       />
@@ -403,11 +530,11 @@ export default function Profile() {
                       </button>
                     </div>
                     
-                    {formData.expertise.length > 0 && (
+                    {formData.expertiseDomains.length > 0 && (
                       <div className="space-y-3">
-                        <h4 className="text-sm font-bold text-gray-900">Current Expertise Areas:</h4>
+                        <h4 className="text-sm font-bold text-gray-900">Current Expertise Domains:</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {formData.expertise.map((exp, index) => (
+                          {formData.expertiseDomains.map((exp, index) => (
                             <div
                               key={index}
                               className="inline-flex items-center justify-between gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 text-blue-800 px-4 py-3 rounded-xl font-medium group hover:from-blue-100 hover:to-indigo-100 transition-all duration-300"

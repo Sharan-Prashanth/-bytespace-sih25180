@@ -1,2039 +1,1317 @@
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/router";
-import { ROLES } from "../../context/AuthContext";
-import ProtectedRoute from "../../components/ProtectedRoute";
-import Navbar from "../../components/Navbar";
-import AdvancedProposalEditor from "../../components/AdvancedProposalEditor";
-import Chatbot from "../../components/Chatbot";
+'use client';
 
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/router';
+import { useAuth } from '../../context/AuthContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
+import AdvancedProposalEditor from '../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
+import Chatbot from '../../components/Saarthi';
+import { useToast, ToastContainer } from '../../components/ui (plate files)/toast';
 
-
-function CreateProposalContent() {
+function CreateNewProposalContent() {
   const router = useRouter();
-  const fileInputRef = useRef(null);
-  const uploadSectionRef = useRef(null);
+  const { user } = useAuth();
+  const editorRef = useRef(null);
+  const submissionInProgressRef = useRef(false);
 
-
-  
-  // UI State Management
-  const [editorMode, setEditorMode] = useState('editor'); // 'editor' or 'upload'
-  const [showSaarthi, setShowSaarthi] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStage, setUploadStage] = useState('');
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionProgress, setSubmissionProgress] = useState(0);
-  const [submissionStage, setSubmissionStage] = useState('');
-  const [showEvaluation, setShowEvaluation] = useState(false);
-  
-
-  
-  // Editor State
-  const [wordCount, setWordCount] = useState(0);
-  const [characterCount, setCharacterCount] = useState(0);
-  const [proposalData, setProposalData] = useState({
-    projectTitle: '',
-    fundingMethod: 'S&T of MoC',
-    implementingAgency: '', // Principal Implementing Agency
+  // Proposal Information State
+  const [proposalInfo, setProposalInfo] = useState({
+    title: '',
+    fundingMethod: 'S&T_OF_MOC',
+    principalImplementingAgency: '',
     subImplementingAgency: '',
     projectLeader: '',
     projectCoordinator: '',
-    coInvestigators: '',
-    domain: 'Coal Technology & Clean Energy',
+    projectDurationMonths: '',
     projectOutlayLakhs: '',
-    durationMonths: ''
   });
 
-  // Editor content and counts state
-  const [editorContent, setEditorContent] = useState('');
+  // Validation State
+  const [validationErrors, setValidationErrors] = useState({});
+  const [isFormValid, setIsFormValid] = useState(false);
 
-  // File Upload Simulation
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+  // Form State - Track which forms have content
+  const [formStatus, setFormStatus] = useState({
+    'formi': false,
+    'formia': false,
+    'formix': false,
+    'formx': false,
+    'formxi': false,
+    'formxii': false,
+  });
+
+  // Upload State for each form
+  const [uploadedFiles, setUploadedFiles] = useState({
+    'formi': null,
+    'formia': null,
+    'formix': null,
+    'formx': null,
+    'formxi': null,
+    'formxii': null,
+  });
+
+  const [uploadingForm, setUploadingForm] = useState(null);
+  const [extractingForm, setExtractingForm] = useState(null);
+  const [extractionProgress, setExtractionProgress] = useState(0);
+
+  // Draft State
+  const [proposalId, setProposalId] = useState(null);
+  const [lastSavedTime, setLastSavedTime] = useState(null);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [isManuallySaving, setIsManuallySaving] = useState(false);
+
+  // Toast notifications
+  const { toasts, removeToast, success, error, info } = useToast();
+
+  // Submission State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionProgress, setSubmissionProgress] = useState(0);
+  const [submissionStage, setSubmissionStage] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedProposalId, setSubmittedProposalId] = useState('');
+
+  // AI Assistant State
+  const [showChatbot, setShowChatbot] = useState(false);
+
+  // Editor Content State - Initial content for all forms
+  const [editorInitialContent, setEditorInitialContent] = useState(null);
+
+  // Signature State - For all forms
+  const [signatures, setSignatures] = useState({
+    headSignature: null, // Form IA
+    institutionSeal: null, // Form IA
+    projectLeaderSignature: null, // Forms IX, X, XI, XII
+    projectCoordinatorSignature: null, // Forms IX, X, XI, XII
+    financeOfficerSignature: null, // Forms XI, XII
+  });
+
+  // Form Configuration
+  const FORM_CONFIGS = [
+    {
+      id: 'formi',
+      label: 'Form I',
+      title: 'Project Proposal for S&T Grant',
+      pdfFile: '/files/FORM-I.pdf',
+      docxFile: '/files/FORM-I.docx',
+    },
+    {
+      id: 'formia',
+      label: 'Form IA',
+      title: 'Endorsement From',
+      pdfFile: '/files/FORM-IA_NEW.pdf',
+      docxFile: '/files/FORM-IA_NEW.docx',
+    },
+    {
+      id: 'formix',
+      label: 'Form IX',
+      title: 'Equipment Details (Already Procured)',
+      pdfFile: '/files/FORM-IX_NEW.pdf',
+      docxFile: '/files/FORM-IX_NEW.docx',
+    },
+    {
+      id: 'formx',
+      label: 'Form X',
+      title: 'Computer & Software Details',
+      pdfFile: '/files/FORM-X_NEW.pdf',
+      docxFile: '/files/FORM-X_NEW.docx',
+    },
+    {
+      id: 'formxi',
+      label: 'Form XI',
+      title: 'Manpower Cost (Salary & Wages)',
+      pdfFile: '/files/FORM-XI_NEW.pdf',
+      docxFile: '/files/FORM-XI_NEW.docx',
+    },
+    {
+      id: 'formxii',
+      label: 'Form XII',
+      title: 'Travel Expenditure (TA/DA)',
+      pdfFile: '/files/FORM-XII_NEW.pdf',
+      docxFile: '/files/FORM-XII_NEW.docx',
+    },
+  ];
+
+  // Load existing draft on mount
+  useEffect(() => {
+    loadExistingDraft();
+  }, []);
+
+  // Validate proposal info
+  useEffect(() => {
+    validateProposalInfo();
+  }, [proposalInfo]);
+
+  // Check if all forms have content
+  useEffect(() => {
+    const allFormsComplete = Object.values(formStatus).every((status) => status === true);
+    setIsFormValid(allFormsComplete && Object.keys(validationErrors).length === 0);
+  }, [formStatus, validationErrors]);
+
+  // Load existing draft from backend
+  const loadExistingDraft = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:5000/api/proposals/drafts', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.drafts && data.drafts.length > 0) {
+        // Load the most recent draft
+        const latestDraft = data.drafts[0];
+        setProposalId(latestDraft._id);
+        
+        setProposalInfo({
+          title: latestDraft.title || '',
+          fundingMethod: latestDraft.researchFundingMethod || 'S&T_OF_MOC',
+          principalImplementingAgency: latestDraft.principalImplementingAgency || '',
+          subImplementingAgency: latestDraft.subImplementingAgency || '',
+          projectLeader: latestDraft.projectLeader || '',
+          projectCoordinator: latestDraft.projectCoordinator || '',
+          projectDurationMonths: latestDraft.projectDuration || '',
+          projectOutlayLakhs: latestDraft.projectOutlay || '',
+        });
+
+        // Load form status
+        const status = {};
+        latestDraft.forms?.forEach(form => {
+          status[form.formKey] = true;
+        });
+        setFormStatus(status);
+
+        // Load signatures from metadata
+        if (latestDraft.metadata?.signatures) {
+          setSignatures(latestDraft.metadata.signatures);
+        }
+
+        info('Draft loaded successfully');
+      }
+    } catch (error) {
+      console.error('Error loading draft:', error);
+      error('Failed to load draft');
+    }
+  };
+
+  // Validate proposal information
+  const validateProposalInfo = () => {
+    const errors = {};
+
+    if (!proposalInfo.title || proposalInfo.title.trim().length === 0) {
+      errors.title = 'Title is required';
+    } else if (proposalInfo.title.length > 150) {
+      errors.title = 'Title must be 150 characters or less';
+    }
+
+    if (!proposalInfo.principalImplementingAgency || proposalInfo.principalImplementingAgency.trim().length === 0) {
+      errors.principalImplementingAgency = 'Principal Implementing Agency is required';
+    } else if (proposalInfo.principalImplementingAgency.length > 100) {
+      errors.principalImplementingAgency = 'Agency name must be 100 characters or less';
+    }
+
+    if (!proposalInfo.subImplementingAgency || proposalInfo.subImplementingAgency.trim().length === 0) {
+      errors.subImplementingAgency = 'Sub Implementing Agency is required';
+    } else if (proposalInfo.subImplementingAgency.length > 100) {
+      errors.subImplementingAgency = 'Agency name must be 100 characters or less';
+    }
+
+    if (!proposalInfo.projectLeader || proposalInfo.projectLeader.trim().length === 0) {
+      errors.projectLeader = 'Project Leader is required';
+    } else if (proposalInfo.projectLeader.length > 100) {
+      errors.projectLeader = 'Name must be 100 characters or less';
+    }
+
+    if (!proposalInfo.projectCoordinator || proposalInfo.projectCoordinator.trim().length === 0) {
+      errors.projectCoordinator = 'Project Coordinator is required';
+    } else if (proposalInfo.projectCoordinator.length > 100) {
+      errors.projectCoordinator = 'Name must be 100 characters or less';
+    }
+
+    if (!proposalInfo.projectDurationMonths || proposalInfo.projectDurationMonths < 1) {
+      errors.projectDurationMonths = 'Duration must be at least 1 month';
+    }
+
+    if (!proposalInfo.projectOutlayLakhs || proposalInfo.projectOutlayLakhs < 0.01) {
+      errors.projectOutlayLakhs = 'Outlay must be at least 0.01 lakhs';
+    }
+
+    setValidationErrors(errors);
+  };
+
+  // Handle proposal info change
+  const handleInfoChange = (field, value) => {
+    setProposalInfo((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // Auto-save draft to backend
+  const autoSaveDraft = async () => {
+    if (isAutoSaving) return;
+
+    try {
+      setIsAutoSaving(true);
+
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:5000/api/proposals/draft', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          proposalId,
+          title: proposalInfo.title,
+          researchFundingMethod: proposalInfo.fundingMethod,
+          principalImplementingAgency: proposalInfo.principalImplementingAgency,
+          subImplementingAgency: proposalInfo.subImplementingAgency,
+          projectLeader: proposalInfo.projectLeader,
+          projectCoordinator: proposalInfo.projectCoordinator,
+          projectDuration: proposalInfo.projectDurationMonths,
+          projectOutlay: proposalInfo.projectOutlayLakhs,
+          signatures
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        if (!proposalId && data.proposal?._id) {
+          setProposalId(data.proposal._id);
+        }
+        setLastSavedTime(new Date());
+      }
+    } catch (error) {
+      console.error('Error auto-saving draft:', error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  // Handle auto-save from editor
+  const handleAutoSave = useCallback(async (editorFormData) => {
+    try {
+      console.log('💾 handleAutoSave called with', editorFormData ? Object.keys(editorFormData).length : 0, 'forms');
+      setIsAutoSaving(true);
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('❌ No auth token found');
+        return null;
+      }
+
+      const payload = {
+        proposalId,
+        title: proposalInfo.title,
+        researchFundingMethod: proposalInfo.fundingMethod,
+        principalImplementingAgency: proposalInfo.principalImplementingAgency,
+        subImplementingAgency: proposalInfo.subImplementingAgency,
+        projectLeader: proposalInfo.projectLeader,
+        projectCoordinator: proposalInfo.projectCoordinator,
+        projectDuration: proposalInfo.projectDurationMonths,
+        projectOutlay: proposalInfo.projectOutlayLakhs,
+        forms: editorFormData ? Object.keys(editorFormData).map(formKey => ({
+          formKey,
+          formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
+          editorContent: editorFormData[formKey].content,
+          wordCount: editorFormData[formKey].wordCount,
+          characterCount: editorFormData[formKey].characterCount
+        })) : undefined,
+        signatures
+      };
+
+      console.log('📦 Auto-save payload:', {
+        hasProposalId: !!proposalId,
+        formsCount: payload.forms?.length || 0,
+        formKeys: payload.forms?.map(f => f.formKey) || []
+      });
+
+      const response = await fetch('http://localhost:5000/api/proposals/draft', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const savedProposalId = data.proposal?._id;
+        console.log('✅ Draft saved successfully:', savedProposalId);
+        if (!proposalId && savedProposalId) {
+          setProposalId(savedProposalId);
+        }
+        setLastSavedTime(new Date());
+        return savedProposalId || proposalId;
+      } else {
+        console.error('❌ Draft save failed:', data.message);
+        return proposalId;
+      }
+    } catch (error) {
+      console.error('❌ Error auto-saving draft:', error);
+      return proposalId;
+    } finally {
+      setIsAutoSaving(false);
+    }
+  }, [proposalId, proposalInfo, formStatus, signatures, FORM_CONFIGS]);
+
+  // Handle file upload for a form
+  const handleFileUpload = async (formId, event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
-    setUploadProgress(0);
-    setUploadSuccess(false);
-    
-    const stages = [
-      { stage: 'Scanning for viruses and malware...', duration: 2000 },
-      { stage: 'Validating document format...', duration: 1500 },
-      { stage: 'Parsing document structure...', duration: 2500 },
-      { stage: 'Extracting content to editor...', duration: 3000 },
-      { stage: 'Processing images and tables...', duration: 2000 },
-      { stage: 'Applying NaCCER compliance check...', duration: 1800 },
-      { stage: 'Storing securely on blockchain...', duration: 2200 },
-      { stage: 'Finalizing secure import...', duration: 1500 }
-    ];
-
-    let currentProgress = 0;
-    const progressPerStage = 100 / stages.length;
-    
-    for (let i = 0; i < stages.length; i++) {
-      setUploadStage(stages[i].stage);
-      
-      await new Promise(resolve => {
-        const interval = setInterval(() => {
-          currentProgress += Math.random() * 4 + 1;
-          const targetProgress = (i + 1) * progressPerStage;
-          if (currentProgress >= targetProgress) {
-            currentProgress = targetProgress;
-            setUploadProgress(currentProgress);
-            clearInterval(interval);
-            resolve();
-          } else {
-            setUploadProgress(currentProgress);
-          }
-        }, 150);
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, stages[i].duration));
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      error('Please upload a PDF or DOCX file');
+      return;
     }
 
-    setUploadProgress(100);
-    setUploadStage('Document uploaded and blockchain verified successfully!');
-    
+    try {
+      setUploadingForm(formId);
+      info('Uploading and extracting file...');
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        error('Please log in to upload files');
+        return;
+      }
+
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      reader.onload = async () => {
+        try {
+          setExtractingForm(formId);
+          setExtractionProgress(50);
+
+          // Extract content from file via backend
+          const response = await fetch('http://localhost:5000/api/upload/extract-form', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              file: reader.result,
+              formId,
+              fileName: file.name
+            })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            setUploadedFiles((prev) => ({
+              ...prev,
+              [formId]: { name: file.name, extracted: true },
+            }));
+
+            // TODO: Load extracted content into editor
+            // This would require passing the content to the editor ref
+            
+            setExtractionProgress(100);
+            
+            // Mark form as complete
+            setFormStatus((prev) => ({
+              ...prev,
+              [formId]: true,
+            }));
+
+            success(`${FORM_CONFIGS.find(f => f.id === formId)?.label} content extracted successfully`);
+            
+            setTimeout(() => {
+              setUploadingForm(null);
+              setExtractingForm(null);
+              setExtractionProgress(0);
+              autoSaveDraft();
+            }, 500);
+          } else {
+            throw new Error(data.message || 'Extraction failed');
+          }
+        } catch (err) {
+          console.error('Error extracting file:', err);
+          error('Error extracting file content. Please try again.');
+          setUploadingForm(null);
+          setExtractingForm(null);
+          setExtractionProgress(0);
+        }
+      };
+
+      reader.onerror = () => {
+        error('Error reading file');
+        setUploadingForm(null);
+        setExtractingForm(null);
+        setExtractionProgress(0);
+      };
+    } catch (err) {
+      console.error('Error uploading file:', err);
+      error('Error uploading file. Please try again.');
+      setUploadingForm(null);
+      setExtractingForm(null);
+      setExtractionProgress(0);
+    }
+  };
+
+  // Manual save draft (called from editor)
+  const handleManualSave = async (editorFormData) => {
+    if (isManuallySaving) return;
+
+    try {
+      setIsManuallySaving(true);
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        error('Please log in to save');
+        return;
+      }
+
+      const response = await fetch('http://localhost:5000/api/proposals/draft', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          proposalId,
+          title: proposalInfo.title,
+          researchFundingMethod: proposalInfo.fundingMethod,
+          principalImplementingAgency: proposalInfo.principalImplementingAgency,
+          subImplementingAgency: proposalInfo.subImplementingAgency,
+          projectLeader: proposalInfo.projectLeader,
+          projectCoordinator: proposalInfo.projectCoordinator,
+          projectDuration: proposalInfo.projectDurationMonths,
+          projectOutlay: proposalInfo.projectOutlayLakhs,
+          forms: editorFormData ? Object.keys(editorFormData).map(formKey => ({
+            formKey,
+            formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
+            editorContent: editorFormData[formKey].content,
+            wordCount: editorFormData[formKey].wordCount,
+            characterCount: editorFormData[formKey].characterCount
+          })) : undefined,
+          signatures
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        if (!proposalId && data.proposal?._id) {
+          setProposalId(data.proposal._id);
+        }
+        setLastSavedTime(new Date());
+        success('Draft saved successfully');
+      } else {
+        error(data.message || 'Failed to save draft');
+      }
+    } catch (err) {
+      console.error('Error saving draft:', err);
+      error('Failed to save draft');
+    } finally {
+      setIsManuallySaving(false);
+    }
+  };
+
+  // Remove uploaded form
+  const handleRemoveForm = async (formId) => {
+    try {
+      info('Removing form...');
+
+      // Mock: Delete from S3 (real API call would go here)
+      // const fileUrl = uploadedFiles[formId]?.url;
+      // if (fileUrl) {
+      //   await fetch('/api/upload/delete', {
+      //     method: 'DELETE',
+      //     body: JSON.stringify({ url: fileUrl }),
+      //   });
+      // }
+
+      // Clear uploaded file
+      setUploadedFiles((prev) => ({
+        ...prev,
+        [formId]: null,
+      }));
+
+      // Clear form status
+      setFormStatus((prev) => ({
+        ...prev,
+        [formId]: false,
+      }));
+
+      success(`${FORM_CONFIGS.find(f => f.id === formId)?.label} removed successfully`);
+      autoSaveDraft();
+    } catch (err) {
+      console.error('Error removing form:', err);
+      error('Error removing form. Please try again.');
+    }
+  };
+
+  // Handle form content change from editor
+  const handleFormContentChange = (formId, hasContent) => {
+    setFormStatus((prev) => ({
+      ...prev,
+      [formId]: hasContent,
+    }));
+  };
+
+  // Handle signature changes from editor
+  const handleSignatureChange = (signatureType, signatureData) => {
+    setSignatures((prev) => ({
+      ...prev,
+      [signatureType]: signatureData,
+    }));
+  };
+
+  // Handle seal changes from editor
+  const handleSealChange = (sealData) => {
+    setSignatures((prev) => ({
+      ...prev,
+      institutionSeal: sealData,
+    }));
+  };
+
+  // Upload all base64 images to S3 (mock implementation)
+  const uploadImagesToS3 = useCallback(async (editorContent) => {
+    try {
+      info('Uploading images to cloud storage...');
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // Prepare images for upload (only base64 strings need upload)
+      const imagesToUpload = [];
+      
+      Object.entries(signatures).forEach(([key, value]) => {
+        if (value && typeof value === 'string' && value.startsWith('data:image')) {
+          imagesToUpload.push({ key, image: value, fileName: `${key}_${Date.now()}` });
+        }
+      });
+
+      if (imagesToUpload.length === 0) {
+        // No images to upload
+        return signatures;
+      }
+
+      // Upload all images to backend
+      const response = await fetch('http://localhost:5000/api/upload/images', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          images: imagesToUpload.map(img => ({ image: img.image, fileName: img.fileName })),
+          folder: 'signatures'
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Upload failed');
+      }
+
+      // Replace base64 with uploaded URLs
+      const uploadedUrls = { ...signatures };
+      data.data.successful.forEach((result, index) => {
+        const imageKey = imagesToUpload[index].key;
+        uploadedUrls[imageKey] = result.url;
+      });
+
+      success('Images uploaded successfully');
+      return uploadedUrls;
+    } catch (err) {
+      console.error('Error uploading images:', err);
+      error('Failed to upload images');
+      throw err;
+    }
+  }, [signatures, info, success, error]);
+
+  // Handle chat message
+  const handleSendMessage = (message) => {
+    // Add user message
+    const userMessage = {
+      type: 'user',
+      content: message,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    };
+    setChatMessages((prev) => [...prev, userMessage]);
+
+    // Mock AI response
     setTimeout(() => {
-      setUploadSuccess(true);
-      setIsUploading(false);
+      const aiResponse = {
+        type: 'ai',
+        content: 'I understand your question. Let me help you with that...\n\n[This is a mock response. Actual AI integration will be added later.]',
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setChatMessages((prev) => [...prev, aiResponse]);
     }, 1000);
   };
 
-  // Per-field upload state (Covering Letter, Proposal, CV)
-  const [selectedFiles, setSelectedFiles] = useState({
-    coveringLetter: null,
-    proposal: null,
-    cv: null,
-  });
-
-  const [fieldIsUploading, setFieldIsUploading] = useState({
-    coveringLetter: false,
-    proposal: false,
-    cv: false,
-  });
-
-  const [fieldUploadProgress, setFieldUploadProgress] = useState({
-    coveringLetter: 0,
-    proposal: 0,
-    cv: 0,
-  });
-
-  const [fieldUploadStage, setFieldUploadStage] = useState({
-    coveringLetter: '',
-    proposal: '',
-    cv: '',
-  });
-
-  const [fieldUploadSuccess, setFieldUploadSuccess] = useState({
-    coveringLetter: false,
-    proposal: false,
-    cv: false,
-  });
-
-  const [fieldError, setFieldError] = useState({
-    coveringLetter: '',
-    proposal: '',
-    cv: '',
-  });
-
-  // Form upload state
-  const [formFiles, setFormFiles] = useState({
-    form1: null,
-    form2: null,
-    form3: null,
-    form4: null,
-    form5: null,
-  });
-
-  const [formIsUploading, setFormIsUploading] = useState({
-    form1: false,
-    form2: false,
-    form3: false,
-    form4: false,
-    form5: false,
-  });
-
-  const [formUploadSuccess, setFormUploadSuccess] = useState({
-    form1: false,
-    form2: false,
-    form3: false,
-    form4: false,
-    form5: false,
-  });
-
-  const [formError, setFormError] = useState({
-    form1: '',
-    form2: '',
-    form3: '',
-    form4: '',
-    form5: '',
-  });
-
-  const FILE_LIMITS = {
-    coveringLetter: 2 * 1024 * 1024, // 2 MB
-    proposal: 20 * 1024 * 1024, // 20 MB
-    cv: 10 * 1024 * 1024, // 10 MB
-    forms: 10 * 1024 * 1024, // 10 MB for forms
-  };
-
-  const validateFile = (field, file) => {
-    if (!file) return 'No file selected';
-    const name = file.name || '';
-    const lower = name.toLowerCase();
-    if (!lower.endsWith('.pdf')) return 'Only PDF files are allowed';
-    const limit = FILE_LIMITS[field] || 5 * 1024 * 1024;
-    if (file.size > limit) return `File exceeds maximum size of ${Math.round(limit / 1024 / 1024)} MB`;
-    return '';
-  };
-
-  const handleSelectFile = (field, e) => {
-    const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-    setSelectedFiles(prev => ({ ...prev, [field]: file }));
-    setFieldError(prev => ({ ...prev, [field]: '' }));
-    setFieldUploadProgress(prev => ({ ...prev, [field]: 0 }));
-    setFieldUploadStage(prev => ({ ...prev, [field]: '' }));
-    setFieldUploadSuccess(prev => ({ ...prev, [field]: false }));
-  };
-
-  const uploadFieldFile = async (field) => {
-    const file = selectedFiles[field];
-    const err = validateFile(field, file);
-    if (err) { setFieldError(prev => ({ ...prev, [field]: err })); return; }
-
-    setFieldIsUploading(prev => ({ ...prev, [field]: true }));
-    setFieldUploadProgress(prev => ({ ...prev, [field]: 0 }));
-    setFieldUploadSuccess(prev => ({ ...prev, [field]: false }));
-
-    const stages = [
-      { stage: 'Validating file...', duration: 800 },
-      { stage: 'Scanning for viruses...', duration: 1000 },
-      { stage: 'Optimizing for storage...', duration: 900 },
-      { stage: 'Storing securely...', duration: 1200 },
-      { stage: 'Finalizing upload...', duration: 700 }
-    ];
-
-    let currentProgress = 0;
-    const progressPerStage = 100 / stages.length;
-
-    for (let i = 0; i < stages.length; i++) {
-      setFieldUploadStage(prev => ({ ...prev, [field]: stages[i].stage }));
-      await new Promise(resolve => {
-        const interval = setInterval(() => {
-          currentProgress += Math.random() * 6 + 2;
-          const target = (i + 1) * progressPerStage;
-          if (currentProgress >= target) {
-            currentProgress = target;
-            setFieldUploadProgress(prev => ({ ...prev, [field]: Math.round(currentProgress) }));
-            clearInterval(interval);
-            resolve();
-          } else {
-            setFieldUploadProgress(prev => ({ ...prev, [field]: Math.round(currentProgress) }));
-          }
-        }, 120);
-      });
-      await new Promise(res => setTimeout(res, stages[i].duration));
-    }
-
-    setFieldUploadProgress(prev => ({ ...prev, [field]: 100 }));
-    setFieldUploadStage(prev => ({ ...prev, [field]: 'Upload complete' }));
-
-    // Simulate server storage delay
-    setTimeout(() => {
-      setFieldIsUploading(prev => ({ ...prev, [field]: false }));
-      setFieldUploadSuccess(prev => ({ ...prev, [field]: true }));
-    }, 600);
-  };
-
-
-
-
-
-  // File Download Handlers
-  const handleDownload = (filename) => {
-    // Simulate file download
-    const link = document.createElement('a');
-    link.href = `/files/${filename}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Form file handlers
-  const handleFormFileSelect = (formKey, e) => {
-    const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-    setFormFiles(prev => ({ ...prev, [formKey]: file }));
-    setFormError(prev => ({ ...prev, [formKey]: '' }));
-    setFormUploadSuccess(prev => ({ ...prev, [formKey]: false }));
-  };
-
-  const uploadFormFile = async (formKey) => {
-    const file = formFiles[formKey];
-    if (!file) {
-      setFormError(prev => ({ ...prev, [formKey]: 'Please select a file first' }));
-      return;
-    }
-
-    const name = file.name || '';
-    const lower = name.toLowerCase();
-    if (!lower.endsWith('.pdf') && !lower.endsWith('.docx') && !lower.endsWith('.doc')) {
-      setFormError(prev => ({ ...prev, [formKey]: 'Only PDF, DOC, or DOCX files are allowed' }));
-      return;
-    }
-
-    if (file.size > FILE_LIMITS.forms) {
-      setFormError(prev => ({ ...prev, [formKey]: `File exceeds maximum size of ${Math.round(FILE_LIMITS.forms / 1024 / 1024)} MB` }));
-      return;
-    }
-
-    setFormIsUploading(prev => ({ ...prev, [formKey]: true }));
-    setFormError(prev => ({ ...prev, [formKey]: '' }));
-
-    // Simulate upload
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    setFormIsUploading(prev => ({ ...prev, [formKey]: false }));
-    setFormUploadSuccess(prev => ({ ...prev, [formKey]: true }));
-  };
-
-  // Form Input Handlers
-  const handleInputChange = (field, value) => {
-    setProposalData(prev => ({ ...prev, [field]: value }));
-  };
-
-  // Handler functions for editor
-  const handleEditorContentChange = (content) => {
-    setEditorContent(content);
-  };
-
-  const handleWordCountChange = (count) => {
-    setWordCount(count);
-  };
-
-  const handleCharacterCountChange = (count) => {
-    setCharacterCount(count);
-  };
-
-  // Submission Handler with AI Analysis
+  // Mock: Submit proposal
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    setIsSubmitting(true);
-    setSubmissionProgress(0);
-    setShowEvaluation(false);
-    
-    const stages = [
-      { stage: 'Checking novelty against existing research...', duration: 2000 },
-      { stage: 'Analyzing technical feasibility...', duration: 2500 },
-      { stage: 'Validating budget and timeline...', duration: 1800 },
-      { stage: 'Comparing with similar proposals...', duration: 2200 },
-      { stage: 'Securing blockchain storage...', duration: 1500 }
-    ];
 
-    let currentProgress = 0;
-    
-    for (let i = 0; i < stages.length; i++) {
-      setSubmissionStage(stages[i].stage);
-      
-      await new Promise(resolve => {
-        const interval = setInterval(() => {
-          currentProgress += Math.random() * 12;
-          if (currentProgress >= (i + 1) * 20) {
-            currentProgress = (i + 1) * 20;
-            setSubmissionProgress(currentProgress);
-            clearInterval(interval);
-            resolve();
-          } else {
-            setSubmissionProgress(currentProgress);
-          }
-        }, 150);
+    if (submissionInProgressRef.current) return;
+    if (!isFormValid) return;
+
+    try {
+      submissionInProgressRef.current = true;
+      setIsSubmitting(true);
+      setSubmissionProgress(0);
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        error('Please log in to submit');
+        return;
+      }
+
+      setSubmissionStage('Validating proposal information...');
+      setSubmissionProgress(10);
+
+      // Step 0: Save as draft first if no proposalId exists
+      let currentProposalId = proposalId;
+      if (!currentProposalId) {
+        setSubmissionStage('Saving draft...');
+        setSubmissionProgress(15);
+        
+        const editorFormDataTemp = editorRef.current?.getFormData?.() || {};
+        currentProposalId = await handleAutoSave(editorFormDataTemp);
+        
+        if (!currentProposalId) {
+          throw new Error('Failed to create draft. Please try again.');
+        }
+      }
+
+      // Step 1: Upload all signature images to S3
+      setSubmissionStage('Uploading signature images...');
+      setSubmissionProgress(20);
+      const uploadedSignatures = await uploadImagesToS3();
+
+      // Step 2: Get editor form data
+      setSubmissionStage('Preparing form data...');
+      setSubmissionProgress(30);
+      const editorFormData = editorRef.current?.getFormData?.() || {};
+
+      // Step 3: Submit proposal with uploaded signatures
+      setSubmissionStage('Submitting proposal...');
+      setSubmissionProgress(50);
+
+      // Prepare submission payload
+      const submissionPayload = {
+        forms: Object.keys(editorFormData).map(formKey => ({
+          formKey,
+          formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
+          editorContent: editorFormData[formKey].content,
+          wordCount: editorFormData[formKey].wordCount,
+          characterCount: editorFormData[formKey].characterCount
+        })),
+        signatures: uploadedSignatures
+      };
+
+      console.log('📦 Submission payload:', {
+        proposalId: currentProposalId,
+        formsCount: submissionPayload.forms.length,
+        formKeys: submissionPayload.forms.map(f => f.formKey),
+        signaturesCount: Object.keys(uploadedSignatures).length,
+        signatureKeys: Object.keys(uploadedSignatures)
       });
-      
-      await new Promise(resolve => setTimeout(resolve, stages[i].duration));
-    }
 
-    setSubmissionProgress(100);
-    setSubmissionStage('Analysis completed successfully!');
-    
-    setTimeout(() => {
-      setShowEvaluation(true);
-    }, 1000);
+      const response = await fetch(`http://localhost:5000/api/proposals/${currentProposalId}/submit`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(submissionPayload)
+      });
 
-    // Simulate backend submission
-    setTimeout(() => {
+      const data = await response.json();
+
+      console.log('📤 Submission response:', {
+        success: data.success,
+        message: data.message,
+        statusCode: response.status,
+        proposal: data.proposal ? {
+          id: data.proposal._id,
+          status: data.proposal.status,
+          formsCount: data.proposal.forms?.length
+        } : null
+      });
+
+      if (!data.success) {
+        console.error('❌ Submission failed:', data.message);
+        throw new Error(data.message || 'Submission failed');
+      }
+
+      console.log('✅ Proposal submitted successfully:', data.proposal);
+
+      setSubmissionStage('AI Evaluation: Checking novelty and originality...');
+      setSubmissionProgress(65);
+
+      // TODO: Trigger AI evaluation endpoint
+      // await fetch(`http://localhost:5000/api/proposals/${proposalId}/ai-evaluation/trigger`, ...)
+
+      setSubmissionStage('AI Evaluation: Verifying compliance with guidelines...');
+      setSubmissionProgress(75);
+
+      setSubmissionStage('AI Evaluation: Assessing technical feasibility...');
+      setSubmissionProgress(85);
+
+      setSubmissionStage('Finalizing submission...');
+      setSubmissionProgress(95);
+
+      setSubmissionProgress(100);
+      setSubmissionStage('Submission complete!');
+
+      const submittedProposalNumber = data.proposal?.proposalNumber || 'Unknown';
+      setSubmittedProposalId(submittedProposalNumber);
+
+      // Show success modal
+      setTimeout(() => {
+        setShowSuccessModal(true);
+      }, 500);
+    } catch (error) {
+      console.error('Error submitting proposal:', error);
+      error(error.message || 'Error submitting proposal. Please try again.');
       setIsSubmitting(false);
-    }, 3000);
+      submissionInProgressRef.current = false;
+    }
   };
 
-  // Mock Evaluation Scores
-  const evaluationScores = {
-    technicalExcellence: Math.floor(Math.random() * 15) + 85, // 85-100
-    financialViability: Math.floor(Math.random() * 20) + 75, // 75-95
-    strategicAlignment: Math.floor(Math.random() * 10) + 90, // 90-100
-    teamCompetency: Math.floor(Math.random() * 18) + 80, // 80-98
-    impactPotential: Math.floor(Math.random() * 12) + 88  // 88-100
+  // Handle success modal close and redirect
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false);
+    router.push('/dashboard');
   };
-
-  const overallScore = Math.round(
-    (evaluationScores.technicalExcellence + 
-     evaluationScores.financialViability + 
-     evaluationScores.strategicAlignment + 
-     evaluationScores.teamCompetency + 
-     evaluationScores.impactPotential) / 5
-  );
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Distinctive Header Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 min-h-[280px]">
-        {/* Animated geometric patterns */}
-        <div className="absolute inset-0">
-          <div className="absolute top-6 left-10 w-12 h-12 border border-blue-400/30 rounded-full animate-pulse"></div>
-          <div className="absolute top-20 right-20 w-10 h-10 border border-indigo-400/20 rounded-lg rotate-45 animate-spin-slow"></div>
-          <div className="absolute bottom-12 left-32 w-8 h-8 bg-blue-500/10 rounded-full animate-bounce"></div>
-          <div className="absolute top-12 right-40 w-4 h-4 bg-indigo-400/20 rounded-full animate-ping"></div>
-        </div>
-        
-        {/* Overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
-        
-        {/* Header Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-10">
-          <div className="group">
-            <div className="flex items-center mb-5">
-              <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl group-hover:shadow-orange-500/25 transition-all duration-500 group-hover:scale-110">
-                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
-              </div>
-              
-              <div className="ml-6">
-                <div className="flex items-center mb-2">
-                  <h1 className="text-white text-4xl font-black tracking-tight bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
-                    Create R&D Proposal
-                  </h1>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse mr-3"></div>
-                    <span className="text-blue-100 font-semibold text-lg">NaCCER Research Portal</span>
-                  </div>
-                  <div className="h-4 w-px bg-blue-300/50"></div>
-                  <span className="text-blue-200 font-medium text-sm">Department of Coal</span>
-                </div>
-              </div>
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      
+      {/* Header */}
+      <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Create New Proposal</h1>
+              <p className="text-blue-100 mt-1">Fill in all required information and complete all 6 forms</p>
             </div>
-            
-            {/* PRISM Banner */}
-            <div className="bg-orange-600 backdrop-blur-md rounded-2xl p-4 border border-orange-300/40 shadow-2xl hover:shadow-orange-500/20 transition-all duration-300">
-              <div className="flex items-center space-x-4">
-                <div className="flex-shrink-0">
-                  <div className="w-10 h-10 bg-gradient-to-br from-white to-orange-50 rounded-lg flex items-center justify-center shadow-lg overflow-hidden border border-orange-200/50">
-                    <img 
-                      src="/images/prism brand logo.png" 
-                      alt="PRISM Logo" 
-                      className="w-10 h-10 object-contain"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <h2 className="text-white font-bold text-xl mb-1 flex items-center">
-                    <span className="text-white drop-shadow-md tracking-wide">PRISM</span>
-                    <div className="ml-3 px-2 py-0.5 bg-gradient-to-r from-green-400/30 to-emerald-400/30 rounded-full flex items-center justify-center border border-green-300/40 backdrop-blur-sm">
-                      <div className="w-1.5 h-1.5 bg-green-300 rounded-full mr-1.5 animate-pulse"></div>
-                      <span className="text-white text-xs font-semibold drop-shadow-sm">ACTIVE</span>
-                    </div>
-                  </h2>
-                  <p className="text-orange-50 text-sm leading-relaxed font-medium opacity-95 drop-shadow-sm">
-                    Proposal Review & Innovation Support Mechanism for Department of Coal's Advanced Research Platform
-                  </p>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Dashboard
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content Container */}
-      <div className="max-w-7xl mx-auto px-6 py-8 relative">
-        {/* SAARTHI AI Assistant - Modularized Component */}
-        <Chatbot showSaarthi={showSaarthi} setShowSaarthi={setShowSaarthi} />
+      <div className="max-w-7xl mx-auto px-6 py-8">
 
-        {/* Guidelines and Templates Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200">
-          <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+        {/* Guidelines & Templates Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border-l-4 border-orange-500">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C20.168 18.477 18.582 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            Guidelines & Resources
-          </h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="group relative overflow-hidden border border-orange-200 rounded-lg p-4 bg-orange-50 hover:shadow-lg transition-all duration-300">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-orange-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-              <div className="relative">
-                <div className="flex items-center mb-3">
-                  <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-base font-bold text-black">S&T Guidelines</h3>
-                </div>
-                <p className="text-black text-sm mb-3 leading-relaxed">
-                  Comprehensive R&D guidelines for Department of Coal including requirements, 
-                  evaluation criteria, and submission protocols.
-                </p>
-                <button
-                  onClick={() => handleDownload('S&T-Guidelines-MoC.pdf')}
-                  className="w-full bg-orange-600 text-white px-3 py-2 rounded-lg hover:bg-orange-700 transition-all duration-300 flex items-center justify-center gap-2 font-medium shadow-md hover:shadow-lg text-sm"
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-black mb-2">Guidelines & Templates</h2>
+              <p className="text-black mb-4">
+                Please read the guidelines carefully. All 6 forms are mandatory for submission.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href="/files/S&T-Guidelines-MoC.pdf"
+                  download
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all shadow-md"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   Download Guidelines (PDF)
-                </button>
-              </div>
-            </div>
-            
-            <div className="group relative overflow-hidden border border-green-200 rounded-lg p-4 bg-green-50 hover:shadow-lg transition-all duration-300">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-green-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-              <div className="relative">
-                <div className="flex items-center mb-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a4 4 0 01-4-4V5a4 4 0 014-4h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a4 4 0 01-4 4z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-base font-bold text-black">Proposal Template</h3>
-                </div>
-                <p className="text-black text-sm mb-3 leading-relaxed">
-                  Standardized template ensuring all required sections for coal research 
-                  proposals are properly structured and formatted.
-                </p>
-                <button
-                  onClick={() => handleDownload('proposal-template.docx')}
-                  className="w-full bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-all duration-300 flex items-center justify-center gap-2 font-medium shadow-md hover:shadow-lg text-sm"
+                </a>
+                <a
+                  href="/files/proposal-template.docx"
+                  download
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  Download Template (DOCX)
-                </button>
+                  Download Proposal Template (DOCX)
+                </a>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Upload Documents Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200">
-          <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-            </div>
-            Upload Documents
+        {/* Proposal Information Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-orange-200">
+          <h2 className="text-xl font-bold text-black mb-4 flex items-center gap-2">
+            <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Proposal Information
+            <span className="text-sm text-red-600 font-normal">(All fields required)</span>
           </h2>
-          
-          {/* Important Note */}
-          <div className="mb-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-orange-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-black font-medium">
-                <strong>Important Note:</strong> Please upload one document at a time.
-              </p>
-            </div>
-          </div>
 
-          {/* Document Upload Fields */}
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* 1. Covering Letter Upload */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-5 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <h4 className="text-base font-bold text-black mb-3 flex items-center">
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">1</span>
-                Covering Letter Upload
-              </h4>
-              <p className="text-xs text-black mb-4 leading-relaxed">
-                Select covering letter to Upload (Covering Letter in PDF format with size less than 2 MB)
-              </p>
-              
-              <div className="mb-3">
-                <input
-                  id="coveringLetterUpload"
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(e) => handleSelectFile('coveringLetter', e)}
-                  className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Project Title */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-black mb-2">
+                Project Title <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                value={proposalInfo.title}
+                onChange={(e) => handleInfoChange('title', e.target.value)}
+                maxLength={150}
+                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter project title (max 150 characters)"
+              />
+              <div className="flex justify-between mt-1">
+                <span className="text-sm text-red-600">{validationErrors.title || ''}</span>
+                <span className="text-sm text-black">{proposalInfo.title.length}/150</span>
               </div>
-              
-              {selectedFiles.coveringLetter && (
-                <div className="text-xs text-black mb-2 p-2 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {selectedFiles.coveringLetter.name}
-                </div>
-              )}
-              
-              {fieldError.coveringLetter && (
-                <div className="text-xs text-red-600 mb-2 p-2 bg-red-50 rounded border border-red-200">
-                  {fieldError.coveringLetter}
-                </div>
-              )}
-              
-              <button
-                type="button"
-                onClick={() => uploadFieldFile('coveringLetter')}
-                disabled={fieldIsUploading.coveringLetter || !selectedFiles.coveringLetter}
-                className="w-full bg-orange-600 text-white py-2.5 rounded-lg text-sm font-semibold mb-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300 shadow-md hover:shadow-lg"
-              >
-                {fieldIsUploading.coveringLetter ? 'Uploading...' : 'Upload'}
-              </button>
-              
-              <div className="text-xs text-gray-500 mb-2">
-                <strong>Allowed format:</strong> PDF
+            </div>
+
+            {/* Funding Method */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Funding Method <span className="text-red-600">*</span>
+              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="S&T_OF_MOC"
+                    checked={proposalInfo.fundingMethod === 'S&T_OF_MOC'}
+                    onChange={(e) => handleInfoChange('fundingMethod', e.target.value)}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-black">S&T of MoC</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="R&D_OF_CIL"
+                    checked={proposalInfo.fundingMethod === 'R&D_OF_CIL'}
+                    onChange={(e) => handleInfoChange('fundingMethod', e.target.value)}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-black">R&D of CIL</span>
+                </label>
               </div>
-              <div className="text-xs text-gray-500">
-                <strong>Maximum size:</strong> 2 MB
-              </div>
-              
-              {fieldIsUploading.coveringLetter && (
-                <div className="mt-3">
-                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden mb-1">
-                    <div 
-                      style={{ width: `${fieldUploadProgress.coveringLetter}%` }} 
-                      className="h-2 bg-orange-500 transition-all duration-300 rounded-full"
-                    ></div>
-                  </div>
-                  <div className="text-xs text-black">
-                    {fieldUploadStage.coveringLetter} • {fieldUploadProgress.coveringLetter}%
-                  </div>
-                </div>
-              )}
-              
-              {fieldUploadSuccess.coveringLetter && (
-                <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded successfully
-                  </div>
-                </div>
+            </div>
+
+            {/* Principal Implementing Agency */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Principal Implementing Agency <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                value={proposalInfo.principalImplementingAgency}
+                onChange={(e) => handleInfoChange('principalImplementingAgency', e.target.value)}
+                maxLength={100}
+                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter agency name"
+              />
+              {validationErrors.principalImplementingAgency && (
+                <span className="text-sm text-red-600">{validationErrors.principalImplementingAgency}</span>
               )}
             </div>
 
-            {/* 2. Proposal Document Upload */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-5 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <h4 className="text-base font-bold text-black mb-3 flex items-center">
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">2</span>
-                Proposal Document Upload
-              </h4>
-              <p className="text-xs text-black mb-4 leading-relaxed">
-                Select proposal to Upload (Proposal in PDF format with size less than 20 MB)
-              </p>
-              
-              <div className="mb-3">
-                <input
-                  id="proposalDocUpload"
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(e) => handleSelectFile('proposal', e)}
-                  className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
-              </div>
-              
-              {selectedFiles.proposal && (
-                <div className="text-xs text-black mb-2 p-2 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {selectedFiles.proposal.name}
-                </div>
-              )}
-              
-              {fieldError.proposal && (
-                <div className="text-xs text-red-600 mb-2 p-2 bg-red-50 rounded border border-red-200">
-                  {fieldError.proposal}
-                </div>
-              )}
-              
-              <button
-                type="button"
-                onClick={() => uploadFieldFile('proposal')}
-                disabled={fieldIsUploading.proposal || !selectedFiles.proposal}
-                className="w-full bg-orange-600 text-white py-2.5 rounded-lg text-sm font-semibold mb-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300 shadow-md hover:shadow-lg"
-              >
-                {fieldIsUploading.proposal ? 'Uploading...' : 'Upload'}
-              </button>
-              
-              <div className="text-xs text-gray-500 mb-2">
-                <strong>Allowed format:</strong> PDF
-              </div>
-              <div className="text-xs text-gray-500">
-                <strong>Maximum size:</strong> 20 MB
-              </div>
-              
-              {fieldIsUploading.proposal && (
-                <div className="mt-3">
-                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden mb-1">
-                    <div 
-                      style={{ width: `${fieldUploadProgress.proposal}%` }} 
-                      className="h-2 bg-orange-500 transition-all duration-300 rounded-full"
-                    ></div>
-                  </div>
-                  <div className="text-xs text-black">
-                    {fieldUploadStage.proposal} • {fieldUploadProgress.proposal}%
-                  </div>
-                </div>
-              )}
-              
-              {fieldUploadSuccess.proposal && (
-                <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded successfully
-                  </div>
-                </div>
+            {/* Sub Implementing Agency */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Sub Implementing Agency <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                value={proposalInfo.subImplementingAgency}
+                onChange={(e) => handleInfoChange('subImplementingAgency', e.target.value)}
+                maxLength={100}
+                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter agency name"
+              />
+              {validationErrors.subImplementingAgency && (
+                <span className="text-sm text-red-600">{validationErrors.subImplementingAgency}</span>
               )}
             </div>
 
-            {/* 3. CV Upload */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-5 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <h4 className="text-base font-bold text-black mb-3 flex items-center">
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600 mr-2">3</span>
-                CV Upload
-              </h4>
-              <p className="text-xs text-black mb-4 leading-relaxed">
-                Select CV to Upload (CV in PDF format with size less than 10 MB)
-              </p>
-              
-              <div className="mb-3">
-                <input
-                  id="cvUpload"
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(e) => handleSelectFile('cv', e)}
-                  className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
-              </div>
-              
-              {selectedFiles.cv && (
-                <div className="text-xs text-black mb-2 p-2 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {selectedFiles.cv.name}
-                </div>
+            {/* Project Leader */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Project Leader <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                value={proposalInfo.projectLeader}
+                onChange={(e) => handleInfoChange('projectLeader', e.target.value)}
+                maxLength={100}
+                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter leader name"
+              />
+              {validationErrors.projectLeader && (
+                <span className="text-sm text-red-600">{validationErrors.projectLeader}</span>
               )}
-              
-              {fieldError.cv && (
-                <div className="text-xs text-red-600 mb-2 p-2 bg-red-50 rounded border border-red-200">
-                  {fieldError.cv}
-                </div>
+            </div>
+
+            {/* Project Coordinator */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Project Coordinator <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                value={proposalInfo.projectCoordinator}
+                onChange={(e) => handleInfoChange('projectCoordinator', e.target.value)}
+                maxLength={100}
+                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter coordinator name"
+              />
+              {validationErrors.projectCoordinator && (
+                <span className="text-sm text-red-600">{validationErrors.projectCoordinator}</span>
               )}
-              
-              <button
-                type="button"
-                onClick={() => uploadFieldFile('cv')}
-                disabled={fieldIsUploading.cv || !selectedFiles.cv}
-                className="w-full bg-orange-600 text-white py-2.5 rounded-lg text-sm font-semibold mb-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300 shadow-md hover:shadow-lg"
-              >
-                {fieldIsUploading.cv ? 'Uploading...' : 'Upload'}
-              </button>
-              
-              <div className="text-xs text-gray-500 mb-2">
-                <strong>Allowed format:</strong> PDF
-              </div>
-              <div className="text-xs text-gray-500">
-                <strong>Maximum size:</strong> 10 MB
-              </div>
-              
-              {fieldIsUploading.cv && (
-                <div className="mt-3">
-                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden mb-1">
-                    <div 
-                      style={{ width: `${fieldUploadProgress.cv}%` }} 
-                      className="h-2 bg-orange-500 transition-all duration-300 rounded-full"
-                    ></div>
-                  </div>
-                  <div className="text-xs text-black">
-                    {fieldUploadStage.cv} • {fieldUploadProgress.cv}%
-                  </div>
-                </div>
+            </div>
+
+            {/* Project Duration */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Project Duration (Months) <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="number"
+                value={proposalInfo.projectDurationMonths}
+                onChange={(e) => handleInfoChange('projectDurationMonths', e.target.value)}
+                min="1"
+                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter duration in months"
+              />
+              {validationErrors.projectDurationMonths && (
+                <span className="text-sm text-red-600">{validationErrors.projectDurationMonths}</span>
               )}
-              
-              {fieldUploadSuccess.cv && (
-                <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded successfully
-                  </div>
-                </div>
+            </div>
+
+            {/* Project Outlay */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Project Outlay (Lakhs) <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="number"
+                value={proposalInfo.projectOutlayLakhs}
+                onChange={(e) => handleInfoChange('projectOutlayLakhs', e.target.value)}
+                min="0.01"
+                step="0.01"
+                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Enter outlay in lakhs"
+              />
+              {validationErrors.projectOutlayLakhs && (
+                <span className="text-sm text-red-600">{validationErrors.projectOutlayLakhs}</span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Required Forms Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200">
-          <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+        {/* Forms Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-orange-200">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-black flex items-center gap-2">
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-            </div>
-            Required Forms
-          </h2>
-          <p className="text-sm text-gray-600 mb-6">Download the required forms, fill them out, and upload the completed forms below.</p>
-
-          {/* Forms Grid - Single Row */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {/* Form 1 - FORM-IA_NEW */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-base font-bold text-black">Form 1</h4>
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">1</span>
-              </div>
-              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
-                Endorsement from Head of the Institution / Organisation
-              </p>
-              
-              {/* Download Buttons */}
-              <div className="flex gap-2 mb-4">
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-IA_NEW.pdf')}
-                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
-                  title="Download PDF"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-IA_NEW.docx')}
-                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
-                  title="Download DOCX"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  DOCX
-                </button>
-              </div>
-
-              {/* Upload Section */}
-              <div className="mb-2">
-                <input
-                  id="form1Upload"
-                  type="file"
-                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e) => handleFormFileSelect('form1', e)}
-                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
-              </div>
-
-              {formFiles.form1 && (
-                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {formFiles.form1.name}
-                </div>
-              )}
-
-              {formError.form1 && (
-                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
-                  {formError.form1}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => uploadFormFile('form1')}
-                disabled={formIsUploading.form1 || !formFiles.form1}
-                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
-              >
-                {formIsUploading.form1 ? 'Uploading...' : 'Upload'}
-              </button>
-
-              {formUploadSuccess.form1 && (
-                <div className="p-1.5 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Form 2 - FORM-IX_NEW */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-base font-bold text-black">Form 2</h4>
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">2</span>
-              </div>
-              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
-                List of Equipment Procured in the Past
-              </p>
-              
-              <div className="flex gap-2 mb-4">
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-IX_NEW.pdf')}
-                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-IX_NEW.docx')}
-                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  DOCX
-                </button>
-              </div>
-
-              <div className="mb-2">
-                <input
-                  id="form2Upload"
-                  type="file"
-                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e) => handleFormFileSelect('form2', e)}
-                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
-              </div>
-
-              {formFiles.form2 && (
-                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {formFiles.form2.name}
-                </div>
-              )}
-
-              {formError.form2 && (
-                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
-                  {formError.form2}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => uploadFormFile('form2')}
-                disabled={formIsUploading.form2 || !formFiles.form2}
-                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
-              >
-                {formIsUploading.form2 ? 'Uploading...' : 'Upload'}
-              </button>
-
-              {formUploadSuccess.form2 && (
-                <div className="p-1.5 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Form 3 - FORM-X_NEW */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-base font-bold text-black">Form 3</h4>
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">3</span>
-              </div>
-              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
-                List of Computer and Accessories Procured in the Past
-              </p>
-              
-              <div className="flex gap-2 mb-4">
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-X_NEW.pdf')}
-                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-X_NEW.docx')}
-                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  DOCX
-                </button>
-              </div>
-
-              <div className="mb-2">
-                <input
-                  id="form3Upload"
-                  type="file"
-                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e) => handleFormFileSelect('form3', e)}
-                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
-              </div>
-
-              {formFiles.form3 && (
-                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {formFiles.form3.name}
-                </div>
-              )}
-
-              {formError.form3 && (
-                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
-                  {formError.form3}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => uploadFormFile('form3')}
-                disabled={formIsUploading.form3 || !formFiles.form3}
-                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
-              >
-                {formIsUploading.form3 ? 'Uploading...' : 'Upload'}
-              </button>
-
-              {formUploadSuccess.form3 && (
-                <div className="p-1.5 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Form 4 - FORM-XI_NEW */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-base font-bold text-black">Form 4</h4>
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">4</span>
-              </div>
-              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
-                Justification of Salary & Wages
-              </p>
-              
-              <div className="flex gap-2 mb-4">
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-XI_NEW.pdf')}
-                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-XI_NEW.docx')}
-                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  DOCX
-                </button>
-              </div>
-
-              <div className="mb-2">
-                <input
-                  id="form4Upload"
-                  type="file"
-                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e) => handleFormFileSelect('form4', e)}
-                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
-              </div>
-
-              {formFiles.form4 && (
-                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {formFiles.form4.name}
-                </div>
-              )}
-
-              {formError.form4 && (
-                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
-                  {formError.form4}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => uploadFormFile('form4')}
-                disabled={formIsUploading.form4 || !formFiles.form4}
-                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
-              >
-                {formIsUploading.form4 ? 'Uploading...' : 'Upload'}
-              </button>
-
-              {formUploadSuccess.form4 && (
-                <div className="p-1.5 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Form 5 - FORM-XII_NEW */}
-            <div className="bg-white rounded-lg border-2 border-orange-200 p-4 hover:border-orange-300 transition-all duration-300 hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-base font-bold text-black">Form 5</h4>
-                <span className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center text-xs font-bold text-orange-600">5</span>
-              </div>
-              <p className="text-xs text-black mb-4 leading-relaxed min-h-[3rem]">
-                Justification for TA-DA
-              </p>
-              
-              <div className="flex gap-2 mb-4">
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-XII_NEW.pdf')}
-                  className="flex-1 bg-red-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-red-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownload('FORM-XII_NEW.docx')}
-                  className="flex-1 bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-semibold hover:bg-blue-700 transition-all duration-300 flex items-center justify-center gap-1"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  DOCX
-                </button>
-              </div>
-
-              <div className="mb-2">
-                <input
-                  id="form5Upload"
-                  type="file"
-                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(e) => handleFormFileSelect('form5', e)}
-                  className="block w-full text-xs text-black file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 file:cursor-pointer cursor-pointer"
-                />
-              </div>
-
-              {formFiles.form5 && (
-                <div className="text-xs text-black mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
-                  <strong>Selected:</strong> {formFiles.form5.name}
-                </div>
-              )}
-
-              {formError.form5 && (
-                <div className="text-xs text-red-600 mb-2 p-1.5 bg-red-50 rounded border border-red-200">
-                  {formError.form5}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => uploadFormFile('form5')}
-                disabled={formIsUploading.form5 || !formFiles.form5}
-                className="w-full bg-orange-600 text-white py-2 rounded text-xs font-semibold mb-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 transition-all duration-300"
-              >
-                {formIsUploading.form5 ? 'Uploading...' : 'Upload'}
-              </button>
-
-              {formUploadSuccess.form5 && (
-                <div className="p-1.5 bg-green-50 rounded border border-green-200">
-                  <div className="flex items-center text-xs text-green-700">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Uploaded
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Editor Mode Toggle */}
-        <div className="mb-6">
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-orange-200">
-            <h2 className="text-xl font-bold text-black mb-4 flex items-center">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              Choose Your Proposal Creation Method
+              Proposal Forms (All 6 Required)
             </h2>
-            <p className="text-black mb-6 text-sm">Select how you want to create your research proposal. You can either upload an existing document or start fresh with our online editor.</p>
-            
-            <div className="grid md:grid-cols-2 gap-6">
-              <div 
-                onClick={() => {
-                  setEditorMode('upload');
-                  setTimeout(() => {
-                    uploadSectionRef.current?.scrollIntoView({ 
-                      behavior: 'smooth', 
-                      block: 'start' 
-                    });
-                  }, 100);
-                }}
-                className={`group relative overflow-hidden border-2 rounded-xl p-4 cursor-pointer transition-all duration-300 ${
-                  editorMode === 'upload'
-                    ? 'border-orange-500 bg-orange-100 hover:shadow-xl shadow-lg shadow-orange-200/50 ring-2 ring-orange-300/50 transform scale-[1.02]'
-                    : 'border-orange-200 bg-orange-50 hover:shadow-lg hover:border-orange-300'
-                }`}
-              >
-                <div className="absolute top-0 right-0 w-16 h-16 bg-orange-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-                <div className="relative">
-                  <div className="flex items-center mb-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-all duration-300 ${
-                      editorMode === 'upload' 
-                        ? 'bg-orange-500 shadow-lg' 
-                        : 'bg-orange-100'
-                    }`}>
-                      <svg className={`w-5 h-5 transition-all duration-300 ${
-                        editorMode === 'upload' ? 'text-white' : 'text-orange-600'
-                      }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-black">Upload Existing Document</h3>
-                      {editorMode === 'upload' && (
-                        <div className="flex items-center mt-1">
-                          <div className="w-2 h-2 bg-orange-600 rounded-full animate-pulse mr-2"></div>
-                          <span className="text-xs text-orange-600 font-medium">SELECTED</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-black text-sm mb-3 leading-relaxed">
-                    Upload your existing Word document (.doc/.docx) and continue editing with our advanced online editor.
-                  </p>
-                  <div className="text-xs text-black">
-                    ✓ Preserve existing formatting<br/>
-                    ✓ AI assistance available<br/>
-                    ✓ Export to PDF/DOC
-                  </div>
-                </div>
-              </div>
-              
-              <div 
-                onClick={() => setEditorMode('editor')}
-                className={`group relative overflow-hidden border-2 rounded-xl p-4 cursor-pointer transition-all duration-300 ${
-                  editorMode === 'editor'
-                    ? 'border-green-500 bg-green-100 hover:shadow-xl shadow-lg shadow-green-200/50 ring-2 ring-green-300/50 transform scale-[1.02]'
-                    : 'border-green-200 bg-green-50 hover:shadow-lg hover:border-green-300'
-                }`}
-              >
-                <div className="absolute top-0 right-0 w-16 h-16 bg-green-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-                <div className="relative">
-                  <div className="flex items-center mb-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-all duration-300 ${
-                      editorMode === 'editor' 
-                        ? 'bg-green-500 shadow-lg' 
-                        : 'bg-green-100'
-                    }`}>
-                      <svg className={`w-5 h-5 transition-all duration-300 ${
-                        editorMode === 'editor' ? 'text-white' : 'text-green-600'
-                      }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-black">Create with Online Editor</h3>
-                      {editorMode === 'editor' && (
-                        <div className="flex items-center mt-1">
-                          <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse mr-2"></div>
-                          <span className="text-xs text-green-600 font-medium">SELECTED</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-black text-sm mb-3 leading-relaxed">
-                    Start fresh with our comprehensive online editor featuring rich formatting tools and templates.
-                  </p>
-                  <div className="text-xs text-black">
-                    ✓ Rich text formatting<br/>
-                    ✓ Built-in templates<br/>
-                    ✓ Real-time collaboration
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
-        </div>
 
-        <div className={`${showSaarthi ? 'flex gap-8' : 'block'} transition-all duration-500`}>
-          {/* Main Content Section */}
-          <div className={showSaarthi ? 'flex-1' : 'w-full'}>
-            {/* File Upload Section */}
-            {editorMode === 'upload' && (
-              <div ref={uploadSectionRef} className="bg-white rounded-xl border border-gray-200 shadow-lg mb-8">
-                <div className="border-b border-orange-200 px-6 py-4 bg-orange-50 rounded-t-xl">
-                  <h2 className="text-xl font-bold text-black flex items-center">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                      <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                    </div>
-                    Document Upload & Edit
-                  </h2>
-                  <p className="text-sm text-black mt-1">Upload your existing document and continue editing in our online editor</p>
-                </div>
-                <div className="p-6">
-                  {!isUploading && !uploadSuccess ? (
-                    <>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        {/* Covering Letter */}
-                        <div className="bg-white rounded-lg border border-orange-200 p-4">
-                          <h4 className="text-sm font-semibold text-black mb-2">1. Covering Letter Upload</h4>
-                          <p className="text-xs text-gray-600 mb-2">Select covering letter to Upload (Covering Letter in PDF format with size less than 2 MB)</p>
-                          <input
-                            id="coveringLetter"
-                            type="file"
-                            accept=".pdf,application/pdf"
-                            onChange={(e) => handleSelectFile('coveringLetter', e)}
-                            className="mb-2"
-                          />
-                          {selectedFiles.coveringLetter && (
-                            <div className="text-xs text-black mb-2">Selected: {selectedFiles.coveringLetter.name}</div>
-                          )}
-                          {fieldError.coveringLetter && <div className="text-xs text-red-600 mb-2">{fieldError.coveringLetter}</div>}
-                          <button
-                            type="button"
-                            onClick={() => uploadFieldFile('coveringLetter')}
-                            disabled={fieldIsUploading.coveringLetter}
-                            className="w-full bg-orange-600 text-white py-2 rounded-md text-sm mb-2 disabled:opacity-50"
-                          >
-                            Upload
-                          </button>
-                          <div className="text-xs text-gray-500">Allowed format: PDF • Max size: 2 MB</div>
-                          {fieldIsUploading.coveringLetter && (
-                            <div className="mt-2">
-                              <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                                <div style={{ width: `${fieldUploadProgress.coveringLetter}%` }} className="h-2 bg-orange-500"></div>
-                              </div>
-                              <div className="text-xs mt-1">{fieldUploadStage.coveringLetter} • {fieldUploadProgress.coveringLetter}%</div>
-                            </div>
-                          )}
-                          {fieldUploadSuccess.coveringLetter && <div className="text-xs text-green-600 mt-2">Uploaded successfully</div>}
-                        </div>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+            <p className="text-black text-sm">
+              <strong>Note:</strong> You can upload any subset of forms (1-6) and their content will be loaded into the editor. 
+              You can then make minor corrections directly in the editor, or you can choose to fill all forms directly in the editor without uploading.
+            </p>
+          </div>
 
-                        {/* Proposal Document */}
-                        <div className="bg-white rounded-lg border border-orange-200 p-4">
-                          <h4 className="text-sm font-semibold text-black mb-2">2. Proposal Document Upload</h4>
-                          <p className="text-xs text-gray-600 mb-2">Select proposal to Upload (Proposal in PDF format with size less than 20 MB)</p>
-                          <input
-                            id="proposalDoc"
-                            type="file"
-                            accept=".pdf,application/pdf"
-                            onChange={(e) => handleSelectFile('proposal', e)}
-                            className="mb-2"
-                          />
-                          {selectedFiles.proposal && (
-                            <div className="text-xs text-black mb-2">Selected: {selectedFiles.proposal.name}</div>
-                          )}
-                          {fieldError.proposal && <div className="text-xs text-red-600 mb-2">{fieldError.proposal}</div>}
-                          <button
-                            type="button"
-                            onClick={() => uploadFieldFile('proposal')}
-                            disabled={fieldIsUploading.proposal}
-                            className="w-full bg-orange-600 text-white py-2 rounded-md text-sm mb-2 disabled:opacity-50"
-                          >
-                            Upload
-                          </button>
-                          <div className="text-xs text-gray-500">Allowed format: PDF • Max size: 20 MB</div>
-                          {fieldIsUploading.proposal && (
-                            <div className="mt-2">
-                              <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                                <div style={{ width: `${fieldUploadProgress.proposal}%` }} className="h-2 bg-orange-500"></div>
-                              </div>
-                              <div className="text-xs mt-1">{fieldUploadStage.proposal} • {fieldUploadProgress.proposal}%</div>
-                            </div>
-                          )}
-                          {fieldUploadSuccess.proposal && <div className="text-xs text-green-600 mt-2">Uploaded successfully</div>}
-                        </div>
-
-                        {/* CV Upload */}
-                        <div className="bg-white rounded-lg border border-orange-200 p-4">
-                          <h4 className="text-sm font-semibold text-black mb-2">3. CV Upload</h4>
-                          <p className="text-xs text-gray-600 mb-2">Select CV to Upload (CV in PDF format with size less than 10 MB)</p>
-                          <input
-                            id="cvUpload"
-                            type="file"
-                            accept=".pdf,application/pdf"
-                            onChange={(e) => handleSelectFile('cv', e)}
-                            className="mb-2"
-                          />
-                          {selectedFiles.cv && (
-                            <div className="text-xs text-black mb-2">Selected: {selectedFiles.cv.name}</div>
-                          )}
-                          {fieldError.cv && <div className="text-xs text-red-600 mb-2">{fieldError.cv}</div>}
-                          <button
-                            type="button"
-                            onClick={() => uploadFieldFile('cv')}
-                            disabled={fieldIsUploading.cv}
-                            className="w-full bg-orange-600 text-white py-2 rounded-md text-sm mb-2 disabled:opacity-50"
-                          >
-                            Upload
-                          </button>
-                          <div className="text-xs text-gray-500">Allowed format: PDF • Max size: 10 MB</div>
-                          {fieldIsUploading.cv && (
-                            <div className="mt-2">
-                              <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                                <div style={{ width: `${fieldUploadProgress.cv}%` }} className="h-2 bg-orange-500"></div>
-                              </div>
-                              <div className="text-xs mt-1">{fieldUploadStage.cv} • {fieldUploadProgress.cv}%</div>
-                            </div>
-                          )}
-                          {fieldUploadSuccess.cv && <div className="text-xs text-green-600 mt-2">Uploaded successfully</div>}
-                        </div>
-                      </div>
-
-                      <div className="mt-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
-                        <h4 className="font-medium text-black mb-2">Important Note</h4>
-                        <p className="text-sm text-black">Please upload one document at a time. Use the Upload button next to each field to start its upload. Files must be PDF and respect the maximum sizes shown.</p>
-                      </div>
-                    </>
-                  ) : isUploading ? (
-                    <div className="bg-orange-50 rounded-lg p-6 border border-orange-200">
-                      {/* Enhanced Loading Animation with Indian Flag Colors */}
-                      <div className="flex items-center justify-center mb-6">
-                        <div className="relative">
-                          {/* Orange-White-Green Ring with Visible White */}
-                          <div className="w-20 h-20 rounded-full animate-spin" style={{
-                            animationDuration: '2s',
-                            background: 'conic-gradient(from 0deg, #f97316 0deg, #f97316 120deg, #ffffff 120deg, #ffffff 240deg, #22c55e 240deg, #22c55e 360deg)',
-                            padding: '4px'
-                          }}>
-                            <div className="w-full h-full bg-orange-50 rounded-full"></div>
-                          </div>
-                          {/* Inner Ring with Visible White */}
-                          <div className="absolute inset-2 w-16 h-16 rounded-full animate-spin" style={{
-                            animationDuration: '1.5s', 
-                            animationDirection: 'reverse',
-                            background: 'conic-gradient(from 180deg, #f97316 0deg, #f97316 120deg, #ffffff 120deg, #ffffff 240deg, #22c55e 240deg, #22c55e 360deg)',
-                            padding: '3px'
-                          }}>
-                            <div className="w-full h-full bg-orange-50 rounded-full"></div>
-                          </div>
-                          {/* Prism Logo in Center */}
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-8 h-8 bg-white rounded-full shadow-lg border-2 border-orange-200 flex items-center justify-center">
-                              <img 
-                                src="/images/prism brand logo.png" 
-                                alt="Prism Logo" 
-                                className="w-6 h-6 object-contain animate-pulse"
-                              />
-                            </div>
-                          </div>
-                          {/* Simplified Particles */}
-                          <div className="absolute -top-2 -left-2 w-2 h-2 bg-orange-500 rounded-full animate-ping" style={{animationDelay: '0s'}}></div>
-                          <div className="absolute -top-2 -right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" style={{animationDelay: '0.5s'}}></div>
-                          <div className="absolute -bottom-2 -right-2 w-2 h-2 bg-orange-500 rounded-full animate-ping" style={{animationDelay: '1s'}}></div>
-                          <div className="absolute -bottom-2 -left-2 w-2 h-2 bg-green-500 rounded-full animate-ping" style={{animationDelay: '1.5s'}}></div>
-                        </div>
-                      </div>
-                      
-                      {/* Stage Display with Enhanced Typography */}
-                      <div className="text-center mb-4">
-                        <div className="text-lg font-semibold text-black mb-1 animate-pulse">
-                          {uploadStage}
-                        </div>
-                        <div className="text-sm text-black">
-                          Secure Blockchain Processing • NaCCER Compliant
-                        </div>
-                      </div>
-                      
-                      {/* Enhanced Progress Bar */}
-                      <div className="mb-4">
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-sm font-medium text-black">Processing Progress</span>
-                          <span className="text-sm font-bold text-orange-600">
-                            {Math.round(uploadProgress)}%
-                          </span>
-                        </div>
-                        
-                        {/* Clean Progress Bar */}
-                        <div className="relative w-full bg-gray-200 rounded-full h-6 overflow-hidden shadow-inner">
-                          {/* Simple Clean Progress Fill */}
-                          <div 
-                            className="h-full transition-all duration-1000 ease-out rounded-full"
-                            style={{ 
-                              width: `${uploadProgress}%`,
-                              background: uploadProgress <= 50 ? 'linear-gradient(90deg, #f97316 0%, #fb923c 100%)' :
-                                         'linear-gradient(90deg, #f97316 0%, #fb923c 50%, #22c55e 100%)'
-                            }}
-                          ></div>
-                        </div>
-                        
-                        {/* Simple Orange-Green Progress Milestones */}
-                        <div className="flex justify-between text-xs text-gray-500 mt-3">
-                          <span className={uploadProgress >= 12.5 ? 'text-orange-600 font-semibold' : ''}>Security</span>
-                          <span className={uploadProgress >= 25 ? 'text-orange-500 font-semibold' : ''}>Validation</span>
-                          <span className={uploadProgress >= 37.5 ? 'text-orange-600 font-semibold' : ''}>Parsing</span>
-                          <span className={uploadProgress >= 50 ? 'text-orange-500 font-semibold' : ''}>Verification</span>
-                          <span className={uploadProgress >= 62.5 ? 'text-green-500 font-semibold' : ''}>Processing</span>
-                          <span className={uploadProgress >= 75 ? 'text-green-600 font-semibold' : ''}>Compliance</span>
-                          <span className={uploadProgress >= 87.5 ? 'text-green-700 font-semibold' : ''}>Blockchain</span>
-                          <span className={uploadProgress >= 100 ? 'text-green-800 font-semibold' : ''}>Complete</span>
-                        </div>
-                      </div>
-                      
-                      {/* Security Badge */}
-                      <div className="flex items-center justify-center space-x-3 text-xs text-black bg-white rounded-lg p-3 border border-orange-200 shadow-sm">
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                          <span>Blockchain secured</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                          <span>End-to-end encrypted</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span>Government compliant</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span>Virus protected</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : uploadSuccess ? (
-                    <div className="bg-white rounded-lg p-8 border-2 border-green-200 text-center shadow-lg">
-                      {/* Indian Flag Success Animation */}
-                      <div className="flex items-center justify-center mb-6">
-                        <div className="relative">
-                          {/* Success Ring with Visible White */}
-                          <div className="w-28 h-28 rounded-full animate-spin" style={{
-                            animationDuration: '3s',
-                            background: 'conic-gradient(from 0deg, #f97316 0deg, #f97316 120deg, #ffffff 120deg, #ffffff 240deg, #22c55e 240deg, #22c55e 360deg)',
-                            padding: '4px'
-                          }}>
-                            <div className="w-full h-full bg-white rounded-full"></div>
-                          </div>
-                          {/* Inner Success Ring with Visible White */}
-                          <div className="absolute inset-3 w-22 h-22 rounded-full animate-spin" style={{
-                            animationDuration: '2s', 
-                            animationDirection: 'reverse',
-                            background: 'conic-gradient(from 180deg, #f97316 0deg, #f97316 120deg, #ffffff 120deg, #ffffff 240deg, #22c55e 240deg, #22c55e 360deg)',
-                            padding: '3px'
-                          }}>
-                            <div className="w-full h-full bg-white rounded-full"></div>
-                          </div>
-                          {/* Simple Orange-Green Checkmark Background */}
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-18 h-18 rounded-full flex items-center justify-center animate-pulse shadow-lg border-2 border-white" style={{background: 'linear-gradient(135deg, #f97316 0%, #22c55e 100%)'}}>
-                              <svg className="w-10 h-10 text-white drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          </div>
-                          {/* Simplified Celebration Particles */}
-                          <div className="absolute -top-2 -left-2 w-2.5 h-2.5 bg-orange-500 rounded-full animate-ping" style={{animationDelay: '0s'}}></div>
-                          <div className="absolute -top-2 -right-2 w-2.5 h-2.5 bg-green-500 rounded-full animate-ping" style={{animationDelay: '0.5s'}}></div>
-                          <div className="absolute -bottom-2 -right-2 w-2.5 h-2.5 bg-orange-500 rounded-full animate-ping" style={{animationDelay: '1s'}}></div>
-                          <div className="absolute -bottom-2 -left-2 w-2.5 h-2.5 bg-green-500 rounded-full animate-ping" style={{animationDelay: '1.5s'}}></div>
-                        </div>
-                      </div>
-                      
-                      {/* Success Message */}
-                      <h3 className="text-2xl font-bold text-black mb-2">Upload Successful!</h3>
-                      <p className="text-black mb-6">Your document has been securely processed and stored on blockchain.</p>
-                      
-                      {/* Professional Success Stats */}
-                      <div className="grid grid-cols-3 gap-4 mb-6 text-center">
-                        <div className="bg-orange-50 rounded-lg p-4 border border-orange-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-                          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <svg className="w-4 h-4 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                          <div className="text-sm font-bold text-orange-600">SECURE</div>
-                          <div className="text-xs text-gray-500">Virus Free</div>
-                        </div>
-                        <div className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1m-5 5l4 4" />
-                            </svg>
-                          </div>
-                          <div className="text-sm font-bold text-blue-600">BLOCKCHAIN</div>
-                          <div className="text-xs text-gray-500">Immutable Storage</div>
-                        </div>
-                        <div className="bg-green-50 rounded-lg p-4 border border-green-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-                          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                            </svg>
-                          </div>
-                          <div className="text-sm font-bold text-green-600">READY</div>
-                          <div className="text-xs text-gray-500">Editor Ready</div>
-                        </div>
-                      </div>
-                      
-                      {/* Call to Action */}
-                      <div className="space-y-4">
-                        <button
-                          onClick={() => {
-                            setUploadSuccess(false);
-                            setEditorMode('editor');
-                          }}
-                          className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl border border-orange-500 flex items-center justify-center space-x-2"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
-                          <span>Continue to Smart Editor</span>
-                        </button>
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                          <p className="text-sm text-black text-center">
-                            Your document is now securely stored on blockchain and loaded in our AI-powered editor. 
-                            You can make additional changes, get SAARTHI assistance, or proceed with your NaCCER submission.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            )}
-
-            {/* Proposal Form Section */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Basic Information */}
-              <div className="bg-white rounded-xl shadow-lg p-6 border border-orange-200">
-                <h2 className="text-2xl font-bold text-black mb-6 flex items-center">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                    <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+          {/* Form Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            {FORM_CONFIGS.map((form) => (
+              <div
+                key={form.id}
+                className={`border-2 rounded-xl p-4 transition-all ${
+                  formStatus[form.id]
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-orange-200 bg-white hover:border-orange-400'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-black">{form.label}</h3>
+                    <p className="text-sm text-black">{form.title}</p>
                   </div>
-                  Proposal Information
-                </h2>
-                
-                <div className="grid md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Title of Research Proposal *</label>
-                    <input
-                      type="text"
-                      value={proposalData.projectTitle}
-                      onChange={(e) => handleInputChange('projectTitle', e.target.value)}
-                      maxLength={150}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Enter your innovative project title (max 150 characters)"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Required Research Funding Method *</label>
-                    <select
-                      value={proposalData.fundingMethod}
-                      onChange={(e) => handleInputChange('fundingMethod', e.target.value)}
-                      required
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                    >
-                      <option value="S&T of MoC">S&T of MoC</option>
-                      <option value="R&D of CIL">R&D of CIL</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Name of the Principal Implementing Agency *</label>
-                    <input
-                      type="text"
-                      value={proposalData.implementingAgency}
-                      onChange={(e) => handleInputChange('implementingAgency', e.target.value)}
-                      maxLength={100}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Name of principal implementing organization (max 100 chars)"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Name of the Sub-Implementing Agency *</label>
-                    <input
-                      type="text"
-                      value={proposalData.subImplementingAgency}
-                      onChange={(e) => handleInputChange('subImplementingAgency', e.target.value)}
-                      maxLength={100}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Name of sub-implementing agency (max 100 chars)"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Name of the Project Leader *</label>
-                    <input
-                      type="text"
-                      value={proposalData.projectLeader}
-                      onChange={(e) => handleInputChange('projectLeader', e.target.value)}
-                      maxLength={100}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Principal investigator name (max 100 chars)"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Name of the Project Coordinator *</label>
-                    <input
-                      type="text"
-                      value={proposalData.projectCoordinator}
-                      onChange={(e) => handleInputChange('projectCoordinator', e.target.value)}
-                      maxLength={100}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Project coordinator name (max 100 chars)"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Co-investigators</label>
-                    <input
-                      type="text"
-                      value={proposalData.coInvestigators}
-                      onChange={(e) => handleInputChange('coInvestigators', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Names of co-investigators"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Project Outlay (Rs. in Lakhs) *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={proposalData.projectOutlayLakhs}
-                      onChange={(e) => handleInputChange('projectOutlayLakhs', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Project outlay in lakhs (e.g., 150.50)"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Project Duration (in months) *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={proposalData.durationMonths}
-                      onChange={(e) => handleInputChange('durationMonths', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                      placeholder="Duration in months (e.g., 24)"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-black mb-1">Research Domain</label>
-                    <select
-                      value={proposalData.domain}
-                      onChange={(e) => handleInputChange('domain', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-orange-200 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-transparent transition-all duration-200 bg-orange-50 hover:bg-white text-black text-xs"
-                    >
-                      <option value="Coal Technology & Clean Energy">Coal Technology & Clean Energy</option>
-                      <option value="Mining Engineering & Safety">Mining Engineering & Safety</option>
-                      <option value="Environmental Sciences">Environmental Sciences</option>
-                      <option value="Chemical Engineering">Chemical Engineering</option>
-                      <option value="Materials Science">Materials Science</option>
-                      <option value="Process Engineering">Process Engineering</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Enhanced Rich Text Editor Section */}
-              {editorMode === 'editor' && (
-                <AdvancedProposalEditor
-                  initialContent={editorContent}
-                  onContentChange={handleEditorContentChange}
-                  onWordCountChange={handleWordCountChange}
-                  onCharacterCountChange={handleCharacterCountChange}
-                  proposalTitle={proposalData.projectTitle}
-                  showStats={true}
-                  showExportButtons={true}
-                />
-              )}
-              
-              {/* Advanced Submit Section */}
-              <div className="bg-white rounded-xl shadow-xl p-6 border border-orange-200">
-                <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                    <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {formStatus[form.id] && (
+                    <svg className="w-6 h-6 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                  </div>
-                  Submit Proposal
-                </h2>
-                
-                {!isSubmitting && !showEvaluation && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <h3 className="text-black mb-2 flex items-center text-sm">
-                        <svg className="w-4 h-4 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  )}
+                </div>
+
+                {/* Download Templates */}
+                <div className="flex gap-2 mb-3">
+                  <a
+                    href={form.pdfFile}
+                    download
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3" />
+                    </svg>
+                    PDF
+                  </a>
+                  <a
+                    href={form.docxFile}
+                    download
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3" />
+                    </svg>
+                    DOCX
+                  </a>
+                </div>
+
+                {/* Upload Section */}
+                <div className="border-t border-orange-200 pt-3">
+                  {/* Extraction Progress */}
+                  {extractingForm === form.id && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-black">Extracting content...</span>
+                        <span className="text-xs text-black">{extractionProgress}%</span>
+                      </div>
+                      <div className="w-full bg-orange-100 rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-orange-500 to-red-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${extractionProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {uploadedFiles[form.id] ? (
+                    <div className="space-y-2">
+                      <div className="text-sm text-black">
+                        <div className="flex items-center gap-2 mb-1">
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="font-semibold">Uploaded:</span>
+                        </div>
+                        <p className="text-xs text-black truncate">{uploadedFiles[form.id].name}</p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveForm(form.id)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-100 text-red-700 text-sm rounded-lg hover:bg-red-200 transition-all font-semibold"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        Pre-Submission Checklist
-                      </h3>
-                      <div className="grid md:grid-cols-2 gap-2 text-xs">
-                        <div className="flex items-center gap-2 text-black">
-                          <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                          Project information completed
-                        </div>
-                        <div className="flex items-center gap-2 text-black">
-                          <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                          Content sections filled
-                        </div>
-                        <div className="flex items-center gap-2 text-black">
-                          <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                          Guidelines reviewed
-                        </div>
-                        <div className="flex items-center gap-2 text-black">
-                          <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                          Ready for AI analysis
-                        </div>
-                      </div>
+                        Remove
+                      </button>
                     </div>
-                    
-                    <button
-                      type="submit"
-                      className="w-full bg-orange-600 text-white py-3 px-6 rounded-lg hover:bg-orange-700 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl text-sm"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      Submit for AI Analysis & Review
-                    </button>
-                  </div>
-                )}
-                
-                {isSubmitting && (
-                  <div className="relative overflow-hidden bg-orange-50 rounded-2xl border border-orange-200 shadow-2xl p-8">
-                    
-                    {/* Floating Particles */}
-                    <div className="absolute inset-0">
-                      <div className="absolute top-1/4 left-1/4 w-3 h-3 bg-orange-300/20 rounded-full animate-pulse animation-delay-1000"></div>
-                      <div className="absolute top-3/4 right-1/4 w-2 h-2 bg-orange-400/30 rounded-full animate-pulse animation-delay-2000"></div>
-                      <div className="absolute top-1/2 right-1/3 w-2.5 h-2.5 bg-orange-200/40 rounded-full animate-pulse animation-delay-3000"></div>
-                      <div className="absolute top-1/3 left-2/3 w-1.5 h-1.5 bg-orange-500/25 rounded-full animate-pulse animation-delay-4000"></div>
-                    </div>
-                    
-                    <div className="relative z-10 text-center">
-                      {/* AI Loading Animation - Match Upload Loader */}
-                      <div className="flex justify-center items-center mb-6">
-                        <div className="relative">
-                          {/* Orange-White-Green Ring with Visible White */}
-                          <div className="w-20 h-20 rounded-full animate-spin" style={{
-                            animationDuration: '2s',
-                            background: 'conic-gradient(from 0deg, #f97316 0deg, #f97316 120deg, #ffffff 120deg, #ffffff 240deg, #22c55e 240deg, #22c55e 360deg)',
-                            padding: '4px'
-                          }}>
-                            <div className="w-full h-full bg-orange-50 rounded-full"></div>
-                          </div>
-                          {/* Inner Ring with Visible White */}
-                          <div className="absolute inset-2 w-16 h-16 rounded-full animate-spin" style={{
-                            animationDuration: '1.5s', 
-                            animationDirection: 'reverse',
-                            background: 'conic-gradient(from 180deg, #f97316 0deg, #f97316 120deg, #ffffff 120deg, #ffffff 240deg, #22c55e 240deg, #22c55e 360deg)',
-                            padding: '3px'
-                          }}>
-                            <div className="w-full h-full bg-orange-50 rounded-full"></div>
-                          </div>
-                          {/* Prism Logo in Center */}
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-8 h-8 bg-white rounded-full shadow-lg border-2 border-orange-200 flex items-center justify-center">
-                              <img 
-                                src="/images/prism brand logo.png" 
-                                alt="Prism Logo" 
-                                className="w-6 h-6 object-contain animate-pulse"
-                              />
-                            </div>
-                          </div>
-                          {/* Simplified Particles */}
-                          <div className="absolute -top-2 -left-2 w-2 h-2 bg-orange-500 rounded-full animate-ping" style={{animationDelay: '0s'}}></div>
-                          <div className="absolute -top-2 -right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" style={{animationDelay: '0.5s'}}></div>
-                          <div className="absolute -bottom-2 -right-2 w-2 h-2 bg-orange-500 rounded-full animate-ping" style={{animationDelay: '1s'}}></div>
-                          <div className="absolute -bottom-2 -left-2 w-2 h-2 bg-green-500 rounded-full animate-ping" style={{animationDelay: '1.5s'}}></div>
-                        </div>
+                  ) : (
+                    <label className="block">
+                      <input
+                        type="file"
+                        accept=".pdf,.docx"
+                        onChange={(e) => handleFileUpload(form.id, e)}
+                        disabled={uploadingForm === form.id || extractingForm === form.id}
+                        className="hidden"
+                      />
+                      <div className="flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white text-sm rounded-lg hover:from-orange-600 hover:to-red-700 cursor-pointer transition-all disabled:opacity-50">
+                        {uploadingForm === form.id ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            Upload Form
+                          </>
+                        )}
                       </div>
-                      
-                      <h3 className="text-2xl text-black mb-2 tracking-tight">AI Analysis in Progress</h3>
-                      <p className="text-black mb-6 text-lg">{submissionStage}</p>
-                    </div>
-                    
-                    {/* Advanced Progress Bar */}
-                    <div className="space-y-4">
-                        <div className="flex justify-between text-black">
-                          <span className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                            Analysis Progress
-                          </span>
-                          <span className="text-black bg-orange-100 px-3 py-1 rounded-full text-sm border border-orange-200">
-                            {Math.round(submissionProgress)}%
-                          </span>
-                        </div>
-                        
-                        <div className="relative">
-                          {/* Clean Progress Bar - Match Upload Progress Bar */}
-                          <div className="relative w-full bg-gray-200 rounded-full h-6 overflow-hidden shadow-inner">
-                            {/* Simple Clean Progress Fill */}
-                            <div 
-                              className="h-full transition-all duration-1000 ease-out rounded-full"
-                              style={{ 
-                                width: `${submissionProgress}%`,
-                                background: submissionProgress <= 50 ? 'linear-gradient(90deg, #f97316 0%, #fb923c 100%)' :
-                                           'linear-gradient(90deg, #f97316 0%, #fb923c 50%, #22c55e 100%)'
-                              }}
-                            ></div>
-                          </div>
-                          
-                          {/* Progress Stages Indicators */}
-                          <div className="flex justify-between mt-3 px-1">
-                            {['Analyzing', 'Processing', 'Evaluating', 'Complete'].map((stage, index) => {
-                              const stageColors = ['text-orange-600', 'text-orange-500', 'text-green-600', 'text-green-700'];
-                              const stageBgColors = ['bg-orange-600 border-orange-600', 'bg-orange-500 border-orange-500', 'bg-green-600 border-green-600', 'bg-green-700 border-green-700'];
-                              
-                              return (
-                                <div key={stage} className={`flex flex-col items-center ${
-                                  submissionProgress > (index * 25) ? stageColors[index] : 'text-black/40'
-                                }`}>
-                                  <div className={`w-3 h-3 rounded-full border-2 transition-all duration-500 ${
-                                    submissionProgress > (index * 25) 
-                                      ? `${stageBgColors[index]} animate-pulse` 
-                                      : 'bg-white border-gray-300'
-                                  }`}></div>
-                                  <span className="text-xs mt-1">{stage}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                  </div>
-                )}
-                
-                {showEvaluation && (
-                  <div className="space-y-6">
-                    <div className="text-center pb-6 border-b border-gray-200">
-                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-2xl text-black mb-2">AI Evaluation Complete</h3>
-                      <p className="text-black">Your proposal has been analyzed and scored</p>
-                    </div>
-                    
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <h4 className="text-black">Evaluation Scores</h4>
-                        
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-                            <span className="text-sm text-black">Technical Excellence</span>
-                            <span className="text-black">{evaluationScores.technicalExcellence}/100</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-                            <span className="text-sm text-black">Financial Viability</span>
-                            <span className="text-black">{evaluationScores.financialViability}/100</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-                            <span className="text-sm text-black">Strategic Alignment</span>
-                            <span className="text-black">{evaluationScores.strategicAlignment}/100</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-                            <span className="text-sm text-black">Team Competency</span>
-                            <span className="text-black">{evaluationScores.teamCompetency}/100</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-                            <span className="text-sm text-black">Impact Potential</span>
-                            <span className="text-black">{evaluationScores.impactPotential}/100</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="relative w-32 h-32 mb-4">
-                          <div className="absolute inset-0 rounded-full border-8 border-gray-200"></div>
-                          <div 
-                            className="absolute inset-0 rounded-full border-8 border-green-500 border-t-transparent animate-pulse"
-                            style={{ 
-                              background: `conic-gradient(from 0deg, #10b981 0%, #10b981 ${overallScore}%, transparent ${overallScore}%, transparent 100%)`
-                            }}
-                          ></div>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="text-center">
-                              <div className="text-3xl text-black">{overallScore}</div>
-                              <div className="text-sm text-black">Overall</div>
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-center text-sm text-black mb-4">
-                          Excellent proposal quality! Your submission shows strong technical merit and strategic alignment.
-                        </p>
-                        <button
-                          onClick={() => router.push('/dashboard')}
-                          className="bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700 transition-all duration-300 shadow-md hover:shadow-lg"
-                        >
-                          Continue to Dashboard
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    </label>
+                  )}
+                </div>
               </div>
-            </form>
+            ))}
           </div>
 
+          {/* Editor Integration */}
+          <div className="border-t-2 border-orange-200 pt-6">
+            <h3 className="text-lg font-bold text-black mb-4">Form Editor</h3>
+            <AdvancedProposalEditor
+              ref={editorRef}
+              proposalId={null}
+              mode="create"
+              proposalTitle={proposalInfo.title || 'Untitled Proposal'}
+              showStats={false}
+              initialContent={editorInitialContent}
+              signatures={signatures}
+              onFormStatusChange={handleFormContentChange}
+              onSignatureChange={handleSignatureChange}
+              onSealChange={handleSealChange}
+              onManualSave={handleManualSave}
+              onAutoSave={handleAutoSave}
+              onContentChange={(content) => {
+                // Content changes handled by auto-save
+              }}
+            />
+          </div>
+        </div>
 
+        {/* Submit Button */}
+        <div className="bg-white rounded-xl shadow-lg p-6 sticky bottom-4 border border-orange-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-black mb-1">
+                <strong>Form Status:</strong> {Object.values(formStatus).filter((s) => s).length} of 6 completed
+              </p>
+              {!isFormValid && (
+                <p className="text-sm text-red-600">
+                  Please complete all required fields and all 6 forms before submitting
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={!isFormValid || isSubmitting}
+              className={`px-8 py-3 rounded-lg font-bold text-white transition-all shadow-lg ${
+                isFormValid && !isSubmitting
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 cursor-pointer'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Submitting...
+                </span>
+              ) : (
+                'Submit Proposal'
+              )}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* AI Assistant Toggle Button */}
+      <button
+        onClick={() => setShowChatbot(!showChatbot)}
+        className="fixed bottom-8 right-8 w-14 h-14 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full shadow-2xl hover:from-orange-600 hover:to-red-700 transition-all flex items-center justify-center z-40"
+        title="AI Assistant - SAARTHI"
+      >
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        </svg>
+      </button>
+
+      {/* AI Chatbot */}
+      <Chatbot
+        showSaarthi={showChatbot}
+        setShowSaarthi={setShowChatbot}
+        context="create"
+      />
+
+      {/* Submission Progress Modal */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 border-2 border-orange-200">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-orange-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-black mb-2">Submitting Proposal</h3>
+              <p className="text-black mb-4">{submissionStage}</p>
+              <div className="w-full bg-orange-100 rounded-full h-3 mb-2">
+                <div
+                  className="bg-gradient-to-r from-orange-500 to-red-600 h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${submissionProgress}%` }}
+                />
+              </div>
+              <p className="text-sm text-black">{submissionProgress}% Complete</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 border-2 border-green-200">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-black mb-2">Proposal Submitted Successfully!</h3>
+              <p className="text-black mb-4">
+                Your proposal has been submitted and is now under AI evaluation.
+              </p>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-black mb-1">
+                  <strong>Proposal ID:</strong>
+                </p>
+                <p className="text-lg font-bold text-orange-600">{submittedProposalId}</p>
+              </div>
+              <button
+                onClick={handleSuccessClose}
+                className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all font-semibold shadow-lg"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function CreateProposal() {
+export default function CreateNewProposal() {
   return (
-    <ProtectedRoute allowedRoles={[ROLES.USER]}>
-      <CreateProposalContent />
+    <ProtectedRoute>
+      <CreateNewProposalContent />
     </ProtectedRoute>
   );
 }

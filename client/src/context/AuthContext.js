@@ -1,5 +1,7 @@
+'use client';
+
 import { createContext, useContext, useState, useEffect } from "react";
-import { API_ENDPOINTS } from "../utils/api";
+import apiClient from "../utils/api";
 
 // Hook to prevent hydration mismatches
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useEffect : () => { };
@@ -7,11 +9,14 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useEffect : ()
 // Create Context
 const AuthContext = createContext();
 
-// User roles
+// User roles (must match backend enum)
 export const ROLES = {
-    USER: 'user',
-    REVIEWER: 'reviewer',
-    STAFF: 'staff'
+    USER: 'USER',
+    CMPDI_MEMBER: 'CMPDI_MEMBER',
+    EXPERT_REVIEWER: 'EXPERT_REVIEWER',
+    TSSRC_MEMBER: 'TSSRC_MEMBER',
+    SSRC_MEMBER: 'SSRC_MEMBER',
+    SUPER_ADMIN: 'SUPER_ADMIN'
 };
 
 // Provider Component
@@ -34,12 +39,9 @@ export const AuthProvider = ({ children }) => {
 
         const token = localStorage.getItem("token");
         if (token) {
-            fetch(API_ENDPOINTS.ME, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.user) setUser(data.user);
+            apiClient.get('/api/auth/me')
+                .then(response => {
+                    if (response.data.user) setUser(response.data.user);
                 })
                 .catch(() => setUser(null))
                 .finally(() => setLoading(false));
@@ -50,39 +52,31 @@ export const AuthProvider = ({ children }) => {
 
     // Login function
     const login = async (email, password) => {
-        const res = await fetch(API_ENDPOINTS.LOGIN, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-        });
-
-        const data = await res.json();
-        if (res.ok) {
+        try {
+            const response = await apiClient.post('/api/auth/login', { email, password });
+            const { token, user: userData } = response.data;
+            
             if (typeof window !== 'undefined') {
-                localStorage.setItem("token", data.token);
+                localStorage.setItem("token", token);
             }
-            setUser(data.user);
-        } else {
-            throw new Error(data.message || "Login failed");
+            setUser(userData);
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Login failed");
         }
     };
 
-    // Register function
-    const register = async (name, email, password, role = ROLES.USER, department = "") => {
-        const res = await fetch(API_ENDPOINTS.REGISTER, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, password, role, department }),
-        });
-
-        const data = await res.json();
-        if (res.ok) {
+    // Register function (PUBLIC - USER role only)
+    const register = async (formData) => {
+        try {
+            const response = await apiClient.post('/api/auth/register', formData);
+            const { token, user: userData } = response.data;
+            
             if (typeof window !== 'undefined') {
-                localStorage.setItem("token", data.token);
+                localStorage.setItem("token", token);
             }
-            setUser(data.user);
-        } else {
-            throw new Error(data.message || "Registration failed");
+            setUser(userData);
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Registration failed");
         }
     };
 
@@ -94,11 +88,18 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     };
 
-    // Role check helper functions
-    const isUser = () => user?.role === ROLES.USER;
-    const isReviewer = () => user?.role === ROLES.REVIEWER;
-    const isStaff = () => user?.role === ROLES.STAFF;
-    const hasRole = (role) => user?.role === role;
+    // Role check helper functions (user.roles is now an array)
+    const hasRole = (role) => user?.roles?.includes(role);
+    const hasAnyRole = (rolesArray) => rolesArray.some(role => user?.roles?.includes(role));
+    const hasAllRoles = (rolesArray) => rolesArray.every(role => user?.roles?.includes(role));
+    
+    // Specific role checks
+    const isUser = () => hasRole(ROLES.USER);
+    const isCMPDIMember = () => hasRole(ROLES.CMPDI_MEMBER);
+    const isExpertReviewer = () => hasRole(ROLES.EXPERT_REVIEWER);
+    const isTSSRCMember = () => hasRole(ROLES.TSSRC_MEMBER);
+    const isSSRCMember = () => hasRole(ROLES.SSRC_MEMBER);
+    const isSuperAdmin = () => hasRole(ROLES.SUPER_ADMIN);
 
     return (
         <AuthContext.Provider value={{
@@ -107,10 +108,16 @@ export const AuthProvider = ({ children }) => {
             login,
             register,
             logout,
-            isUser,
-            isReviewer,
-            isStaff,
+            // Role check helpers
             hasRole,
+            hasAnyRole,
+            hasAllRoles,
+            isUser,
+            isCMPDIMember,
+            isExpertReviewer,
+            isTSSRCMember,
+            isSSRCMember,
+            isSuperAdmin,
             ROLES
         }}>
             {children}

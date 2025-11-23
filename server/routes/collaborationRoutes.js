@@ -1,6 +1,20 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import emailService from '../services/emailService.js';
+import {
+  getActiveUsers,
+  getRoomStatus,
+  getAllActiveRooms
+} from '../services/collaborationService.js';
+import {
+  addCollaborator,
+  inviteCollaboratorByEmail,
+  getCollaborators,
+  updateCollaborator,
+  removeCollaborator,
+  getActiveCollaborators,
+  updateUserStatus
+} from '../controllers/collaborationController.js';
 
 const router = express.Router();
 
@@ -94,6 +108,103 @@ router.get('/invitations/:proposalId', protect, async (req, res) => {
       success: false,
       message: 'Server error while fetching invitations',
       error: error.message
+    });
+  }
+});
+
+// ========== COLLABORATION MANAGEMENT ENDPOINTS ==========
+
+// Add collaborator to proposal
+router.post('/proposals/:proposalId/collaborators', protect, addCollaborator);
+
+// Invite collaborator by email
+router.post('/proposals/:proposalId/invite', protect, inviteCollaboratorByEmail);
+
+// Get all collaborators for a proposal
+router.get('/proposals/:proposalId/collaborators', protect, getCollaborators);
+
+// Update collaborator role/permissions
+router.put('/proposals/:proposalId/collaborators/:collaboratorId', protect, updateCollaborator);
+
+// Remove collaborator
+router.delete('/proposals/:proposalId/collaborators/:collaboratorId', protect, removeCollaborator);
+
+// Get active collaborators in real-time
+router.get('/proposals/:proposalId/active', protect, getActiveCollaborators);
+
+// Update user online status
+router.put('/users/status', protect, updateUserStatus);
+
+// ========== REAL-TIME COLLABORATION ENDPOINTS ==========
+
+/**
+ * Get active users for a specific proposal
+ * GET /api/collaboration/proposals/:proposalId/users
+ */
+router.get("/proposals/:proposalId/users", protect, async (req, res) => {
+  try {
+    const { proposalId } = req.params;
+    const activeUsers = getActiveUsers(proposalId);
+
+    res.json({
+      success: true,
+      proposalId,
+      userCount: activeUsers.length,
+      users: activeUsers
+    });
+
+  } catch (error) {
+    console.error("Get active users error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching active users"
+    });
+  }
+});
+
+/**
+ * Get room status for a specific proposal
+ * GET /api/collaboration/proposals/:proposalId/status
+ */
+router.get("/proposals/:proposalId/status", protect, async (req, res) => {
+  try {
+    const { proposalId } = req.params;
+    const roomStatus = getRoomStatus(proposalId);
+
+    res.json({
+      success: true,
+      proposalId,
+      ...roomStatus
+    });
+
+  } catch (error) {
+    console.error("Get room status error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching room status"
+    });
+  }
+});
+
+/**
+ * Get all active collaboration rooms (admin/monitoring)
+ * GET /api/collaboration/rooms
+ */
+router.get("/rooms", protect, async (req, res) => {
+  try {
+    const rooms = getAllActiveRooms();
+
+    res.json({
+      success: true,
+      count: rooms.length,
+      rooms
+    });
+
+  } catch (error) {
+    console.error("Get all rooms error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching rooms"
     });
   }
 });

@@ -1,12 +1,15 @@
+'use client';
+
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "../../../context/AuthContext";
 import ProtectedRoute from "../../../components/ProtectedRoute";
-import AdvancedProposalEditor from "../../../components/AdvancedProposalEditor";
-import Chatbot from "../../../components/Chatbot";
+import AdvancedProposalEditor from "../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor";
+import Chatbot from "../../../components/Saarthi";
 import VersionHistory from "../../../components/VersionHistory";
 import Navbar from "../../../components/Navbar";
 import LoadingScreen from "../../../components/LoadingScreen";
+import apiClient from "../../../utils/api";
 
 // Custom CSS animations for the commit modal
 const modalAnimationStyles = `
@@ -107,12 +110,15 @@ function EditProposalContent() {
     const [commitMessage, setCommitMessage] = useState('Updated proposal content and methodology');
     const [proposalData, setProposalData] = useState({
         projectTitle: '',
+        fundingMethod: 'S&T of MoC',
         implementingAgency: '',
+        subImplementingAgency: '',
         projectLeader: '',
+        projectCoordinator: '',
         coInvestigators: '',
         domain: 'Coal Technology & Clean Energy',
-        budget: '',
-        duration: ''
+        projectOutlayLakhs: '',
+        durationMonths: ''
     });
 
     // Initial proposal content
@@ -241,42 +247,44 @@ function EditProposalContent() {
 
     useEffect(() => {
         if (id) {
-            fetchProposal();
+            loadProposal();
         }
     }, [id]);
 
-    const fetchProposal = async () => {
+    const loadProposal = async () => {
         try {
-            // Simulate loading time
-            setTimeout(() => {
-                const mockData = {
-                    id: id,
-                    title: "Advanced Coal Gasification Technology for Enhanced Energy Production",
-                    projectLeader: "Dr. Sarah Chen",
-                    implementingAgency: "Indian Institute of Technology Delhi",
-                    coInvestigators: "Prof. Michael Kumar, Dr. Rajesh Sharma",
-                    status: "under_review",
-                    author: user?.name || "Dr. Sarah Chen",
-                    department: "Department of Coal Mining Engineering",
-                    createdAt: "2025-09-20",
-                    lastModified: "2025-09-26",
-                    version: "3.2"
-                };
-                setProposal(mockData);
-                setEditorContent(initialContent);
-                setProposalData({
-                    projectTitle: mockData.title,
-                    implementingAgency: mockData.implementingAgency,
-                    projectLeader: mockData.projectLeader,
-                    coInvestigators: mockData.coInvestigators,
-                    domain: 'Coal Technology & Clean Energy',
-                    budget: '₹200 Cr',
-                    duration: '24 months'
-                });
-                setLoading(false);
-            }, 1000);
+            console.log('📖 Loading proposal for editing:', id);
+            setLoading(true);
+            
+            const response = await apiClient.get(`/api/proposals/${id}`);
+            const proposalData = response.data.proposal || response.data;
+            
+            setProposal(proposalData);
+            setProposalData({
+                projectTitle: proposalData.title || '',
+                fundingMethod: proposalData.fundingMethod || 'S&T of MoC',
+                implementingAgency: proposalData.implementingAgency || '',
+                subImplementingAgency: proposalData.subImplementingAgency || '',
+                projectLeader: proposalData.projectLeader || '',
+                projectCoordinator: proposalData.projectCoordinator || '',
+                coInvestigators: proposalData.coInvestigators || '',
+                domain: proposalData.domain || 'Coal Technology & Clean Energy',
+                projectOutlayLakhs: proposalData.budget ? (proposalData.budget / 100000).toFixed(2) : '',
+                durationMonths: proposalData.durationMonths || ''
+            });
+            
+            // Load word and character counts from forms
+            const totalWords = proposalData.forms?.reduce((sum, form) => sum + (form.wordCount || 0), 0) || 0;
+            const totalChars = proposalData.forms?.reduce((sum, form) => sum + (form.characterCount || 0), 0) || 0;
+            setWordCount(totalWords);
+            setCharacterCount(totalChars);
+            
+            console.log('✅ Proposal loaded successfully for editing');
+            console.log('📊 Loaded forms:', proposalData.forms?.length || 0);
         } catch (error) {
-            console.error("Error fetching proposal:", error);
+            console.error('❌ Error loading proposal:', error);
+            alert('Failed to load proposal: ' + error.message);
+        } finally {
             setLoading(false);
         }
     };
@@ -333,6 +341,44 @@ function EditProposalContent() {
         setIsSubmitting(true);
         setSubmissionProgress(0);
         setShowEvaluation(false);
+        
+        // Save the proposal with updated version
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`http://localhost:5000/api/proposals/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    title: proposalData.projectTitle,
+                    description: `${proposalData.implementingAgency} - ${proposalData.domain}`,
+                    domain: proposalData.domain,
+                    budget: parseFloat(proposalData.projectOutlayLakhs) * 100000,
+                    fundingMethod: proposalData.fundingMethod,
+                    implementingAgency: proposalData.implementingAgency,
+                    subImplementingAgency: proposalData.subImplementingAgency,
+                    projectLeader: proposalData.projectLeader,
+                    projectCoordinator: proposalData.projectCoordinator,
+                    coInvestigators: proposalData.coInvestigators,
+                    durationMonths: proposalData.durationMonths ? parseInt(proposalData.durationMonths) : null,
+                    versionComment: commitMessage
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update proposal');
+            }
+            
+            const data = await response.json();
+            console.log('✅ Proposal updated successfully');
+        } catch (error) {
+            console.error('❌ Error updating proposal:', error);
+            alert('Failed to update proposal: ' + error.message);
+            setIsSubmitting(false);
+            return;
+        }
 
         const stages = [
             { stage: 'Analyzing content changes...', duration: 2000 },
@@ -344,55 +390,25 @@ function EditProposalContent() {
 
         let currentProgress = 0;
 
+        // In real implementation, progress would be tracked from actual API calls
         for (let i = 0; i < stages.length; i++) {
             setSubmissionStage(stages[i].stage);
-
-            await new Promise(resolve => {
-                const interval = setInterval(() => {
-                    currentProgress += Math.random() * 12;
-                    if (currentProgress >= (i + 1) * 20) {
-                        currentProgress = (i + 1) * 20;
-                        setSubmissionProgress(currentProgress);
-                        clearInterval(interval);
-                        resolve();
-                    } else {
-                        setSubmissionProgress(currentProgress);
-                    }
-                }, 150);
-            });
-
-            await new Promise(resolve => setTimeout(resolve, stages[i].duration));
+            setSubmissionProgress((i + 1) * 20);
         }
 
         setSubmissionProgress(100);
         setSubmissionStage('Version created and stored successfully!');
 
-        // Calculate new version
-        const currentVersion = proposal?.version || "3.2";
-        const versionParts = currentVersion.split(".");
-        const newMinorVersion = parseInt(versionParts[1]) + 1;
-        const newVersion = `${versionParts[0]}.${newMinorVersion}`;
+        // Reload the proposal to get the updated version number
+        await loadProposal();
 
-        // Update proposal with new version
-        setProposal(prev => ({
-            ...prev,
-            version: newVersion,
-            lastModified: new Date().toISOString().split('T')[0]
-        }));
-
-        setTimeout(() => {
-            setShowEvaluation(true);
-        }, 1000);
-
-        // Simulate backend submission
-        setTimeout(() => {
-            setIsSubmitting(false);
-        }, 1500);
+        setShowEvaluation(true);
+        setIsSubmitting(false);
 
         // Auto-hide evaluation after 8 seconds
         setTimeout(() => {
             setShowEvaluation(false);
-        }, 10000);
+        }, 8000);
     };
 
     // Mock Evaluation Scores
@@ -545,6 +561,8 @@ function EditProposalContent() {
                         showVersionHistory={showVersionHistory}
                         setShowVersionHistory={setShowVersionHistory}
                         showSaarthi={showSaarthi}
+                        proposalId={id}
+                        currentVersion={proposal?.version || 1}
                     />
 
                     {/* Action Buttons - Top Right */}
@@ -684,6 +702,9 @@ function EditProposalContent() {
                             showStats={true}
                             showExportButtons={true}
                             className="bg-white rounded-xl shadow-lg border border-orange-200"
+                            proposalId={id}
+                            existingForms={proposal?.forms || []}
+                            mode="edit"
                         />
 
                         {/* Submit New Version Button - Hidden During Progress */}

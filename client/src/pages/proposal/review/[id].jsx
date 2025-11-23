@@ -1,10 +1,13 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
-import Chatbot from '../../../components/Chatbot';
+import Chatbot from '../../../components/Saarthi';
 import jsPDF from 'jspdf';
 import { createPortal } from 'react-dom';
+import apiClient from '../../../utils/api';
 
 // Custom CSS animations matching other pages
 const reviewAnimationStyles = `
@@ -68,94 +71,51 @@ function ReviewProposalContent() {
   const [showChatbot, setShowChatbot] = useState(true);
 
   useEffect(() => {
-    const fetchProposal = async () => {
+    const loadProposal = async () => {
       try {
         if (id) {
-          // Mock data for coal R&D proposal - replace with actual API
-          const mockProposal = {
-            id: id || "COAL-2024-001",
-            title: "Advanced Coal Gasification Technology for Clean Energy Production",
-            researcher: "Dr. Rajesh Kumar",
-            institution: "Indian Institute of Technology (Indian School of Mines), Dhanbad",
-            description: "Development of advanced coal gasification technology to improve energy efficiency and reduce environmental impact in coal-based power generation. This comprehensive solution integrates cutting-edge thermochemical processes with AI-driven optimization algorithms to achieve maximum energy conversion rates while minimizing carbon emissions.",
-            domain: "Coal Technology & Clean Energy",
-            budget: 2500000,
-            status: "under_review",
-            submittedDate: "2025-09-15",
-            currentPhase: "Expert Technical Review",
-            createdAt: "2025-09-15T10:00:00Z",
-            documents: [
-              { name: "Main_Research_Proposal.pdf", size: "4.2 MB", uploadDate: "2025-09-15", type: "proposal" },
-              { name: "Technical_Specifications.pdf", size: "3.8 MB", uploadDate: "2025-09-15", type: "technical" },
-              { name: "Budget_Breakdown_Detailed.xlsx", size: "1.5 MB", uploadDate: "2025-09-15", type: "financial" },
-              { name: "Literature_Review.pdf", size: "2.9 MB", uploadDate: "2025-09-15", type: "research" },
-              { name: "Environmental_Impact_Assessment.pdf", size: "3.2 MB", uploadDate: "2025-09-15", type: "environmental" },
-              { name: "Safety_Protocols.pdf", size: "1.8 MB", uploadDate: "2025-09-15", type: "safety" },
-              { name: "Team_Qualifications.pdf", size: "2.1 MB", uploadDate: "2025-09-15", type: "team" },
-              { name: "Equipment_Specifications.pdf", size: "3.5 MB", uploadDate: "2025-09-15", type: "equipment" },
-              { name: "Timeline_Gantt_Chart.pdf", size: "1.3 MB", uploadDate: "2025-09-15", type: "timeline" }
-            ],
-            existingFeedback: [
-              { 
-                id: 1, 
-                reviewer: "AI System", 
-                comment: "Initial automated review completed. Proposal shows strong technical merit and clear research objectives. No compliance issues detected.", 
-                date: "2025-09-16",
-                type: "system_feedback"
-              },
-              { 
-                id: 2, 
-                reviewer: "Dr. Amit Sharma", 
-                comment: "Methodology for coal characterization looks comprehensive. Please clarify the safety protocols for high-temperature gasification experiments.", 
-                date: "2025-09-20",
-                type: "reviewer_feedback"
-              }
-            ],
-            timeline: {
-              phase1: "6 months - Coal Characterization & Process Design",
-              phase2: "12 months - Pilot Plant Construction & Testing", 
-              phase3: "6 months - Optimization & Performance Evaluation"
-            }
-          };
-          setProposal(mockProposal);
-          setReviewStatus(mockProposal.status);
+          console.log('📖 Loading proposal for review:', id);
+          setLoading(true);
+          
+          const response = await apiClient.get(`/api/proposals/${id}`);
+          const proposalData = response.data.proposal || response.data;
+          setProposal(proposalData);
+          setReviewStatus(proposalData.status || 'under_review');
+          console.log('✅ Proposal loaded for review');
         }
       } catch (error) {
-        console.error("Error fetching proposal:", error);
+        console.error('❌ Error loading proposal for review:', error);
+        alert('Failed to load proposal: ' + error.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProposal();
+    loadProposal();
   }, [id]);
 
   const handleSubmitFeedback = async () => {
     if (!feedback.trim()) {
+      console.log('⚠️  Feedback submission blocked: empty feedback');
       alert("Please enter feedback before submitting.");
       return;
     }
 
     try {
-      // API call to submit feedback
-      console.log("Submitting feedback:", { proposalId: id, feedback, reviewStatus });
+      console.log('💬 Submitting feedback for proposal:', id);
       
-      // Mock feedback submission
-      const newFeedback = {
-        id: Date.now(),
-        reviewer: user?.name || "Dr. Review Expert",
-        comment: feedback,
-        date: new Date().toISOString().split('T')[0],
-        type: "reviewer_feedback"
-      };
+      // Call backend API to submit feedback
+      const response = await apiClient.post(`/api/proposals/${id}/feedback`, { 
+        feedback, 
+        reviewStatus 
+      });
       
-      setProposal(prev => ({
-        ...prev,
-        existingFeedback: [...prev.existingFeedback, newFeedback]
-      }));
-      
+      // Update local state with the updated proposal
+      setProposal(response.data.proposal || response.data);
       setFeedback('');
       setShowSuccessModal(true);
+      
+      console.log('✅ Feedback submitted successfully');
       
       // Auto-hide success modal after 3 seconds
       setTimeout(() => {
@@ -163,8 +123,8 @@ function ReviewProposalContent() {
       }, 3000);
       
     } catch (error) {
-      console.error("Error submitting feedback:", error);
-      alert("Failed to submit feedback. Please try again.");
+      console.error('❌ Error submitting feedback:', error);
+      alert("Failed to submit feedback: " + error.message);
     }
   };
 
@@ -356,10 +316,7 @@ function ReviewProposalContent() {
     setCommitting(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // API call to submit decision
+      // API call to submit decision (real implementation would go here)
       console.log("Submitting decision:", { proposalId: id, reviewStatus, commitMessage });
       
       // Mock decision submission
