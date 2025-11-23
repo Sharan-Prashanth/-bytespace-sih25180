@@ -4,6 +4,7 @@ import re
 import math
 from io import BytesIO
 from datetime import datetime
+from typing import Dict
 
 import PyPDF2
 import chardet
@@ -296,6 +297,94 @@ def aggregate_llm_cost(results):
     return total, avg_conf, combined_breakdown
 
 
+# Recommended category ranges (percents) used for quick validation
+CATEGORY_RANGES = {
+    "equipment": (5, 35),
+    "software_and_tools": (5, 15),
+    "manpower": (30, 55),
+    "data_collection": (5, 20),
+    "travel_and_fieldwork": (2, 8),
+    "cloud_and_compute": (2, 10),
+    "maintenance_and_operations": (3, 12),
+    "consumables": (2, 10),
+    "contingency": (5, 10)
+}
+
+
+def assess_breakdown(breakdown: Dict[str, int], total_cost: float) -> str:
+    """Return a concise one-line comment assessing whether major categories are within recommended ranges.
+
+    If a category is outside the range, mention it briefly. If all OK, return an OK message.
+    """
+    issues = []
+    if not breakdown or total_cost <= 0:
+        return "No valid breakdown available to assess category proportions."
+
+    for cat, (low, high) in CATEGORY_RANGES.items():
+        val = float(breakdown.get(cat, 0))
+        pct = (val / total_cost) * 100 if total_cost else 0.0
+        # allow small rounding tolerance +-1%
+        if pct + 1 < low:
+            issues.append(f"{cat} low ({pct:.0f}% < {low}%)")
+        elif pct - 1 > high:
+            issues.append(f"{cat} high ({pct:.0f}% > {high}%)")
+
+    if not issues:
+        return "Breakdown looks reasonable against typical funding ranges."
+    # return top 3 issues as a succinct comment
+    return "; ".join(issues[:3]) + "."
+
+
+def call_gemini_usage_comment(final_budget: int, llm_cost: float, ml_cost: float, breakdown: Dict[str, int], validation_status: str) -> str:
+    """Ask Gemini to produce exactly 5 short lines describing why the cost is lower and how the saved money can be used to meet expectations.
+
+    Returns a single string with 5 newline-separated lines. Falls back to a heuristic 5-line comment on failure.
+    """
+    try:
+        # Build a compact prompt that provides the numbers and requests exactly five lines.
+        breakdown_preview = ", ".join([f"{k}:{v}" for k, v in (breakdown or {}).items() if v])
+        prompt = f"""
+You are a senior Government of India R&D cost advisor. Based on the inputs below, produce EXACTLY five short, plain-language lines (no numbering, no extra text) explaining:
+- Why the final budget is lower than expected (point to likely categories or conservative assumptions).
+- Practical ways the government can reallocate or use the freed/saved funds to meet the project's expectations.
+
+INPUT:
+Final government budget (Lakhs): {int(final_budget)}
+LLM combined cost (Lakhs): {round(llm_cost,2)}
+ML predicted cost (Lakhs): {round(ml_cost,2)}
+Validation status: {validation_status}
+Breakdown sample: {breakdown_preview}
+
+REQUIREMENTS:
+- Return EXACTLY 5 lines separated by newlines. Each line must be short (<=140 characters).
+- Lines should be actionable and focused on cost drivers and reallocation options.
+"""
+        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        resp = model.generate_content(prompt)
+        raw = resp.text or ""
+        # normalize output to five non-empty lines
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        if len(lines) >= 5:
+            return "\n".join(lines[:5])
+        # if model returned fewer lines but some text, try to split by sentences
+        import re as _re
+        sents = _re.split(r'(?<=[.?!])\s+', raw.strip()) if raw else []
+        sents = [s.strip() for s in sents if s.strip()]
+        if len(sents) >= 5:
+            return "\n".join(sents[:5])
+    except Exception:
+        pass
+
+    # Fallback heuristic 5-line comment
+    fb = []
+    fb.append(f"Final budget set to {int(final_budget)} Lakhs after cross-checks with ML/LLM estimates.")
+    fb.append("Lower cost likely due to conservative equipment estimates or reliance on internal manpower.")
+    fb.append("Use savings for focused pilot deployments, validation studies, or targeted equipment upgrades.")
+    fb.append("Allocate a portion to capacity building and field validation to meet expected outcomes.")
+    fb.append("Keep a contingency reserve and tie disbursements to clear milestones for accountability.")
+    return "\n".join(fb)
+
+
 # ===============================================================
 #                ML COST PREDICTION FROM SBERT + LGBM
 # ===============================================================
@@ -400,15 +489,19 @@ async def process_and_estimate(file: UploadFile = File(...)):
         print("Supabase Insert Error:", e)
 
 
-    # --- FINAL API RESPONSE ---
+    # --- FINAL, MINIMAL API RESPONSE ---
+    # government_budget_lakhs: overall budget the model suggests the government can give (integer Lakhs)
+    # score_pct: 0-100 where higher means the ML and LLM estimates agree closely (smaller difference)
+    # comment: concise assessment of major category proportions (e.g., manpower, equipment)
+
+    # compute score from difference ratio (smaller difference => higher score)
+    score_pct = int(round(max(0.0, min(1.0, 1.0 - diff_ratio)) * 100))
+
+    # ask Gemini to produce a 5-line comment about why the cost is lower and how savings can be used
+    gemini_comment = call_gemini_usage_comment(final_score, llm_cost, ml_cost_value, llm_breakdown, validation_status)
+
     return {
-        "project": file.filename,
-        "final_score": final_score,
-        "ml_cost": ml_cost_value,
-        "llm_cost": llm_cost,
-        "validation_status": validation_status,
-        "difference_ratio": diff_ratio,
-        "confidence": llm_conf,
-        "historical_matches_used": similar_projects,
-        "breakdown": llm_breakdown
+        "government_budget_lakhs": int(final_score),
+        "score_pct": score_pct,
+        "comment": gemini_comment
     }

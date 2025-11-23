@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from RAG import novelty
+from Common.Novelty import novelty
 from Common.Cost_validation import cost_estimator
 from RAG import plag
 from RAG import rag_chat_guidlines
