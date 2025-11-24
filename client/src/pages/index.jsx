@@ -44,12 +44,12 @@ export default function Home() {
       description: "Sustainable and efficient mining practices for a greener future."
     },
     {
-      img: "/images/coal mining image3.webp",
+      img: "/images/coal mining image3.jpeg",
       title: "Frontline Coal Operations",
       description: "Ensuring safe, responsible, and inclusive coal handling practices under the Ministry of Coal."
     },
     {
-      img: "/images/coal mining image4.webp",
+      img: "/images/coal mining image4.jpeg",
       title: "Mechanized Coal Mining",
       description: "Enhancing productivity and environmental compliance through modern, sustainable mining machinery."
     },
