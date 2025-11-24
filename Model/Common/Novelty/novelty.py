@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 import joblib
 import numpy as np
 from pathlib import Path
+from sklearn.neighbors import NearestNeighbors
 
 load_dotenv()
 
@@ -57,6 +58,8 @@ def get_sbert_embedder(model_name: str = "all-MiniLM-L6-v2"):
 
 # In-memory cache of precomputed embeddings/texts
 _NOVELTY_STORE = {"texts": [], "embs": None}
+# optional nearest-neighbor index for fast similarity search
+_NOVELTY_STORE.setdefault("nn", None)
 
 def load_novelty_joblib():
     """Load precomputed novelty embeddings/texts from joblib if available.
@@ -68,9 +71,10 @@ def load_novelty_joblib():
             data = joblib.load(NOVELTY_JOBLIB_PATH)
             texts = data.get("texts", [])
             embs = data.get("embs", None)
+            nn = data.get("nn", None)
             if embs is not None:
                 embs = np.asarray(embs)
-            _NOVELTY_STORE = {"texts": texts, "embs": embs}
+            _NOVELTY_STORE = {"texts": texts, "embs": embs, "nn": nn}
             return _NOVELTY_STORE
         except Exception:
             pass
@@ -91,18 +95,25 @@ def load_novelty_joblib():
         try:
             embs = embedder.encode(texts, convert_to_tensor=False, show_progress_bar=False)
             embs = [np.array(e).astype(np.float32) for e in embs]
-            _NOVELTY_STORE = {"texts": texts, "embs": np.vstack(embs)}
+            emb_arr = np.vstack(embs)
+            # attempt to build a nearest-neighbor index for fast retrieval
+            nn = None
             try:
-                joblib.dump({"texts": texts, "embs": np.vstack(embs)}, NOVELTY_JOBLIB_PATH)
+                nn = NearestNeighbors(n_neighbors=10, metric='cosine').fit(emb_arr)
+            except Exception:
+                nn = None
+            _NOVELTY_STORE = {"texts": texts, "embs": emb_arr, "nn": nn}
+            try:
+                joblib.dump({"texts": texts, "embs": emb_arr.tolist(), "nn": nn}, NOVELTY_JOBLIB_PATH)
             except Exception:
                 pass
             return _NOVELTY_STORE
         except Exception:
             pass
     # fallback: store texts only
-    _NOVELTY_STORE = {"texts": texts, "embs": None}
+    _NOVELTY_STORE = {"texts": texts, "embs": None, "nn": None}
     try:
-        joblib.dump({"texts": texts, "embs": None}, NOVELTY_JOBLIB_PATH)
+        joblib.dump({"texts": texts, "embs": None, "nn": None}, NOVELTY_JOBLIB_PATH)
     except Exception:
         pass
     return _NOVELTY_STORE
@@ -110,7 +121,7 @@ def load_novelty_joblib():
 def save_novelty_joblib():
     global _NOVELTY_STORE
     try:
-        data = {"texts": _NOVELTY_STORE.get("texts", []), "embs": _NOVELTY_STORE.get("embs")}
+        data = {"texts": _NOVELTY_STORE.get("texts", []), "embs": _NOVELTY_STORE.get("embs"), "nn": _NOVELTY_STORE.get("nn")}
         # convert numpy array to list for joblib portability
         if isinstance(data["embs"], np.ndarray):
             data["embs"] = data["embs"].tolist()
@@ -138,14 +149,20 @@ def update_novelty_store_with_texts(new_texts: List[str]):
             else:
                 embs_arr = np.vstack([embs, np.vstack(new_embs)]) if isinstance(embs, np.ndarray) else np.vstack(new_embs)
             texts.extend(to_add)
-            _NOVELTY_STORE = {"texts": texts, "embs": embs_arr}
+            # rebuild nearest-neighbor index
+            nn = None
+            try:
+                nn = NearestNeighbors(n_neighbors=10, metric='cosine').fit(embs_arr)
+            except Exception:
+                nn = None
+            _NOVELTY_STORE = {"texts": texts, "embs": embs_arr, "nn": nn}
             save_novelty_joblib()
             return
         except Exception:
             pass
     # fallback: just append texts and save
     texts.extend(to_add)
-    _NOVELTY_STORE = {"texts": texts, "embs": embs}
+    _NOVELTY_STORE = {"texts": texts, "embs": embs, "nn": None}
     save_novelty_joblib()
 
 # initialize store at import
@@ -403,8 +420,25 @@ def compare_innovation_against_past(innovation: str, past_jsons: List[Dict[str, 
     try:
         store_texts = _NOVELTY_STORE.get("texts", []) or []
         store_embs = _NOVELTY_STORE.get("embs", None)
+        store_nn = _NOVELTY_STORE.get("nn", None)
         embedder = get_sbert_embedder()
-        if store_embs is not None and embedder is not None:
+        # Prefer nearest-neighbor index if available
+        if store_nn is not None and embedder is not None:
+            try:
+                inv_emb = np.array(embedder.encode([innovation], convert_to_tensor=False))[0].astype(np.float32).reshape(1, -1)
+                dists, idxs = store_nn.kneighbors(inv_emb, n_neighbors=min(10, len(store_texts)))
+                for dist_row, idx_row in zip(dists, idxs):
+                    for dist, idx in zip(dist_row, idx_row):
+                        sim = 1.0 - float(dist)
+                        if sim >= sim_threshold:
+                            matches.append({
+                                "file": "pretrained_store",
+                                "similarity": round(sim, 3),
+                                "matched_sections": [store_texts[int(idx)][:300]]
+                            })
+            except Exception:
+                pass
+        elif store_embs is not None and embedder is not None:
             try:
                 inv_emb = np.array(embedder.encode([innovation], convert_to_tensor=False))[0].astype(np.float32)
                 # compute cosine similarity
@@ -603,23 +637,30 @@ async def process_innovations(file: UploadFile = File(...)):
         except Exception:
             public_url = None
 
-        # 10) Upsert into DB: update existing row by filename or insert new
+        # 10) Upsert into DB in a single atomic call (requires a unique index on `filename`)
         try:
-            # Attempt update first
-            upd = supabase.table("novelty_reports").update({
+            # coerce novelty_percentage into a numeric type
+            npct = result_record["result"].get("novelty_percentage")
+            try:
+                npct_val = float(npct) if npct is not None else None
+            except Exception:
+                npct_val = None
+
+            upsert_payload = {
+                "filename": result_record["filename"],
                 "file_path": result_record["file_path"],
-                "novelty_percentage": result_record["result"]["novelty_percentage"],
+                "novelty_percentage": npct_val,
                 "result": result_record["result"]
-            }).eq("filename", result_record["filename"]).execute()
-            rows = getattr(upd, 'data', []) or []
-            # If update did not affect rows, insert
-            if not rows:
-                supabase.table("novelty_reports").insert({
-                    "filename": result_record["filename"],
-                    "file_path": result_record["file_path"],
-                    "novelty_percentage": result_record["result"]["novelty_percentage"],
-                    "result": result_record["result"]
-                }).execute()
+            }
+            # Use upsert to insert or update based on unique filename constraint
+            try:
+                supabase.table("novelty_reports").upsert(upsert_payload).execute()
+            except Exception:
+                # If upsert with this client isn't available, fall back to insert (best-effort)
+                try:
+                    supabase.table("novelty_reports").insert(upsert_payload).execute()
+                except Exception as e:
+                    print("Warning: DB insert fallback failed:", e)
         except Exception as e:
             print("Warning: DB upsert failed:", e)
 
@@ -674,9 +715,51 @@ Return exactly 3 short lines (each <=140 chars). If the score is high, return 1 
 
         improvement_comment = call_gemini_improvements(build_novelty_improvement_prompt(novelty_score, truly_new, already_existing, detailed_context))
 
+        # Build verbose formatted comment using Gemini (preferred) or fallback to local template
+        def build_verbose_comment_prompt(score: int, total_innov: int, truly_new_count: int, context: str, existing_files_preview: str) -> str:
+            return f"""
+Produce a concise formatted evaluation comment for a proposal given the novelty score and context.
+Output must follow this exact structure (including labels):
+
+Score: <score>/100 Changeable: <percent>%
+<One short paragraph (2-3 sentences) summarizing the proposal's novelty in plain language.>
+Recommended actions:
+- <action 1>
+- <action 2>
+- <action 3>
+
+Inputs:
+Score: {score}
+Total innovations considered: {total_innov}
+Truly new ideas count: {truly_new_count}
+Context (short): {context[:800]}
+Matched files (sample): {existing_files_preview}
+
+Produce exactly the structure shown above. Keep each recommended action short (<=120 chars). If score >= 85, make the paragraph congratulatory and include one validation action plus two dissemination suggestions.
+"""
+
+        try:
+            sample_existing = ", ".join([m.get("file", "") for m in (already_existing or [])[:5]])
+            prompt = build_verbose_comment_prompt(novelty_score, total_innov, truly_new_count, (detailed_context or ""), sample_existing)
+            raw_verbose = call_gemini(prompt)
+            verbose_comment = raw_verbose.strip() if raw_verbose and isinstance(raw_verbose, str) else None
+        except Exception:
+            verbose_comment = None
+
+        if not verbose_comment:
+            # fallback: construct a local formatted comment
+            changeable_pct = max(0, 100 - novelty_score)
+            summary = (detailed_context.split('\n')[0] if detailed_context else 'Novelty summary unavailable.')
+            recs = [
+                "Document prior art and clearly highlight novel integration steps versus published work.",
+                "Provide pilot test plans and small-scale validation data to substantiate claimed innovations.",
+                "Include IP or patent landscape notes where applicable to strengthen novelty claims."
+            ]
+            verbose_comment = f"Score: {novelty_score}/100 Changeable: {changeable_pct}%\n{summary}\nRecommended actions:\n- {recs[0]}\n- {recs[1]}\n- {recs[2]}"
+
         return JSONResponse({
             "novelty_percentage": novelty_score,
-            "improvement_comment": improvement_comment
+            "comment": verbose_comment
         })
     except Exception as e:
         import traceback
