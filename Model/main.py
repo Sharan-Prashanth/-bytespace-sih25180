@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from Common.Novelty import novelty
 from Common.Cost_validation import cost_estimator
 from Common.Benefit_to_coal_industry import benefit
+from Common.Deliverables import deliverable as deliverables
 from RAG import plag
 from RAG import rag_chat_guidlines
 from RAG import rag_chat_specialist
@@ -28,6 +29,7 @@ app.add_middleware(
 # Include all routers
 app.include_router(timeline.router)
 app.include_router(benefit.router)
+app.include_router(deliverables.router)
 # app.include_router(similarity_checker.router)
 app.include_router(rag_chat_guidlines.router)
 app.include_router(rag_chat_specialist.router)
