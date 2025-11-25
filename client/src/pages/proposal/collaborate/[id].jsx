@@ -1,22 +1,21 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../../../context/AuthContext';
-import ProtectedRoute from '../../../components/ProtectedRoute';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import ChatWindow from '../../../components/ChatWindow';
 import LoadingScreen from '../../../components/LoadingScreen';
 import AdvancedProposalEditor from '../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
+import ProtectedRoute from '../../../components/ProtectedRoute';
 import Chatbot from '../../../components/Saarthi';
 import VersionHistory from '../../../components/VersionHistory';
-import ChatWindow from '../../../components/ChatWindow';
-import { createPortal } from 'react-dom';
+import { useAuth } from '../../../context/AuthContext';
 import apiClient from '../../../utils/api';
-import { 
-  getCollaborators, 
-  getActiveCollaborators, 
-  inviteCollaborator,
-  removeCollaborator,
-  updateCollaborator 
+import {
+    getActiveCollaborators,
+    getCollaborators,
+    inviteCollaborator,
+    removeCollaborator
 } from '../../../utils/collaborationApi';
 
 // Custom CSS animations for the collaborate page
@@ -282,33 +281,39 @@ function CollaborateContent() {
         { type: 'p', children: [{ text: 'Current coal processing facilities in India operate with outdated equipment that struggles to meet environmental compliance standards set by the Ministry of Coal. The lack of advanced gasification infrastructure limits the country\'s ability to maximize coal utilization for power generation and industrial applications.' }] },
         { type: 'h2', children: [{ text: '2. Research Objectives' }] },
         { type: 'p', children: [{ text: 'Primary Objectives:', bold: true }] },
-        { type: 'ul', children: [
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Develop an integrated coal gasification system achieving 60%+ energy efficiency' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Design carbon capture mechanisms reducing CO2 emissions by 45%' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Create automated monitoring systems for real-time process optimization' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Establish economic viability models for large-scale implementation' }] }] },
-        ]},
+        {
+            type: 'ul', children: [
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Develop an integrated coal gasification system achieving 60%+ energy efficiency' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Design carbon capture mechanisms reducing CO2 emissions by 45%' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Create automated monitoring systems for real-time process optimization' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Establish economic viability models for large-scale implementation' }] }] },
+            ]
+        },
         { type: 'h2', children: [{ text: '3. Methodology & Approach' }] },
         { type: 'p', children: [{ text: 'Phase 1: Laboratory Testing (Months 1-8)', bold: true }] },
-        { type: 'ul', children: [
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Coal characterization using X-ray fluorescence and thermogravimetric analysis' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Gasification reactor design using computational fluid dynamics modeling' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Catalyst development for enhanced reaction efficiency' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Small-scale prototype testing under controlled conditions' }] }] },
-        ]},
+        {
+            type: 'ul', children: [
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Coal characterization using X-ray fluorescence and thermogravimetric analysis' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Gasification reactor design using computational fluid dynamics modeling' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Catalyst development for enhanced reaction efficiency' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Small-scale prototype testing under controlled conditions' }] }] },
+            ]
+        },
         { type: 'p', children: [{ text: 'Phase 2: Pilot Plant Development (Months 9-18)', bold: true }] },
-        { type: 'ul', children: [
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Construction of pilot-scale gasification facility' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Integration of carbon capture systems' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Performance testing with various coal grades' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Environmental impact assessment and monitoring' }] }] },
-        ]},
+        {
+            type: 'ul', children: [
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Construction of pilot-scale gasification facility' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Integration of carbon capture systems' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Performance testing with various coal grades' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Environmental impact assessment and monitoring' }] }] },
+            ]
+        },
     ];
 
     // Load collaborators
     const loadCollaborators = async () => {
         if (!id) return;
-        
+
         try {
             setLoadingCollaborators(true);
             const collabData = await getCollaborators(id);
@@ -325,7 +330,7 @@ function CollaborateContent() {
     // Load active collaborators
     const loadActiveCollaborators = async () => {
         if (!id) return;
-        
+
         try {
             const activeData = await getActiveCollaborators(id);
             setActiveCollaborators(activeData.users || []);
@@ -340,13 +345,13 @@ function CollaborateContent() {
                 if (id) {
                     console.log('📖 Loading proposal for collaboration:', id);
                     setLoading(true);
-                    
+
                     try {
                         const response = await apiClient.get(`/api/proposals/${id}`);
                         const proposalData = response.data.proposal || response.data;
                         setProposal(proposalData);
                         console.log('✅ Proposal loaded for collaboration');
-                        
+
                         // Load collaborators
                         await loadCollaborators();
                         await loadActiveCollaborators();
@@ -518,7 +523,7 @@ function CollaborateContent() {
                 setCollaboratorRole('');
                 setCollaboratorDescription('');
                 setShowCollaborateModal(false);
-                
+
                 // Reload collaborators
                 await loadCollaborators();
             }
@@ -769,11 +774,11 @@ function CollaborateContent() {
                                         <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border border-white ${author.isActiveNow ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
                                     </div>
                                 )}
-                                
+
                                 {/* Show collaborators */}
                                 {collaborators.slice(0, 5).map((collab, index) => {
                                     const getRoleBgColor = (role) => {
-                                        switch(role) {
+                                        switch (role) {
                                             case 'principal_investigator': return 'bg-blue-600';
                                             case 'admin': return 'bg-purple-600';
                                             case 'reviewer': return 'bg-orange-600';
@@ -782,7 +787,7 @@ function CollaborateContent() {
                                             default: return 'bg-indigo-600';
                                         }
                                     };
-                                    
+
                                     return (
                                         <div key={collab._id || index} className="relative">
                                             <div
@@ -870,14 +875,14 @@ function CollaborateContent() {
                         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {suggestions.map((suggestion, index) => (
                                 <div key={suggestion.id} className={`p-4 rounded-lg border-l-4 ${suggestion.type === 'ai'
-                                        ? 'bg-purple-50 border-purple-500'
-                                        : 'bg-blue-50 border-blue-500'
+                                    ? 'bg-purple-50 border-purple-500'
+                                    : 'bg-blue-50 border-blue-500'
                                     } ${index === 0 ? 'border-l-green-500 bg-green-50' : ''}`}>
                                     <div className="flex items-start gap-2 mb-2">
                                         <div className={`px-2 py-0.5 rounded-full text-xs font-semibold ${index === 0 ? 'bg-green-100 text-green-800' :
-                                                suggestion.type === 'ai'
-                                                    ? 'bg-purple-100 text-purple-800'
-                                                    : 'bg-blue-100 text-blue-800'
+                                            suggestion.type === 'ai'
+                                                ? 'bg-purple-100 text-purple-800'
+                                                : 'bg-blue-100 text-blue-800'
                                             }`}>
                                             {suggestion.category}
                                         </div>
@@ -950,8 +955,8 @@ function CollaborateContent() {
                             <button
                                 onClick={() => setShowChatWindow(!showChatWindow)}
                                 className={`w-16 h-16 rounded-2xl shadow-2xl transition-all duration-300 flex items-center justify-center transform hover:scale-110 hover:rotate-3 cursor-pointer ${showChatWindow
-                                        ? 'bg-blue-700 text-white scale-110 rotate-3'
-                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    ? 'bg-blue-700 text-white scale-110 rotate-3'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
                                     }`}
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1010,10 +1015,10 @@ function CollaborateContent() {
                             <div className="font-semibold">{hoveredCollaborator.name}</div>
                             <div className="text-xs text-gray-300">{hoveredCollaborator.role}</div>
                             <div className={`text-xs flex items-center gap-1 mt-1 ${hoveredCollaborator.status === 'online' ? 'text-green-300' :
-                                    hoveredCollaborator.status === 'away' ? 'text-yellow-300' : 'text-gray-500'
+                                hoveredCollaborator.status === 'away' ? 'text-yellow-300' : 'text-gray-500'
                                 }`}>
                                 <div className={`w-1.5 h-1.5 rounded-full ${hoveredCollaborator.status === 'online' ? 'bg-green-400' :
-                                        hoveredCollaborator.status === 'away' ? 'bg-yellow-400' : 'bg-gray-400'
+                                    hoveredCollaborator.status === 'away' ? 'bg-yellow-400' : 'bg-gray-400'
                                     }`}></div>
                                 {hoveredCollaborator.status}
                             </div>
@@ -1314,7 +1319,7 @@ function CollaborateContent() {
                                 {/* Collaborators */}
                                 {collaborators.map((collab) => {
                                     const getRoleColor = (role) => {
-                                        switch(role) {
+                                        switch (role) {
                                             case 'admin': return 'bg-purple-100 text-purple-800';
                                             case 'reviewer': return 'bg-orange-100 text-orange-800';
                                             case 'collaborator': return 'bg-green-100 text-green-800';
@@ -1322,9 +1327,9 @@ function CollaborateContent() {
                                             default: return 'bg-indigo-100 text-indigo-800';
                                         }
                                     };
-                                    
+
                                     const getRoleBgColor = (role) => {
-                                        switch(role) {
+                                        switch (role) {
                                             case 'admin': return 'bg-purple-600';
                                             case 'reviewer': return 'bg-orange-600';
                                             case 'collaborator': return 'bg-green-600';

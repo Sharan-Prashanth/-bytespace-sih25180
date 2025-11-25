@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../../context/AuthContext';
-import ProtectedRoute from '../../components/ProtectedRoute';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AdvancedProposalEditor from '../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
+import ProtectedRoute from '../../components/ProtectedRoute';
 import Chatbot from '../../components/Saarthi';
-import { useToast, ToastContainer } from '../../components/ui (plate files)/toast';
+import { ToastContainer, useToast } from '../../components/ui (plate files)/toast';
+import { useAuth } from '../../context/AuthContext';
 
 function CreateNewProposalContent() {
   const router = useRouter();
@@ -161,12 +161,12 @@ function CreateNewProposalContent() {
       });
 
       const data = await response.json();
-      
+
       if (data.success && data.drafts && data.drafts.length > 0) {
         // Load the most recent draft
         const latestDraft = data.drafts[0];
         setProposalId(latestDraft._id);
-        
+
         setProposalInfo({
           title: latestDraft.title || '',
           fundingMethod: latestDraft.researchFundingMethod || 'S&T_OF_MOC',
@@ -390,7 +390,7 @@ function CreateNewProposalContent() {
       // Convert file to base64
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      
+
       reader.onload = async () => {
         try {
           setExtractingForm(formId);
@@ -420,9 +420,9 @@ function CreateNewProposalContent() {
 
             // TODO: Load extracted content into editor
             // This would require passing the content to the editor ref
-            
+
             setExtractionProgress(100);
-            
+
             // Mark form as complete
             setFormStatus((prev) => ({
               ...prev,
@@ -430,7 +430,7 @@ function CreateNewProposalContent() {
             }));
 
             success(`${FORM_CONFIGS.find(f => f.id === formId)?.label} content extracted successfully`);
-            
+
             setTimeout(() => {
               setUploadingForm(null);
               setExtractingForm(null);
@@ -585,7 +585,7 @@ function CreateNewProposalContent() {
   const uploadImagesToS3 = useCallback(async (editorContent) => {
     try {
       info('Uploading images to cloud storage...');
-      
+
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
@@ -593,7 +593,7 @@ function CreateNewProposalContent() {
 
       // Prepare images for upload (only base64 strings need upload)
       const imagesToUpload = [];
-      
+
       Object.entries(signatures).forEach(([key, value]) => {
         if (value && typeof value === 'string' && value.startsWith('data:image')) {
           imagesToUpload.push({ key, image: value, fileName: `${key}_${Date.now()}` });
@@ -687,10 +687,10 @@ function CreateNewProposalContent() {
       if (!currentProposalId) {
         setSubmissionStage('Saving draft...');
         setSubmissionProgress(15);
-        
+
         const editorFormDataTemp = editorRef.current?.getFormData?.() || {};
         currentProposalId = await handleAutoSave(editorFormDataTemp);
-        
+
         if (!currentProposalId) {
           throw new Error('Failed to create draft. Please try again.');
         }
@@ -802,7 +802,7 @@ function CreateNewProposalContent() {
     <div className="min-h-screen bg-white">
       {/* Toast Container */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      
+
       {/* Header */}
       <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -1048,7 +1048,7 @@ function CreateNewProposalContent() {
 
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
             <p className="text-black text-sm">
-              <strong>Note:</strong> You can upload any subset of forms (1-6) and their content will be loaded into the editor. 
+              <strong>Note:</strong> You can upload any subset of forms (1-6) and their content will be loaded into the editor.
               You can then make minor corrections directly in the editor, or you can choose to fill all forms directly in the editor without uploading.
             </p>
           </div>
@@ -1058,11 +1058,10 @@ function CreateNewProposalContent() {
             {FORM_CONFIGS.map((form) => (
               <div
                 key={form.id}
-                className={`border-2 rounded-xl p-4 transition-all ${
-                  formStatus[form.id]
+                className={`border-2 rounded-xl p-4 transition-all ${formStatus[form.id]
                     ? 'border-green-500 bg-green-50'
                     : 'border-orange-200 bg-white hover:border-orange-400'
-                }`}
+                  }`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -1211,11 +1210,10 @@ function CreateNewProposalContent() {
             <button
               onClick={handleSubmit}
               disabled={!isFormValid || isSubmitting}
-              className={`px-8 py-3 rounded-lg font-bold text-white transition-all shadow-lg ${
-                isFormValid && !isSubmitting
+              className={`px-8 py-3 rounded-lg font-bold text-white transition-all shadow-lg ${isFormValid && !isSubmitting
                   ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 cursor-pointer'
                   : 'bg-gray-400 cursor-not-allowed'
-              }`}
+                }`}
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">

@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
-import { useAuth } from "../../../context/AuthContext";
-import ProtectedRoute from "../../../components/ProtectedRoute";
+import { useEffect, useState } from "react";
+import LoadingScreen from "../../../components/LoadingScreen";
 import AdvancedProposalEditor from "../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor";
+import ProtectedRoute from "../../../components/ProtectedRoute";
 import Chatbot from "../../../components/Saarthi";
 import VersionHistory from "../../../components/VersionHistory";
-import Navbar from "../../../components/Navbar";
-import LoadingScreen from "../../../components/LoadingScreen";
+import { useAuth } from "../../../context/AuthContext";
 import apiClient from "../../../utils/api";
 
 // Custom CSS animations for the commit modal
@@ -255,10 +254,10 @@ function EditProposalContent() {
         try {
             console.log('📖 Loading proposal for editing:', id);
             setLoading(true);
-            
+
             const response = await apiClient.get(`/api/proposals/${id}`);
             const proposalData = response.data.proposal || response.data;
-            
+
             setProposal(proposalData);
             setProposalData({
                 projectTitle: proposalData.title || '',
@@ -272,13 +271,13 @@ function EditProposalContent() {
                 projectOutlayLakhs: proposalData.budget ? (proposalData.budget / 100000).toFixed(2) : '',
                 durationMonths: proposalData.durationMonths || ''
             });
-            
+
             // Load word and character counts from forms
             const totalWords = proposalData.forms?.reduce((sum, form) => sum + (form.wordCount || 0), 0) || 0;
             const totalChars = proposalData.forms?.reduce((sum, form) => sum + (form.characterCount || 0), 0) || 0;
             setWordCount(totalWords);
             setCharacterCount(totalChars);
-            
+
             console.log('✅ Proposal loaded successfully for editing');
             console.log('📊 Loaded forms:', proposalData.forms?.length || 0);
         } catch (error) {
@@ -341,7 +340,7 @@ function EditProposalContent() {
         setIsSubmitting(true);
         setSubmissionProgress(0);
         setShowEvaluation(false);
-        
+
         // Save the proposal with updated version
         try {
             const token = localStorage.getItem('token');
@@ -366,11 +365,11 @@ function EditProposalContent() {
                     versionComment: commitMessage
                 })
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to update proposal');
             }
-            
+
             const data = await response.json();
             console.log('✅ Proposal updated successfully');
         } catch (error) {
@@ -574,8 +573,8 @@ function EditProposalContent() {
                                     if (showSaarthi) setShowSaarthi(false); // Close AI if open
                                 }}
                                 className={`px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 ${showVersionHistory
-                                        ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white'
-                                        : 'bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 text-orange-800 border border-orange-300'
+                                    ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white'
+                                    : 'bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 text-orange-800 border border-orange-300'
                                     }`}
                             >
                                 <div className="w-5 h-5 bg-orange-200 rounded-full flex items-center justify-center">
@@ -813,8 +812,8 @@ function EditProposalContent() {
                                                     <div key={stage} className={`flex flex-col items-center ${submissionProgress > (index * 25) ? stageColors[index] : 'text-black/40'
                                                         }`}>
                                                         <div className={`w-3 h-3 rounded-full border-2 transition-all duration-500 ${submissionProgress > (index * 25)
-                                                                ? `${stageBgColors[index]} animate-pulse`
-                                                                : 'bg-white border-gray-300'
+                                                            ? `${stageBgColors[index]} animate-pulse`
+                                                            : 'bg-white border-gray-300'
                                                             }`}></div>
                                                         <span className="text-xs mt-1">{stage}</span>
                                                     </div>
@@ -958,8 +957,8 @@ function EditProposalContent() {
                                     onClick={handleCommitConfirm}
                                     disabled={!commitMessage.trim()}
                                     className={`flex-1 px-4 py-3 rounded-lg transition-all duration-300 font-medium transform active:scale-95 ${commitMessage.trim()
-                                            ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-lg hover:shadow-xl hover:scale-105 hover:-translate-y-0.5'
-                                            : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
+                                        ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-lg hover:shadow-xl hover:scale-105 hover:-translate-y-0.5'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
                                         }`}
                                 >
                                     Submit Version
