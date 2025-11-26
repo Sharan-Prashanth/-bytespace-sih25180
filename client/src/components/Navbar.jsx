@@ -31,7 +31,7 @@ export default function Navbar({ variant = "default" }) {
       default:
         return {
           bg: isScrolled
-            ? "bg-slate-900/90 backdrop-blur-md shadow-lg border-b border-slate-800"
+            ? "bg-slate-900/95 backdrop-blur-md shadow-lg border-b border-slate-800"
             : "bg-transparent",
           text: "text-white",
           border: "border-transparent"
@@ -45,7 +45,7 @@ export default function Navbar({ variant = "default" }) {
   useEffect(() => {
     const handleScroll = () => {
       const scrollTop = window.scrollY;
-      setIsScrolled(scrollTop > 20);
+      setIsScrolled(scrollTop > 100);
     };
 
     window.addEventListener('scroll', handleScroll);
@@ -98,7 +98,7 @@ export default function Navbar({ variant = "default" }) {
     { code: 'pa', name: 'ਪੰਜਾਬੀ' }
   ];
 
-  const defaultUserAvatar = "/images/default-user.svg";
+  const defaultUserAvatar = "/images/default-user-avatar.svg";
   const userAvatar = defaultUserAvatar;
   const displayName = user?.fullName || user?.email?.split('@')[0] || 'User';
   const displayRoles = user?.roles?.join(', ').replace(/_/g, ' ') || 'USER';
@@ -113,34 +113,25 @@ export default function Navbar({ variant = "default" }) {
             <div className="flex items-center gap-6 min-w-0">
               <Link href={user ? "/dashboard" : "/"}>
                 <div className="flex items-center gap-4 cursor-pointer group">
-                  {/* GOI Logo */}
+                  {/* Government and Brand Logos */}
                   <div className="flex items-center gap-3">
+                    {/* Government of India Logo */}
                     <img
                       src="/images/GOI logo.png"
                       alt="Government of India"
-                      className="h-12 w-auto brightness-0 invert opacity-90 group-hover:opacity-100 transition-opacity"
+                      className="h-10 w-auto brightness-0 invert opacity-90 group-hover:opacity-100 transition-opacity"
                     />
-                    <div className="hidden sm:block leading-tight">
-                      <div className="font-bold text-sm tracking-wide">भारत सरकार</div>
-                      <div className="font-medium text-xs opacity-80">Government of India</div>
+
+                    {/* Divider */}
+                    <div className="h-8 w-px bg-white/20"></div>
+
+                    {/* PRISM Logo */}
+                    <div className={`w-10 h-10 backdrop-blur-md rounded-lg flex items-center justify-center border border-white/20 transition-colors ${isScrolled ? 'bg-white/10' : 'bg-transparent'}`}>
+                      <img src="/images/prism brand logo.png" alt="PRISM Logo" className="w-6 h-6 object-contain brightness-0 invert" />
                     </div>
-                  </div>
 
-                  {/* Divider */}
-                  <div className="h-8 w-px bg-white/20 mx-2"></div>
-
-                  {/* Ministry/Portal Logos */}
-                  <div className="flex items-center gap-4">
-                    <img
-                      src="/images/CoalLog4.png"
-                      alt="Coal India"
-                      className="h-10 w-auto bg-white/10 rounded p-1 backdrop-blur-sm"
-                    />
-                    <img
-                      src="/images/cmpdi logo.jpg"
-                      alt="CMPDI"
-                      className="h-10 w-auto bg-white/10 rounded p-1 backdrop-blur-sm hidden md:block"
-                    />
+                    {/* PRISM Text */}
+                    <span className="font-bold text-xl tracking-tight text-white">PRISM</span>
                   </div>
                 </div>
               </Link>
@@ -149,7 +140,7 @@ export default function Navbar({ variant = "default" }) {
             {/* Right Section: Controls & Status */}
             <div className="hidden md:flex items-center gap-6 justify-end flex-shrink-0">
               {/* Accessibility Tools */}
-              <div className="flex items-center gap-1 bg-white/5 rounded-full p-1 border border-white/10 backdrop-blur-sm">
+              <div className="flex items-center gap-1 bg-transparent rounded-full p-1 border border-white/10 backdrop-blur-sm">
                 <button
                   onClick={decreaseFontSize}
                   className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors text-xs font-bold"
@@ -223,31 +214,28 @@ export default function Navbar({ variant = "default" }) {
                     <div className="relative" ref={userMenuRef}>
                       <button
                         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                        className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all duration-300"
+                        className="flex items-center gap-2 p-1 pr-2 rounded-full bg-transparent hover:bg-white/10 border border-white/10 transition-all duration-300"
                       >
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 border border-white/20">
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-white/5 border border-white/20">
                           <img
                             src={userAvatar}
                             alt="User"
+                            loading="eager"
                             className="w-full h-full object-cover"
-                            onError={(e) => { e.currentTarget.src = defaultUserAvatar; }}
                           />
                         </div>
-                        <div className="text-left hidden lg:block">
-                          <div className="text-xs font-bold leading-none mb-0.5">{displayName}</div>
-                          <div className="text-[10px] opacity-70 uppercase tracking-wider leading-none">{displayRoles}</div>
-                        </div>
-                        <svg className={`w-4 h-4 transition-transform opacity-70 ${isUserMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+                        <svg className={`w-3 h-3 transition-transform opacity-50 ${isUserMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       </button>
 
                       {/* Dropdown Menu */}
                       {isUserMenuOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-fade-in-up text-slate-900 overflow-hidden">
-                          <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
-                            <p className="text-sm font-bold text-slate-900">{user?.fullName}</p>
-                            <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                        <div className={`absolute right-0 top-full mt-2 w-64 backdrop-blur-xl rounded-2xl shadow-2xl py-2 z-50 animate-fade-in-up overflow-hidden ${isScrolled ? 'bg-white border border-slate-200' : 'bg-slate-900/10 border border-white/10'}`}>
+                          <div className={`px-6 py-4 ${isScrolled ? 'bg-slate-50 border-b border-slate-200' : 'bg-white/5 border-b border-white/10'}`}>
+                            <p className={`text-sm font-bold ${isScrolled ? 'text-slate-900' : 'text-white'}`}>{user?.fullName}</p>
+                            <p className={`text-xs truncate ${isScrolled ? 'text-slate-600' : 'text-slate-300'}`}>{user?.email}</p>
                             <div className="flex flex-wrap gap-1 mt-2">
                               {user?.roles?.map((role, index) => (
                                 <span key={index} className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-semibold">
@@ -259,7 +247,7 @@ export default function Navbar({ variant = "default" }) {
 
                           <div className="p-2">
                             <Link href="/profile">
-                              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer group">
+                              <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors cursor-pointer group ${isScrolled ? 'text-slate-700 hover:bg-slate-100' : 'text-white hover:bg-white/10'}`}>
                                 <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -270,7 +258,7 @@ export default function Navbar({ variant = "default" }) {
                             </Link>
 
                             <Link href="/dashboard">
-                              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer group">
+                              <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors cursor-pointer group ${isScrolled ? 'text-slate-700 hover:bg-slate-100' : 'text-white hover:bg-white/10'}`}>
                                 <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -281,10 +269,10 @@ export default function Navbar({ variant = "default" }) {
                             </Link>
                           </div>
 
-                          <div className="border-t border-slate-100 mt-1 p-2">
+                          <div className={`mt-1 p-2 ${isScrolled ? 'border-t border-slate-200' : 'border-t border-white/10'}`}>
                             <button
                               onClick={logout}
-                              className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-red-50 text-red-600 transition-colors w-full text-left group"
+                              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors w-full text-left group ${isScrolled ? 'text-red-600 hover:bg-red-50' : 'text-red-400 hover:bg-red-500/20'}`}
                             >
                               <div className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center group-hover:bg-red-100 transition-colors">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -300,17 +288,26 @@ export default function Navbar({ variant = "default" }) {
                   </>
                 ) : (
                   // Guest navigation
-                  <div className="flex items-center gap-3">
-                    <Link href="/login">
-                      <button className="px-5 py-2 rounded-full text-sm font-semibold text-white hover:bg-white/10 transition-colors">
-                        Sign In
-                      </button>
-                    </Link>
-                    <Link href="/register">
-                      <button className="px-5 py-2 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 transition-all hover:-translate-y-0.5">
-                        Register
-                      </button>
-                    </Link>
+                  <div className="flex items-center gap-6">
+                    <div className="hidden lg:flex items-center gap-6 text-sm font-medium text-white/80">
+                      <a href="#about" className="hover:text-white transition-colors">Why NaCCER?</a>
+                      <a href="#services" className="hover:text-white transition-colors">Services</a>
+                      <a href="#research" className="hover:text-white transition-colors">Research</a>
+                      <a href="#leadership" className="hover:text-white transition-colors">Enterprise</a>
+                    </div>
+                    <div className="h-6 w-px bg-white/20 hidden lg:block"></div>
+                    <div className="flex items-center gap-3">
+                      <Link href="/login">
+                        <button className="px-5 py-2 rounded-full text-sm font-semibold text-white hover:bg-white/10 transition-colors">
+                          Sign In
+                        </button>
+                      </Link>
+                      <Link href="/register">
+                        <button className="px-5 py-2 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 transition-all hover:-translate-y-0.5">
+                          Register
+                        </button>
+                      </Link>
+                    </div>
                   </div>
                 )}
               </div>
@@ -408,7 +405,7 @@ export default function Navbar({ variant = "default" }) {
             </div>
           </div>
         )}
-      </nav>
+      </nav >
     </>
   );
 }

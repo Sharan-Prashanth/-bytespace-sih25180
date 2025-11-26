@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import VersionHistory from '@/components/VersionHistory';
+import { useState } from 'react';
 
-export default function VersionsTab({ 
-  proposalId, 
+export default function VersionsTab({
+  proposalId,
   currentVersion,
   canCommit,
   onCommitVersion
@@ -29,7 +29,7 @@ export default function VersionsTab({
       )}
 
       <div className="flex-1 overflow-hidden">
-        <VersionHistory 
+        <VersionHistory
           proposalId={proposalId}
           formId={null}
           currentVersion={currentVersion}

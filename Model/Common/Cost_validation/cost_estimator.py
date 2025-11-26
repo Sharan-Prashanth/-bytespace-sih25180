@@ -358,6 +358,19 @@ Breakdown sample: {breakdown_preview}
 REQUIREMENTS:
 - Return EXACTLY 5 lines separated by newlines. Each line must be short (<=140 characters).
 - Lines should be actionable and focused on cost drivers and reallocation options.
+
+EXAMPLE:
+Score: 40/100    Changeable: 24%
+The budget broadly aligns with pilot-scale efforts but lacks
+detailed line-item breakdowns for high-value equipment. Several
+procurement entries above ₹5M require vendor quotes or
+justification.
+Recommended actions:
+Provide detailed quotations for specialized
+equipment and vendor estimates for each major line
+item.Separate capital vs operational expenses and
+include lifecycle maintenance cost estimates.Clarify contingencies and explain assumptions
+behind unit costs to reduce budget uncertainty
 """
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
         resp = model.generate_content(prompt)
