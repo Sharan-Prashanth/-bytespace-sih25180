@@ -7,6 +7,8 @@ import ProtectedRoute from '../../../components/ProtectedRoute';
 import TimelineChart from '../../../components/TimelineChart';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import apiClient from '../../../utils/api';
+import { getProposalTracking } from '../../../utils/proposalApi';
 
 // Custom CSS animations for the track page
 const trackAnimationStyles = `
@@ -81,19 +83,26 @@ function TrackProposalContent() {
     currentPhase: "Technical Review",
     progress: 65,
     timeline: [
-      { phase: "Proposal Submitted", status: "completed", date: "2025-09-15", description: "Proposal successfully submitted to AI-powered PRISM portal" },
-      { phase: "AI Initial Screening", status: "completed", date: "2025-09-16", description: "AI system completed automated compliance and quality checks" },
-      { phase: "AI Reviewer Assignment", status: "completed", date: "2025-09-18", description: "AI system automatically assigned expert reviewers based on domain expertise" },
-      { phase: "Expert Technical Review", status: "active", date: "2025-09-20", description: "AI-assigned experts conducting detailed technical assessment" },
-      { phase: "AI-Assisted Budget Analysis", status: "pending", date: null, description: "AI financial evaluation and expert review pending" },
-      { phase: "Final Expert Decision", status: "pending", date: null, description: "Expert committee final decision based on AI recommendations" }
+      { phase: "Initial Submission", status: "completed", date: "Sep 15, 2025", description: "Proposal successfully submitted through PRISM portal with all required documentation and initial AI validation completed." },
+      { phase: "AI-Powered Document Analysis", status: "completed", date: "Sep 16, 2025", description: "Advanced AI systems analyzed proposal structure, content quality, and compliance with NaCCER guidelines using natural language processing." },
+      { phase: "Technical Feasibility Review", status: "completed", date: "Sep 18, 2025", description: "Expert committee evaluated technical approach, methodology, and potential impact on coal industry research objectives." },
+      { phase: "Budget & Resource Assessment", status: "completed", date: "Sep 22, 2025", description: "Financial analysis completed with AI-assisted cost validation and resource allocation optimization recommendations." },
+      { phase: "Novelty & Innovation Check", status: "active", date: "Ongoing", description: "AI-powered plagiarism detection and innovation assessment comparing against existing research databases and patent repositories." },
+      { phase: "Expert Panel Review", status: "pending", date: "Expected: Oct 5, 2025", description: "Domain experts from coal research institutes will provide detailed feedback and recommendations on scientific merit." },
+      { phase: "Stakeholder Feedback", status: "pending", date: "Expected: Oct 10, 2025", description: "Industry stakeholders and coal sector representatives will review practical applicability and implementation potential." },
+      { phase: "Final Decision", status: "pending", date: "Expected: Oct 15, 2025", description: "Comprehensive evaluation results compiled and final funding decision made by NaCCER review board." }
     ],
     milestones: [
-      { title: "Technical Documentation Review", completed: true, dueDate: "2025-09-22", completedDate: "2025-09-21" },
-      { title: "Laboratory Setup Assessment", completed: true, dueDate: "2025-09-25", completedDate: "2025-09-24" },
-      { title: "Budget & Resource Evaluation", completed: false, dueDate: "2025-09-28" },
-      { title: "Expert Committee Presentation", completed: false, dueDate: "2025-10-05" },
-      { title: "Final Approval Decision", completed: false, dueDate: "2025-10-12" }
+      { title: "Proposal Submitted", completed: true, dueDate: "Sep 15, 2025", completedDate: "Sep 15, 2025" },
+      { title: "AI Validation Passed", completed: true, dueDate: "Sep 16, 2025", completedDate: "Sep 16, 2025" },
+      { title: "Document Verification", completed: true, dueDate: "Sep 17, 2025", completedDate: "Sep 17, 2025" },
+      { title: "Technical Review Completed", completed: true, dueDate: "Sep 20, 2025", completedDate: "Sep 18, 2025" },
+      { title: "Budget Analysis Done", completed: true, dueDate: "Sep 23, 2025", completedDate: "Sep 22, 2025" },
+      { title: "Innovation Assessment", completed: false, dueDate: "Oct 1, 2025", completedDate: null },
+      { title: "Plagiarism Check", completed: false, dueDate: "Oct 3, 2025", completedDate: null },
+      { title: "Expert Review Scheduled", completed: false, dueDate: "Oct 5, 2025", completedDate: null },
+      { title: "Industry Feedback", completed: false, dueDate: "Oct 10, 2025", completedDate: null },
+      { title: "Final Approval", completed: false, dueDate: "Oct 15, 2025", completedDate: null }
     ],
     recentActivity: [
       { 

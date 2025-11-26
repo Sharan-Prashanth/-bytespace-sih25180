@@ -1,1186 +1,661 @@
+import mongoose from 'mongoose';
 import Proposal from '../models/Proposal.js';
+import ProposalVersion from '../models/ProposalVersion.js';
 import User from '../models/User.js';
-import StatusHistory from '../models/StatusHistory.js';
+import proposalIdGenerator from '../utils/proposalIdGenerator.js';
+import emailService from '../services/emailService.js';
+import aiService from '../services/aiService.js';
+import storageService from '../services/storageService.js';
+import activityLogger from '../utils/activityLogger.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
-// ============= CORE CRUD OPERATIONS =============
-
-// @desc    Create new proposal
-// @route   POST /api/proposals
-// @access  Private (USER, SUPER_ADMIN)
-export const createProposal = async (req, res) => {
-  try {
-    const {
-      title,
-      researchFundingMethod,
-      principalImplementingAgency,
-      subImplementingAgency,
-      projectLeader,
-      projectCoordinator,
-      projectDuration,
-      projectOutlay,
-      coInvestigators,
-      forms,
-      tags,
-      priority
-    } = req.body;
-
-    // Validation
-    if (!title || !researchFundingMethod || !principalImplementingAgency || 
-        !subImplementingAgency || !projectLeader || !projectCoordinator || 
-        !projectDuration || !projectOutlay) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide all required fields'
-      });
-    }
-
-    const proposalData = {
-      title,
-      researchFundingMethod,
-      principalImplementingAgency,
-      subImplementingAgency,
-      projectLeader,
-      projectCoordinator,
-      projectDuration: parseInt(projectDuration),
-      projectOutlay,
-      createdBy: req.user._id,
-      coInvestigators: coInvestigators || [],
-      forms: forms || [],
-      tags: tags || [],
-      priority: priority || 'medium',
-      status: 'draft',
-      // Add creator as principal investigator in collaborators
-      collaborators: [{
-        user: req.user._id,
-        role: 'principal_investigator',
-        permissions: {
-          canEdit: true,
-          canComment: true,
-          canInvite: true
-        },
-        status: 'accepted'
-      }]
-    };
-
-    const proposal = await Proposal.create(proposalData);
-
-    const populatedProposal = await Proposal.findById(proposal._id)
-      .populate('createdBy coInvestigators', 'fullName email')
-      .populate('collaborators.user', 'fullName email');
-
-    console.log(`✅ Proposal created: ${proposal.proposalNumber} by ${req.user.fullName}`);
-
-    res.status(201).json({
-      success: true,
-      message: 'Proposal created successfully',
-      proposal: populatedProposal
-    });
-
-  } catch (error) {
-    console.error('Create proposal error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error creating proposal',
-      error: error.message
-    });
+/**
+ * Helper: Find proposal by ID or proposalCode
+ */
+const findProposal = async (proposalId) => {
+  if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
+    return await Proposal.findById(proposalId);
+  } else {
+    return await Proposal.findOne({ proposalCode: proposalId });
   }
 };
 
-// @desc    Get all proposals (filtered by role)
-// @route   GET /api/proposals
-// @access  Private
-export const getProposals = async (req, res) => {
-  try {
-    const { status, priority, page = 1, limit = 10, search } = req.query;
-    
-    const proposals = await Proposal.getProposalsByRole(req.user._id, req.user.roles);
-    
-    // Apply filters
-    let filteredProposals = proposals;
-    
-    if (status) {
-      filteredProposals = filteredProposals.filter(p => p.status === status);
-    }
-    
-    if (priority) {
-      filteredProposals = filteredProposals.filter(p => p.priority === priority);
-    }
-    
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredProposals = filteredProposals.filter(p => 
-        p.title.toLowerCase().includes(searchLower) ||
-        p.proposalNumber?.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    // Pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + parseInt(limit);
-    const paginatedProposals = filteredProposals.slice(startIndex, endIndex);
-    
-    res.json({
-      success: true,
-      count: filteredProposals.length,
-      page: parseInt(page),
-      pages: Math.ceil(filteredProposals.length / limit),
-      proposals: paginatedProposals
-    });
+/**
+ * Helper: Check if user has access to proposal
+ */
+const checkProposalAccess = (proposal, user) => {
+  // Handle both populated and non-populated createdBy
+  const createdById = proposal.createdBy?._id || proposal.createdBy;
+  const isPI = createdById.toString() === user._id.toString();
+  
+  // Handle populated co-investigators
+  const isCI = proposal.coInvestigators?.some(ci => {
+    const ciId = ci._id || ci;
+    return ciId.toString() === user._id.toString();
+  });
+  
+  // Handle populated collaborators
+  const isCollaborator = proposal.collaborators?.some(collab => {
+    const userId = collab.userId?._id || collab.userId;
+    return userId.toString() === user._id.toString();
+  });
+  
+  // Handle populated reviewers
+  const isReviewer = proposal.assignedReviewers?.some(rev => {
+    const reviewerId = rev.reviewer?._id || rev.reviewer;
+    return reviewerId.toString() === user._id.toString();
+  });
+  
+  const isAdmin = user.roles?.includes('SUPER_ADMIN');
+  const isCommittee = user.roles?.some(role => ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER'].includes(role));
 
-  } catch (error) {
-    console.error('Get proposals error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching proposals',
-      error: error.message
-    });
-  }
+  return isPI || isCI || isCollaborator || isReviewer || isAdmin || isCommittee;
 };
 
-// @desc    Get user's own proposals
-// @route   GET /api/proposals/my-proposals
-// @access  Private
-export const getMyProposals = async (req, res) => {
-  try {
-    const proposals = await Proposal.find({
-      $or: [
-        { createdBy: req.user._id },
-        { coInvestigators: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    })
-      .populate('createdBy coInvestigators', 'fullName email')
-      .populate('collaborators.user', 'fullName email')
-      .sort({ createdAt: -1 });
-
-    res.json({
-      success: true,
-      count: proposals.length,
-      proposals
-    });
-
-  } catch (error) {
-    console.error('Get my proposals error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching your proposals',
-      error: error.message
-    });
+/**
+ * Helper: Process embedded images in forms
+ * Replaces base64 images with S3 URLs
+ */
+const processFormImages = async (forms, proposalCode) => {
+  const processedForms = { ...forms };
+  
+  for (const formKey in processedForms) {
+    if (processedForms[formKey] && Array.isArray(processedForms[formKey])) {
+      // Process Plate.js content structure
+      for (const node of processedForms[formKey]) {
+        if (node.type === 'img' && node.url && node.url.startsWith('data:')) {
+          // Extract base64 data
+          const matches = node.url.match(/^data:(.+);base64,(.+)$/);
+          if (matches) {
+            const mimeType = matches[1];
+            const base64Data = matches[2];
+            const buffer = Buffer.from(base64Data, 'base64');
+            
+            // Upload to S3
+            const uploadResult = await storageService.uploadImage({
+              buffer,
+              mimetype: mimeType,
+              originalname: `${Date.now()}.png`
+            }, `${proposalCode}/images`);
+            
+            if (uploadResult.success) {
+              node.url = uploadResult.url;
+            }
+          }
+        }
+      }
+    }
   }
+  
+  return processedForms;
 };
 
-// @desc    Get single proposal by ID
-// @route   GET /api/proposals/:id
-// @access  Private
-export const getProposalById = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id)
-      .populate('createdBy coInvestigators', 'fullName email designation organisationName')
-      .populate('collaborators.user', 'fullName email')
-      .populate('cmpdiAssignees tssrcAssignees ssrcAssignees', 'fullName email')
-      .populate('assignedExperts.expert assignedExperts.assignedBy', 'fullName email')
-      .populate('comments.from', 'fullName email')
-      .populate('statusHistory.changedBy', 'fullName email');
+/**
+ * @route   GET /api/proposals
+ * @desc    Get proposals (filtered by user role)
+ * @access  Private
+ */
+export const getProposals = asyncHandler(async (req, res) => {
+  const { status, page = 1, limit = 20, search } = req.query;
+  const user = req.user;
 
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
+  let query = { isDeleted: false };
 
-    // Check authorization
-    const isCreator = proposal.createdBy._id.toString() === req.user._id.toString();
-    const isCoInvestigator = proposal.coInvestigators.some(ci => ci._id.toString() === req.user._id.toString());
-    const isCollaborator = proposal.collaborators.some(c => c.user._id.toString() === req.user._id.toString());
-    const isCMPDI = req.user.roles.includes('CMPDI_MEMBER') || proposal.cmpdiAssignees.some(a => a._id.toString() === req.user._id.toString());
-    const isTSSRC = req.user.roles.includes('TSSRC_MEMBER') || proposal.tssrcAssignees.some(a => a._id.toString() === req.user._id.toString());
-    const isSSRC = req.user.roles.includes('SSRC_MEMBER') || proposal.ssrcAssignees.some(a => a._id.toString() === req.user._id.toString());
-    const isExpert = proposal.assignedExperts.some(e => e.expert._id.toString() === req.user._id.toString());
-    const isSuperAdmin = req.user.roles.includes('SUPER_ADMIN');
-
-    if (!isCreator && !isCoInvestigator && !isCollaborator && !isCMPDI && !isTSSRC && !isSSRC && !isExpert && !isSuperAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this proposal'
-      });
-    }
-
-    res.json({
-      success: true,
-      proposal
-    });
-
-  } catch (error) {
-    console.error('Get proposal by ID error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching proposal',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Update proposal metadata
-// @route   PUT /api/proposals/:id
-// @access  Private (USER, SUPER_ADMIN)
-export const updateProposal = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
-
-    // Check if user is creator or has edit permissions
-    const isCreator = proposal.createdBy.toString() === req.user._id.toString();
-    const collaborator = proposal.collaborators.find(c => c.user.toString() === req.user._id.toString());
-    const canEdit = collaborator?.permissions.canEdit || false;
-    const isSuperAdmin = req.user.roles.includes('SUPER_ADMIN');
-
-    if (!isCreator && !canEdit && !isSuperAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to edit this proposal'
-      });
-    }
-
-    // Can only edit drafts
-    if (proposal.status !== 'draft') {
-      return res.status(400).json({
-        success: false,
-        message: 'Can only edit proposals in draft status'
-      });
-    }
-
-    // Update allowed fields
-    const allowedUpdates = [
-      'title', 'researchFundingMethod', 'principalImplementingAgency',
-      'subImplementingAgency', 'projectLeader', 'projectCoordinator',
-      'projectDuration', 'projectOutlay', 'tags', 'priority'
+  // Filter based on user role
+  if (user.roles.includes('SUPER_ADMIN')) {
+    // Admin sees all proposals
+  } else if (user.roles.includes('CMPDI_MEMBER')) {
+    // CMPDI sees proposals in their review stages
+    query.status = { $in: ['SUBMITTED', 'AI_EVALUATION', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW'] };
+  } else if (user.roles.includes('TSSRC_MEMBER')) {
+    // TSSRC sees CMPDI approved proposals
+    query.status = { $in: ['CMPDI_APPROVED', 'TSSRC_REVIEW'] };
+  } else if (user.roles.includes('SSRC_MEMBER')) {
+    // SSRC sees TSSRC approved proposals
+    query.status = { $in: ['TSSRC_APPROVED', 'SSRC_REVIEW'] };
+  } else if (user.roles.includes('EXPERT_REVIEWER')) {
+    // Reviewers see assigned proposals
+    query['assignedReviewers.reviewer'] = user._id;
+  } else {
+    // Normal users see their own proposals
+    query.$or = [
+      { createdBy: user._id },
+      { coInvestigators: user._id }
     ];
+  }
 
-    allowedUpdates.forEach(field => {
-      if (req.body[field] !== undefined) {
+  // Additional filters
+  if (status) {
+    query.status = status;
+  }
+
+  if (search) {
+    query.$or = [
+      { proposalCode: { $regex: search, $options: 'i' } },
+      { title: { $regex: search, $options: 'i' } },
+      { projectLeader: { $regex: search, $options: 'i' } }
+    ];
+  }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const [proposals, total] = await Promise.all([
+    Proposal.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip(skip)
+      .populate('createdBy', 'fullName email')
+      .populate('coInvestigators', 'fullName email')
+      .select('-forms')
+      .lean(),
+    Proposal.countDocuments(query)
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      proposals,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    }
+  });
+});
+
+/**
+ * @route   POST /api/proposals
+ * @desc    Create a new proposal
+ * @access  Private
+ */
+export const createProposal = asyncHandler(async (req, res) => {
+  const {
+    title,
+    fundingMethod,
+    principalAgency,
+    subAgencies,
+    projectLeader,
+    projectCoordinator,
+    durationMonths,
+    outlayLakhs,
+    forms
+  } = req.body;
+
+  // Generate unique proposal code
+  const proposalCode = await proposalIdGenerator.generateProposalCode();
+
+  // Process embedded images if any
+  const processedForms = forms ? await processFormImages(forms, proposalCode) : {};
+
+  // Create proposal
+  const proposal = await Proposal.create({
+    proposalCode,
+    title,
+    fundingMethod,
+    principalAgency,
+    subAgencies: subAgencies || [],
+    projectLeader,
+    projectCoordinator,
+    durationMonths,
+    outlayLakhs,
+    forms: processedForms,
+    status: 'DRAFT',
+    currentVersion: 0.1,
+    createdBy: req.user._id,
+    collaborators: [{
+      userId: req.user._id,
+      role: 'PI',
+      addedAt: new Date()
+    }]
+  });
+
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'PROPOSAL_CREATED',
+    proposalId: proposal._id,
+    details: { proposalCode: proposal.proposalCode },
+    ipAddress: req.ip
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Proposal created successfully',
+    data: proposal
+  });
+});
+
+/**
+ * @route   GET /api/proposals/:proposalId
+ * @desc    Get proposal by ID or proposalCode
+ * @access  Private
+ */
+export const getProposalById = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  
+  // Check if proposalId is a valid MongoDB ObjectId or a proposalCode
+  let proposal;
+  if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
+    // It's a valid ObjectId
+    proposal = await Proposal.findById(proposalId)
+      .populate('createdBy', 'fullName email designation organisationName')
+      .populate('coInvestigators', 'fullName email designation organisationName')
+      .populate('collaborators.userId', 'fullName email roles')
+      .populate('assignedReviewers.reviewer', 'fullName email expertiseDomains')
+      .populate('assignedReviewers.assignedBy', 'fullName email')
+      .populate('timeline.changedBy', 'fullName email');
+  } else {
+    // It's a proposalCode (e.g., PROP-2025-0007)
+    proposal = await Proposal.findOne({ proposalCode: proposalId })
+      .populate('createdBy', 'fullName email designation organisationName')
+      .populate('coInvestigators', 'fullName email designation organisationName')
+      .populate('collaborators.userId', 'fullName email roles')
+      .populate('assignedReviewers.reviewer', 'fullName email expertiseDomains')
+      .populate('assignedReviewers.assignedBy', 'fullName email')
+      .populate('timeline.changedBy', 'fullName email');
+  }
+
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have access to this proposal'
+    });
+  }
+
+  res.json({
+    success: true,
+    data: proposal
+  });
+});
+
+/**
+ * @route   PUT /api/proposals/:proposalId
+ * @desc    Update proposal (auto-save or manual save)
+ * @access  Private
+ */
+export const updateProposal = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  
+  // Find proposal by ObjectId or proposalCode
+  let proposal;
+  if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
+    proposal = await Proposal.findById(proposalId);
+  } else {
+    proposal = await Proposal.findOne({ proposalCode: proposalId });
+  }
+
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Check if user is PI or CI
+  const isPI = proposal.createdBy.toString() === req.user._id.toString();
+  const isCI = proposal.coInvestigators.some(ci => ci.toString() === req.user._id.toString());
+
+  if (!isPI && !isCI) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only PI and CI can update the proposal'
+    });
+  }
+
+  // Can only update DRAFT proposals
+  if (proposal.status !== 'DRAFT' && !req.body.forms) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot update proposal information after submission. Use version commit for content changes.'
+    });
+  }
+
+  // Update fields
+  const updateableFields = [
+    'title', 'fundingMethod', 'principalAgency', 'subAgencies',
+    'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs', 'forms'
+  ];
+
+  for (const field of updateableFields) {
+    if (req.body[field] !== undefined) {
+      if (field === 'forms') {
+        // Process embedded images
+        proposal[field] = await processFormImages(req.body[field], proposal.proposalCode);
+      } else {
         proposal[field] = req.body[field];
       }
-    });
+    }
+  }
 
-    await proposal.save();
+  await proposal.save();
 
-    const updatedProposal = await Proposal.findById(proposal._id)
-      .populate('createdBy coInvestigators', 'fullName email');
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'PROPOSAL_UPDATED',
+    proposalId: proposal._id,
+    details: { 
+      proposalCode: proposal.proposalCode,
+      updates: Object.keys(req.body)
+    },
+    ipAddress: req.ip
+  });
 
-    res.json({
-      success: true,
-      message: 'Proposal updated successfully',
-      proposal: updatedProposal
-    });
+  res.json({
+    success: true,
+    message: 'Proposal updated successfully',
+    data: proposal
+  });
+});
 
-  } catch (error) {
-    console.error('Update proposal error:', error);
-    res.status(500).json({
+/**
+ * @route   DELETE /api/proposals/:proposalId
+ * @desc    Delete proposal (only drafts)
+ * @access  Private
+ */
+export const deleteProposal = asyncHandler(async (req, res) => {
+  const proposal = await findProposal(req.params.proposalId);
+
+  if (!proposal) {
+    return res.status(404).json({
       success: false,
-      message: 'Server error updating proposal',
-      error: error.message
+      message: 'Proposal not found'
     });
   }
-};
 
-// @desc    Delete proposal (soft delete, only drafts)
-// @route   DELETE /api/proposals/:id
-// @access  Private (USER, SUPER_ADMIN)
-export const deleteProposal = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
+  // Only PI or admin can delete
+  const isPI = proposal.createdBy.toString() === req.user._id.toString();
+  const isAdmin = req.user.roles.includes('SUPER_ADMIN');
 
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
-
-    const isCreator = proposal.createdBy.toString() === req.user._id.toString();
-    const isSuperAdmin = req.user.roles.includes('SUPER_ADMIN');
-
-    if (!isCreator && !isSuperAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this proposal'
-      });
-    }
-
-    // Can only delete drafts
-    if (proposal.status !== 'draft') {
-      return res.status(400).json({
-        success: false,
-        message: 'Can only delete proposals in draft status'
-      });
-    }
-
-    await proposal.deleteOne();
-
-    res.json({
-      success: true,
-      message: 'Proposal deleted successfully'
-    });
-
-  } catch (error) {
-    console.error('Delete proposal error:', error);
-    res.status(500).json({
+  if (!isPI && !isAdmin) {
+    return res.status(403).json({
       success: false,
-      message: 'Server error deleting proposal',
-      error: error.message
+      message: 'Only PI or admin can delete the proposal'
     });
   }
-};
 
-// ============= FORM-SPECIFIC OPERATIONS =============
-
-// @desc    Get all forms from a proposal
-// @route   GET /api/proposals/:id/forms
-// @access  Private
-export const getProposalForms = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
-
-    const formsMap = proposal.getFormsMap();
-
-    res.json({
-      success: true,
-      forms: proposal.forms,
-      formsMap
-    });
-
-  } catch (error) {
-    console.error('Get proposal forms error:', error);
-    res.status(500).json({
+  // Can only delete drafts
+  if (proposal.status !== 'DRAFT') {
+    return res.status(400).json({
       success: false,
-      message: 'Server error fetching forms',
-      error: error.message
+      message: 'Cannot delete submitted proposals'
     });
   }
-};
 
-// @desc    Get specific form content
-// @route   GET /api/proposals/:id/forms/:formKey
-// @access  Private
-export const getProposalForm = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
+  // Soft delete
+  proposal.isDeleted = true;
+  await proposal.save();
 
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'PROPOSAL_DELETED',
+    proposalId: proposal._id,
+    details: { proposalCode: proposal.proposalCode },
+    ipAddress: req.ip
+  });
 
-    const form = proposal.getForm(req.params.formKey);
+  res.json({
+    success: true,
+    message: 'Proposal deleted successfully'
+  });
+});
 
-    if (!form) {
-      return res.status(404).json({
-        success: false,
-        message: 'Form not found'
-      });
-    }
+/**
+ * @route   POST /api/proposals/:proposalId/submit
+ * @desc    Submit proposal for review
+ * @access  Private (PI only)
+ */
+export const submitProposal = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  let proposal;
+  if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
+    proposal = await Proposal.findById(proposalId).populate('createdBy', 'fullName email');
+  } else {
+    proposal = await Proposal.findOne({ proposalCode: proposalId }).populate('createdBy', 'fullName email');
+  }
 
-    res.json({
-      success: true,
-      form
-    });
-
-  } catch (error) {
-    console.error('Get proposal form error:', error);
-    res.status(500).json({
+  if (!proposal) {
+    return res.status(404).json({
       success: false,
-      message: 'Server error fetching form',
-      error: error.message
+      message: 'Proposal not found'
     });
   }
-};
 
-// @desc    Update specific form content
-// @route   PUT /api/proposals/:id/forms/:formKey
-// @access  Private (USER, SUPER_ADMIN)
-export const updateProposalForm = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
-
-    // Check permissions
-    const isCreator = proposal.createdBy.toString() === req.user._id.toString();
-    const collaborator = proposal.collaborators.find(c => c.user.toString() === req.user._id.toString());
-    const canEdit = collaborator?.permissions.canEdit || false;
-    const isSuperAdmin = req.user.roles.includes('SUPER_ADMIN');
-
-    if (!isCreator && !canEdit && !isSuperAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to edit this form'
-      });
-    }
-
-    const { editorContent, yjsState, formData, wordCount, characterCount } = req.body;
-
-    proposal.updateForm(
-      req.params.formKey,
-      editorContent,
-      wordCount || 0,
-      characterCount || 0,
-      req.user._id
-    );
-
-    // Update yjsState and formData if provided
-    const form = proposal.getForm(req.params.formKey);
-    if (form) {
-      if (yjsState) form.yjsState = Buffer.from(yjsState, 'base64');
-      if (formData) form.formData = formData;
-    }
-
-    await proposal.save();
-
-    res.json({
-      success: true,
-      message: 'Form updated successfully',
-      form: proposal.getForm(req.params.formKey)
-    });
-
-  } catch (error) {
-    console.error('Update proposal form error:', error);
-    res.status(500).json({
+  // Only PI can submit
+  const isPI = proposal.createdBy._id.toString() === req.user._id.toString();
+  if (!isPI) {
+    return res.status(403).json({
       success: false,
-      message: error.message || 'Server error updating form',
-      error: error.message
+      message: 'Only Principal Investigator can submit the proposal'
     });
   }
-};
 
-// @desc    Upload PDF for a specific form
-// @route   POST /api/proposals/:id/forms/:formKey/upload-pdf
-// @access  Private (USER, SUPER_ADMIN)
-export const uploadFormPdf = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
-
-    const { pdfUrl } = req.body;
-
-    if (!pdfUrl) {
-      return res.status(400).json({
-        success: false,
-        message: 'PDF URL is required'
-      });
-    }
-
-    const form = proposal.getForm(req.params.formKey);
-
-    if (form) {
-      if (!form.originalPdfs) form.originalPdfs = [];
-      form.originalPdfs.push(pdfUrl);
-      form.uploadedBy = req.user._id;
-      form.uploadedAt = new Date();
-    } else {
-      // Create new form with PDF
-      proposal.forms.push({
-        formKey: req.params.formKey,
-        formLabel: req.params.formKey,
-        originalPdfs: [pdfUrl],
-        uploadedBy: req.user._id,
-        uploadedAt: new Date()
-      });
-    }
-
-    await proposal.save();
-
-    res.json({
-      success: true,
-      message: 'PDF uploaded successfully',
-      form: proposal.getForm(req.params.formKey)
-    });
-
-  } catch (error) {
-    console.error('Upload form PDF error:', error);
-    res.status(500).json({
+  // Check if already submitted
+  if (proposal.status !== 'DRAFT') {
+    return res.status(400).json({
       success: false,
-      message: 'Server error uploading PDF',
-      error: error.message
+      message: 'Proposal has already been submitted'
     });
   }
-};
 
-// ============= SUBMISSION & STATUS =============
-
-// @desc    Submit proposal (draft → submitted)
-// @route   POST /api/proposals/:id/submit
-// @access  Private (USER, SUPER_ADMIN)
-export const submitProposal = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
-
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
-
-    const isCreator = proposal.createdBy.toString() === req.user._id.toString();
-    const isSuperAdmin = req.user.roles.includes('SUPER_ADMIN');
-
-    if (!isCreator && !isSuperAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to submit this proposal'
-      });
-    }
-
-    if (proposal.status !== 'draft') {
-      return res.status(400).json({
-        success: false,
-        message: 'Proposal is not in draft status'
-      });
-    }
-
-    // Update forms from request body
-    const { forms, signatures } = req.body;
-    
-    console.log(`📝 Updating proposal ${proposal._id} with ${forms?.length || 0} forms and signatures`);
-    
-    if (forms && Array.isArray(forms)) {
-      forms.forEach(formData => {
-        const existingFormIndex = proposal.forms.findIndex(f => f.formKey === formData.formKey);
-        
-        if (existingFormIndex !== -1) {
-          // Update existing form
-          console.log(`  ✏️ Updating form: ${formData.formKey}`);
-          proposal.forms[existingFormIndex] = {
-            ...proposal.forms[existingFormIndex].toObject(),
-            ...formData,
-            lastModified: new Date(),
-            lastModifiedBy: req.user._id
-          };
-        } else {
-          // Add new form
-          console.log(`  ➕ Adding new form: ${formData.formKey}`);
-          proposal.forms.push({
-            ...formData,
-            lastModifiedBy: req.user._id,
-            uploadedBy: req.user._id
-          });
-        }
-      });
-    }
-
-    // Store signatures in metadata
-    if (signatures) {
-      console.log(`  📷 Storing ${Object.keys(signatures).length} signatures in metadata`);
-      proposal.metadata = {
-        ...proposal.metadata,
-        signatures
-      };
-    }
-
-    // Validate that all required forms are present
-    const requiredForms = ['formi', 'formia', 'formix', 'formx', 'formxi', 'formxii'];
-    const submittedFormKeys = proposal.forms.map(f => f.formKey);
-    const missingForms = requiredForms.filter(formKey => !submittedFormKeys.includes(formKey));
-    
-    if (missingForms.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Missing required forms: ${missingForms.join(', ')}`
-      });
-    }
-
-    proposal.updateStatus('submitted', req.user._id);
-    await proposal.save();
-
-    console.log(`✅ Proposal ${proposal.proposalNumber} submitted by ${req.user.fullName}`);
-    console.log(`   - Forms: ${proposal.forms.length}`);
-    console.log(`   - Signatures: ${Object.keys(proposal.metadata?.signatures || {}).length}`);
-    console.log(`   - Status: ${proposal.status}`);
-
-    const populatedProposal = await Proposal.findById(proposal._id)
-      .populate('createdBy', 'fullName email');
-
-    res.json({
-      success: true,
-      message: 'Proposal submitted successfully',
-      proposal: populatedProposal
-    });
-
-  } catch (error) {
-    console.error('Submit proposal error:', error);
-    res.status(500).json({
+  // Validate all forms are filled
+  const requiredForms = ['formI', 'formIA', 'formIX', 'formX', 'formXI', 'formXII'];
+  const missingForms = requiredForms.filter(form => !proposal.forms[form] || proposal.forms[form].length === 0);
+  
+  if (missingForms.length > 0) {
+    return res.status(400).json({
       success: false,
-      message: 'Server error submitting proposal',
-      error: error.message
+      message: `Please complete all forms. Missing: ${missingForms.join(', ')}`
     });
   }
-};
 
-// @desc    Update proposal status
-// @route   PUT /api/proposals/:id/status
-// @access  Private (Committee members, SUPER_ADMIN)
-export const updateProposalStatus = async (req, res) => {
-  try {
-    const proposal = await Proposal.findById(req.params.id);
+  // Update status to AI_EVALUATION
+  proposal.status = 'AI_EVALUATION';
+  proposal.currentVersion = 1;
+  await proposal.save();
 
-    if (!proposal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Proposal not found'
-      });
-    }
-
-    const { newStatus } = req.body;
-
-    if (!newStatus) {
-      return res.status(400).json({
-        success: false,
-        message: 'New status is required'
-      });
-    }
-
-    // Validate status transition (add your business logic)
-    proposal.updateStatus(newStatus, req.user._id);
-    await proposal.save();
-
-    console.log(`🔄 Proposal ${proposal.proposalNumber} status changed to ${newStatus} by ${req.user.fullName}`);
-
-    res.json({
-      success: true,
-      message: 'Proposal status updated successfully',
-      proposal
-    });
-
-  } catch (error) {
-    console.error('Update proposal status error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating status',
-      error: error.message
-    });
-  }
-};
-
-// ============= ROLE-SPECIFIC PROPOSAL FETCHING =============
-
-// @desc    Get proposals for investigator (same as my-proposals)
-// @route   GET /api/proposals/investigator
-// @access  Private (USER)
-export const getInvestigatorProposals = async (req, res) => {
-  try {
-    const proposals = await Proposal.find({ 
-      createdBy: req.user._id
-    })
-    .populate('createdBy', 'fullName email')
-    .sort({ createdAt: -1 });
-
-    // Transform data to match frontend expectations
-    const transformedProposals = proposals.map(proposal => ({
-      id: proposal._id,
+  // Create version 1
+  const version = await ProposalVersion.create({
+    proposalId: proposal._id,
+    versionNumber: 1,
+    commitMessage: 'Initial submission',
+    forms: proposal.forms,
+    proposalInfo: {
       title: proposal.title,
-      status: proposal.status,
-      stageOwner: getStageOwner(proposal.status),
-      domain: proposal.tags?.[0] || 'Not specified',
-      submissionDate: proposal.submittedAt,
-      lastUpdated: proposal.updatedAt,
-      budget: proposal.projectOutlay ? parseFloat(proposal.projectOutlay.toString()) : 0,
-      hasComments: proposal.comments?.length > 0
-    }));
+      fundingMethod: proposal.fundingMethod,
+      principalAgency: proposal.principalAgency,
+      subAgencies: proposal.subAgencies,
+      projectLeader: proposal.projectLeader,
+      projectCoordinator: proposal.projectCoordinator,
+      durationMonths: proposal.durationMonths,
+      outlayLakhs: proposal.outlayLakhs
+    },
+    createdBy: req.user._id
+  });
 
-    res.json({
-      success: true,
-      proposals: transformedProposals
-    });
-  } catch (error) {
-    console.error('Get investigator proposals error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching proposals'
-    });
-  }
-};
-
-// @desc    Get proposals for CMPDI members
-// @route   GET /api/proposals/cmpdi
-// @access  Private (CMPDI_MEMBER)
-export const getCMPDIProposals = async (req, res) => {
-  try {
-    const proposals = await Proposal.find({
-      status: { 
-        $in: [
-          'cmpdi_review',
-          'expert_review',
-          'cmpdi_clarification_requested',
-          'cmpdi_approved',
-          'cmpdi_rejected'
-        ]
-      }
-    })
-    .populate('createdBy', 'fullName email organisationName')
-    .populate('assignedExperts.expert', 'fullName email')
-    .sort({ submittedAt: -1 });
-
-    // Transform data to match frontend expectations
-    const transformedProposals = proposals.map(proposal => ({
-      id: proposal._id,
-      title: proposal.title,
-      principalInvestigator: proposal.createdBy?.fullName,
-      organization: proposal.createdBy?.organisationName,
-      submittedDate: proposal.submittedAt,
-      domain: proposal.tags?.[0] || 'Not specified',
-      subStatus: proposal.status,
-      assignedExperts: proposal.assignedExperts?.map(e => e.expert?.fullName).filter(Boolean) || [],
-      expertReportsReceived: proposal.assignedExperts?.filter(e => e.reviewSubmitted).length || 0,
-      clarificationRequested: proposal.status === 'cmpdi_clarification_requested'
-    }));
-
-    res.json({
-      success: true,
-      proposals: transformedProposals
-    });
-  } catch (error) {
-    console.error('Get CMPDI proposals error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching proposals'
-    });
-  }
-};
-
-// @desc    Get proposals for Expert Reviewers
-// @route   GET /api/proposals/expert
-// @access  Private (EXPERT_REVIEWER)
-export const getExpertProposals = async (req, res) => {
-  try {
-    const proposals = await Proposal.find({
-      'assignedExperts.expert': req.user._id
-    })
-    .populate('createdBy', 'fullName email organisationName')
-    .sort({ submittedAt: -1 });
-
-    // Transform data to match frontend expectations
-    const transformedProposals = proposals.map(proposal => {
-      const expertAssignment = proposal.assignedExperts?.find(
-        e => e.expert.toString() === req.user._id.toString()
+  // Trigger AI evaluation (async)
+  aiService.evaluateProposal({
+    proposalCode: proposal.proposalCode,
+    title: proposal.title,
+    forms: proposal.forms,
+    ...proposal.toObject()
+  }).then(async (aiResult) => {
+    if (aiResult.success) {
+      // Upload AI report to S3
+      const uploadResult = await storageService.uploadAIReport(
+        aiResult.aiReport,
+        proposal.proposalCode,
+        1
       );
-      
-      return {
-        id: proposal._id,
-        title: proposal.title,
-        principalInvestigator: proposal.createdBy?.fullName,
-        organization: proposal.createdBy?.organisationName,
-        assignedDate: expertAssignment?.assignedAt,
-        dueDate: null, // TODO: Add due date logic if needed
-        reviewStatus: expertAssignment?.reviewSubmitted ? 'submitted' : 'pending',
-        domain: proposal.tags?.[0] || 'Not specified'
-      };
-    });
 
-    res.json({
-      success: true,
-      proposals: transformedProposals
-    });
-  } catch (error) {
-    console.error('Get expert proposals error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching proposals'
-    });
-  }
-};
+      if (uploadResult.success) {
+        // Update version with AI report URL
+        version.aiReportUrl = uploadResult.url;
+        await version.save();
 
-// @desc    Get proposals for TSSRC members
-// @route   GET /api/proposals/tssrc
-// @access  Private (TSSRC_MEMBER)
-export const getTSSRCProposals = async (req, res) => {
-  try {
-    const proposals = await Proposal.find({
-      status: { 
-        $in: [
-          'tssrc_review',
-          'tssrc_clarification_requested',
-          'tssrc_approved',
-          'tssrc_rejected'
-        ]
-      }
-    })
-    .populate('createdBy', 'fullName email organisationName')
-    .sort({ submittedAt: -1 });
-
-    // Transform data to match frontend expectations
-    const transformedProposals = proposals.map(proposal => ({
-      id: proposal._id,
-      title: proposal.title,
-      principalInvestigator: proposal.createdBy?.fullName,
-      organization: proposal.createdBy?.organisationName,
-      submittedDate: proposal.submittedAt,
-      subStatus: proposal.status,
-      cmpdiSummary: proposal.cmpdiReview?.remarks || 'Pending',
-      domain: proposal.tags?.[0] || 'Not specified'
-    }));
-
-    res.json({
-      success: true,
-      proposals: transformedProposals
-    });
-  } catch (error) {
-    console.error('Get TSSRC proposals error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching proposals'
-    });
-  }
-};
-
-// @desc    Get proposals for SSRC members
-// @route   GET /api/proposals/ssrc
-// @access  Private (SSRC_MEMBER)
-export const getSSRCProposals = async (req, res) => {
-  try {
-    const proposals = await Proposal.find({
-      status: { 
-        $in: [
-          'ssrc_review',
-          'ssrc_approved',
-          'ssrc_rejected'
-        ]
-      }
-    })
-    .populate('createdBy', 'fullName email organisationName')
-    .sort({ submittedAt: -1 });
-
-    // Transform data to match frontend expectations
-    const transformedProposals = proposals.map(proposal => ({
-      id: proposal._id,
-      title: proposal.title,
-      principalInvestigator: proposal.createdBy?.fullName,
-      organization: proposal.createdBy?.organisationName,
-      submittedDate: proposal.submittedAt,
-      subStatus: proposal.status,
-      tssrcSummary: proposal.tssrcReview?.remarks || 'Pending',
-      cmpdiSummary: proposal.cmpdiReview?.remarks || 'Pending',
-      domain: proposal.tags?.[0] || 'Not specified'
-    }));
-
-    res.json({
-      success: true,
-      proposals: transformedProposals
-    });
-  } catch (error) {
-    console.error('Get SSRC proposals error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching proposals'
-    });
-  }
-};
-
-// Helper function to get stage owner based on status
-function getStageOwner(status) {
-  if (status === 'draft') return 'Principal Investigator';
-  if (status?.includes('cmpdi')) return 'CMPDI';
-  if (status?.includes('expert')) return 'Expert Reviewer';
-  if (status?.includes('tssrc')) return 'TSSRC';
-  if (status?.includes('ssrc')) return 'SSRC';
-  if (status?.includes('project')) return 'Project Team';
-  return 'System';
-}
-
-// Placeholder functions for remaining endpoints
-// These need full implementation based on your business logic
-
-export const inviteCollaborator = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const respondToInvitation = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const removeCollaborator = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const updateCollaboratorPermissions = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const assignCMPDIMember = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const assignExpertReviewer = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const submitExpertReview = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const submitCMPDIDecision = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const assignTSSRCMember = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const submitTSSRCDecision = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const assignSSRCMember = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const submitSSRCDecision = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const addComment = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const getComments = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const uploadDocument = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const getDocuments = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const deleteDocument = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const addMonitoringLog = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const getMonitoringLogs = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const triggerAIEvaluation = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const getAIEvaluation = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const getProposalStats = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-export const getWorkflowTimeline = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Not implemented yet' });
-};
-
-// ============= DRAFT SAVE/LOAD OPERATIONS =============
-
-// @desc    Save proposal draft (create or update)
-// @route   POST /api/proposals/draft
-// @access  Private (USER, SUPER_ADMIN)
-export const saveDraft = async (req, res) => {
-  try {
-    const {
-      proposalId,
-      title,
-      researchFundingMethod,
-      principalImplementingAgency,
-      subImplementingAgency,
-      projectLeader,
-      projectCoordinator,
-      projectDuration,
-      projectOutlay,
-      forms,
-      signatures
-    } = req.body;
-
-    // If proposalId exists, update existing draft
-    if (proposalId) {
-      const proposal = await Proposal.findById(proposalId);
-
-      if (!proposal) {
-        return res.status(404).json({
-          success: false,
-          message: 'Proposal not found'
+        // Add to proposal's AI reports array
+        proposal.aiReports.push({
+          version: 1,
+          reportUrl: uploadResult.url,
+          generatedAt: new Date()
         });
+
+        // Update status to CMPDI_REVIEW
+        proposal.status = 'CMPDI_REVIEW';
+        await proposal.save();
+
+        // Send notification email to PI
+        await emailService.sendProposalSubmittedEmail(
+          proposal.createdBy.email,
+          proposal.createdBy.fullName,
+          proposal.proposalCode,
+          proposal.title
+        );
       }
-
-      // Check if user owns the proposal
-      if (proposal.createdBy.toString() !== req.user._id.toString()) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to update this proposal'
-        });
-      }
-
-      // Only allow updating drafts
-      if (proposal.status !== 'draft') {
-        return res.status(400).json({
-          success: false,
-          message: 'Can only update proposals in draft status'
-        });
-      }
-
-      // Update proposal fields
-      if (title) proposal.title = title;
-      if (researchFundingMethod) proposal.researchFundingMethod = researchFundingMethod;
-      if (principalImplementingAgency) proposal.principalImplementingAgency = principalImplementingAgency;
-      if (subImplementingAgency) proposal.subImplementingAgency = subImplementingAgency;
-      if (projectLeader) proposal.projectLeader = projectLeader;
-      if (projectCoordinator) proposal.projectCoordinator = projectCoordinator;
-      if (projectDuration) proposal.projectDuration = parseInt(projectDuration);
-      if (projectOutlay) proposal.projectOutlay = projectOutlay;
-
-      // Update forms
-      if (forms && Array.isArray(forms)) {
-        forms.forEach(formData => {
-          const existingFormIndex = proposal.forms.findIndex(f => f.formKey === formData.formKey);
-          
-          if (existingFormIndex !== -1) {
-            // Update existing form
-            proposal.forms[existingFormIndex] = {
-              ...proposal.forms[existingFormIndex].toObject(),
-              ...formData,
-              lastModified: new Date(),
-              lastModifiedBy: req.user._id
-            };
-          } else {
-            // Add new form
-            proposal.forms.push({
-              ...formData,
-              lastModifiedBy: req.user._id,
-              uploadedBy: req.user._id
-            });
-          }
-        });
-      }
-
-      // Store signatures in metadata
-      if (signatures) {
-        proposal.metadata = {
-          ...proposal.metadata,
-          signatures
-        };
-      }
-
-      await proposal.save();
-
-      const updatedProposal = await Proposal.findById(proposal._id)
-        .populate('createdBy', 'fullName email');
-
-      return res.status(200).json({
-        success: true,
-        message: 'Draft saved successfully',
-        proposal: updatedProposal
-      });
     }
+  }).catch(error => {
+    console.error('AI evaluation error:', error);
+  });
 
-    // Create new draft proposal
-    const proposalData = {
-      title: title || 'Untitled Proposal',
-      researchFundingMethod: researchFundingMethod || 'S&T of MoC',
-      principalImplementingAgency: principalImplementingAgency || '',
-      subImplementingAgency: subImplementingAgency || '',
-      projectLeader: projectLeader || '',
-      projectCoordinator: projectCoordinator || '',
-      projectDuration: projectDuration ? parseInt(projectDuration) : 12,
-      projectOutlay: projectOutlay || '0',
-      createdBy: req.user._id,
-      forms: forms || [],
-      status: 'draft',
-      collaborators: [{
-        user: req.user._id,
-        role: 'principal_investigator',
-        permissions: {
-          canEdit: true,
-          canComment: true,
-          canInvite: true
-        },
-        status: 'accepted'
-      }],
-      metadata: signatures ? { signatures } : {}
-    };
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'PROPOSAL_SUBMITTED',
+    proposalId: proposal._id,
+    details: { proposalCode: proposal.proposalCode },
+    ipAddress: req.ip
+  });
 
-    const proposal = await Proposal.create(proposalData);
+  res.json({
+    success: true,
+    message: 'Proposal submitted successfully. AI evaluation in progress.',
+    data: {
+      proposalCode: proposal.proposalCode,
+      status: proposal.status,
+      version: version.versionNumber
+    }
+  });
+});
 
-    const populatedProposal = await Proposal.findById(proposal._id)
-      .populate('createdBy', 'fullName email');
+/**
+ * @route   GET /api/proposals/:proposalId/track
+ * @desc    Get proposal timeline/tracking info
+ * @access  Private
+ */
+export const getProposalTracking = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  let proposal;
+  if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
+    proposal = await Proposal.findById(proposalId)
+      .populate('timeline.changedBy', 'fullName email roles')
+      .select('proposalCode title status currentVersion timeline createdAt updatedAt');
+  } else {
+    proposal = await Proposal.findOne({ proposalCode: proposalId })
+      .populate('timeline.changedBy', 'fullName email roles')
+      .select('proposalCode title status currentVersion timeline createdAt updatedAt');
+  }
 
-    res.status(201).json({
-      success: true,
-      message: 'Draft created successfully',
-      proposal: populatedProposal
-    });
-
-  } catch (error) {
-    console.error('Save draft error:', error);
-    res.status(500).json({
+  if (!proposal) {
+    return res.status(404).json({
       success: false,
-      message: 'Server error saving draft',
-      error: error.message
+      message: 'Proposal not found'
     });
   }
-};
 
-// @desc    Load user's draft proposals
-// @route   GET /api/proposals/drafts
-// @access  Private
-export const getDrafts = async (req, res) => {
-  try {
-    const drafts = await Proposal.find({
-      createdBy: req.user._id,
-      status: 'draft'
-    })
-      .populate('createdBy', 'fullName email')
-      .sort({ updatedAt: -1 })
-      .limit(10);
-
-    res.status(200).json({
-      success: true,
-      count: drafts.length,
-      drafts
-    });
-  } catch (error) {
-    console.error('Get drafts error:', error);
-    res.status(500).json({
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
       success: false,
-      message: 'Server error fetching drafts',
-      error: error.message
+      message: 'You do not have access to this proposal'
     });
   }
-};
+
+  // Get version history
+  const versions = await ProposalVersion.find({ proposalId: proposal._id })
+    .select('versionNumber commitMessage createdAt createdBy aiReportUrl')
+    .populate('createdBy', 'fullName email')
+    .sort({ versionNumber: 1 });
+
+  res.json({
+    success: true,
+    data: {
+      proposal,
+      versions,
+      timeline: proposal.timeline
+    }
+  });
+});
+
+/**
+ * @route   PATCH /api/proposals/:proposalId/info
+ * @desc    Update proposal information (PI only)
+ * @access  Private
+ */
+export const updateProposalInfo = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const {
+    title,
+    fundingMethod,
+    principalAgency,
+    subAgencies,
+    projectLeader,
+    projectCoordinator,
+    durationMonths,
+    outlayLakhs
+  } = req.body;
+
+  const proposal = await findProposal(proposalId);
+
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Check if user is PI
+  const createdById = proposal.createdBy?._id || proposal.createdBy;
+  if (createdById.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only Principal Investigator can update proposal information'
+    });
+  }
+
+  // Update fields
+  if (title !== undefined) proposal.title = title;
+  if (fundingMethod !== undefined) proposal.fundingMethod = fundingMethod;
+  if (principalAgency !== undefined) proposal.principalAgency = principalAgency;
+  if (subAgencies !== undefined) proposal.subAgencies = subAgencies;
+  if (projectLeader !== undefined) proposal.projectLeader = projectLeader;
+  if (projectCoordinator !== undefined) proposal.projectCoordinator = projectCoordinator;
+  if (durationMonths !== undefined) proposal.durationMonths = durationMonths;
+  if (outlayLakhs !== undefined) proposal.outlayLakhs = outlayLakhs;
+
+  await proposal.save();
+
+  // Log activity
+  await activityLogger.logActivity({
+    userId: req.user._id,
+    action: 'UPDATE_PROPOSAL_INFO',
+    resourceType: 'PROPOSAL',
+    resourceId: proposal._id,
+    details: { proposalCode: proposal.proposalCode }
+  });
+
+  res.json({
+    success: true,
+    message: 'Proposal information updated successfully',
+    data: proposal
+  });
+});

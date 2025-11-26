@@ -344,34 +344,25 @@ function EditProposalContent() {
         
         // Save the proposal with updated version
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:5000/api/proposals/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    title: proposalData.projectTitle,
-                    description: `${proposalData.implementingAgency} - ${proposalData.domain}`,
-                    domain: proposalData.domain,
-                    budget: parseFloat(proposalData.projectOutlayLakhs) * 100000,
-                    fundingMethod: proposalData.fundingMethod,
-                    implementingAgency: proposalData.implementingAgency,
-                    subImplementingAgency: proposalData.subImplementingAgency,
-                    projectLeader: proposalData.projectLeader,
-                    projectCoordinator: proposalData.projectCoordinator,
-                    coInvestigators: proposalData.coInvestigators,
-                    durationMonths: proposalData.durationMonths ? parseInt(proposalData.durationMonths) : null,
-                    versionComment: commitMessage
-                })
+            const response = await apiClient.put(`/api/proposals/${id}`, {
+                title: proposalData.projectTitle,
+                description: `${proposalData.implementingAgency} - ${proposalData.domain}`,
+                domain: proposalData.domain,
+                budget: parseFloat(proposalData.projectOutlayLakhs) * 100000,
+                fundingMethod: proposalData.fundingMethod,
+                implementingAgency: proposalData.implementingAgency,
+                subImplementingAgency: proposalData.subImplementingAgency,
+                projectLeader: proposalData.projectLeader,
+                projectCoordinator: proposalData.projectCoordinator,
+                coInvestigators: proposalData.coInvestigators,
+                durationMonths: proposalData.durationMonths ? parseInt(proposalData.durationMonths) : null,
+                versionComment: commitMessage
             });
             
-            if (!response.ok) {
+            if (!response.data.success) {
                 throw new Error('Failed to update proposal');
             }
             
-            const data = await response.json();
             console.log('✅ Proposal updated successfully');
         } catch (error) {
             console.error('❌ Error updating proposal:', error);

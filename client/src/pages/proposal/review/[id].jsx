@@ -8,6 +8,18 @@ import Chatbot from '../../../components/Saarthi';
 import jsPDF from 'jspdf';
 import { createPortal } from 'react-dom';
 import apiClient from '../../../utils/api';
+import {
+  createReport,
+  updateReport,
+  submitReport,
+  getReports,
+  addComment
+} from '../../../utils/proposalApi';
+import {
+  updateProposalStatus,
+  requestClarification,
+  assignReviewer
+} from '../../../utils/workflowApi';
 
 // Custom CSS animations matching other pages
 const reviewAnimationStyles = `
@@ -69,6 +81,8 @@ function ReviewProposalContent() {
   const [submittedDecision, setSubmittedDecision] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [showChatbot, setShowChatbot] = useState(true);
+  const [showClarificationModal, setShowClarificationModal] = useState(false);
+  const [clarificationMessage, setClarificationMessage] = useState('');
 
   useEffect(() => {
     const loadProposal = async () => {
@@ -78,9 +92,9 @@ function ReviewProposalContent() {
           setLoading(true);
           
           const response = await apiClient.get(`/api/proposals/${id}`);
-          const proposalData = response.data.proposal || response.data;
+          const proposalData = response.data.data.proposal;
           setProposal(proposalData);
-          setReviewStatus(proposalData.status || 'under_review');
+          setReviewStatus(proposalData.status || 'CMPDI_REVIEW');
           console.log('✅ Proposal loaded for review');
         }
       } catch (error) {
@@ -104,14 +118,12 @@ function ReviewProposalContent() {
     try {
       console.log('💬 Submitting feedback for proposal:', id);
       
-      // Call backend API to submit feedback
-      const response = await apiClient.post(`/api/proposals/${id}/feedback`, { 
-        feedback, 
-        reviewStatus 
+      // Add feedback as a comment
+      await addComment(id, {
+        text: feedback,
+        category: 'GENERAL'
       });
       
-      // Update local state with the updated proposal
-      setProposal(response.data.proposal || response.data);
       setFeedback('');
       setShowSuccessModal(true);
       
@@ -295,6 +307,34 @@ function ReviewProposalContent() {
     setReviewStatus(newStatus);
   };
 
+  const handleRequestClarification = async () => {
+    if (!clarificationMessage.trim()) {
+      alert("Please enter clarification message.");
+      return;
+    }
+
+    try {
+      console.log("Requesting clarification for proposal:", id);
+      
+      await requestClarification(id, {
+        message: clarificationMessage
+      });
+      
+      setClarificationMessage('');
+      setShowClarificationModal(false);
+      
+      alert('Clarification request sent successfully!');
+      
+      // Reload proposal to reflect updated status
+      const response = await apiClient.get(`/api/proposals/${id}`);
+      setProposal(response.data.data.proposal);
+      
+    } catch (error) {
+      console.error("Error requesting clarification:", error);
+      alert("Failed to request clarification. Please try again.");
+    }
+  };
+
   const handleSubmitDecision = async () => {
     // First show confirmation modal
     setShowDecisionConfirm(true);
@@ -316,14 +356,16 @@ function ReviewProposalContent() {
     setCommitting(true);
     
     try {
-      // API call to submit decision (real implementation would go here)
       console.log("Submitting decision:", { proposalId: id, reviewStatus, commitMessage });
       
-      // Mock decision submission
-      setProposal(prev => ({
-        ...prev,
-        status: reviewStatus
-      }));
+      // Update proposal status via backend API
+      const response = await updateProposalStatus(id, {
+        newStatus: reviewStatus,
+        comments: commitMessage
+      });
+      
+      // Update local state with the updated proposal
+      setProposal(response.proposal);
       
       setShowCommitModal(false);
       setCommitting(false);
@@ -630,9 +672,9 @@ function ReviewProposalContent() {
                   
                   <div className="space-y-3">
                     {[
-                      { value: 'approved', label: 'Approve', color: 'green' },
-                      { value: 'needs_revision', label: 'Needs Revision', color: 'yellow' },
-                      { value: 'rejected', label: 'Reject', color: 'red' }
+                      { value: 'APPROVED', label: 'Approve', color: 'green' },
+                      { value: 'REVISION_REQUESTED', label: 'Needs Revision', color: 'yellow' },
+                      { value: 'REJECTED', label: 'Reject', color: 'red' }
                     ].map((option) => (
                       <label key={option.value} className="flex items-center cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
                         <input
@@ -661,7 +703,7 @@ function ReviewProposalContent() {
                     ))}
                   </div>
 
-                  {reviewStatus !== 'under_review' && (
+                  {reviewStatus !== 'CMPDI_REVIEW' && reviewStatus !== 'AI_EVALUATION' && (
                     <button
                       onClick={handleSubmitDecision}
                       className="w-full mt-4 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105"
@@ -669,6 +711,13 @@ function ReviewProposalContent() {
                       Submit Decision
                     </button>
                   )}
+                  
+                  <button
+                    onClick={() => setShowClarificationModal(true)}
+                    className="w-full mt-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-yellow-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105"
+                  >
+                    Request Clarification
+                  </button>
                 </div>
 
                 {/* Feedback Section */}
@@ -862,6 +911,50 @@ function ReviewProposalContent() {
                 >
                   Continue Review
                 </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {/* Clarification Request Modal */}
+        {showClarificationModal && createPortal(
+          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
+            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-black mb-2">Request Clarification</h3>
+                <p className="text-gray-500 mb-6">Ask the Principal Investigator for additional information or clarification</p>
+                
+                <textarea
+                  value={clarificationMessage}
+                  onChange={(e) => setClarificationMessage(e.target.value)}
+                  placeholder="Enter your clarification request here..."
+                  className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-black placeholder-gray-500 mb-4"
+                />
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowClarificationModal(false);
+                      setClarificationMessage('');
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRequestClarification}
+                    disabled={!clarificationMessage.trim()}
+                    className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-2 px-6 rounded-lg font-semibold hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+                  >
+                    Send Request
+                  </button>
+                </div>
               </div>
             </div>
           </div>,

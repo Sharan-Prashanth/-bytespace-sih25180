@@ -1,502 +1,722 @@
+/**
+ * Collaboration Service - In-Memory State Management Layer
+ * 
+ * This service acts as an intermediary layer between the frontend and database,
+ * managing real-time collaboration state, active users, and proposal data caching.
+ * 
+ * Key Features:
+ * - Room-based collaboration per proposal
+ * - Active user tracking with presence detection
+ * - In-memory proposal state caching
+ * - Optimistic updates with database sync
+ * - Auto-save and conflict resolution
+ */
+
 import Proposal from '../models/Proposal.js';
-import Version from '../models/Version.js';
+import ProposalVersion from '../models/ProposalVersion.js';
+import User from '../models/User.js';
+import mongoose from 'mongoose';
 
-/**
- * Collaboration Service using Socket.IO for Presence/Awareness
- * 
- * NOTE: Editor synchronization is now handled by Yjs/Hocuspocus.
- * Socket.IO is used ONLY for:
- * - Room-based presence (who's viewing/editing)
- * - Active user tracking and broadcasting
- * - Cursor positions and selections (awareness)
- * - User activity indicators
- * 
- * Yjs handles:
- * - CRDT-based editor content synchronization
- * - Conflict resolution
- * - Undo/redo across clients
- * - Persistence to MongoDB
- */
+class CollaborationService {
+  constructor() {
+    // Map of proposalId -> Room data
+    this.rooms = new Map();
+    
+    // Map of socketId -> user session data
+    this.sessions = new Map();
+    
+    // Sync queue for database updates
+    this.syncQueue = new Map();
+    
+    // Auto-save timers
+    this.autoSaveTimers = new Map();
+    
+    // Configuration
+    this.config = {
+      autoSaveInterval: 120000, // 2 minutes
+      roomTimeout: 300000, // 5 minutes of inactivity before room cleanup
+      maxCacheSize: 100, // Maximum number of rooms to keep in memory
+      syncDebounce: 5000 // 5 seconds debounce for DB sync
+    };
 
-// Store active rooms and users
-// Structure: { proposalId: { users: Map<socketId, userData>, lastActivity: Date } }
-const activeRooms = new Map();
-
-// Store socket to user mapping
-const socketUsers = new Map();
-
-/**
- * Initialize Socket.IO collaboration
- */
-export function initializeCollaboration(io) {
-  console.log('🔌 Initializing Socket.IO collaboration service...');
-
-  // Middleware for authentication
-  io.use(async (socket, next) => {
-    try {
-      const token = socket.handshake.auth.token;
-      const userId = socket.handshake.auth.userId;
-      const userName = socket.handshake.auth.userName;
-      const userEmail = socket.handshake.auth.userEmail;
-
-      if (!token || !userId) {
-        return next(new Error('Authentication required'));
-      }
-
-      // Attach user info to socket
-      socket.userId = userId;
-      socket.userName = userName || 'Anonymous';
-      socket.userEmail = userEmail || '';
-
-      next();
-    } catch (error) {
-      next(new Error('Authentication failed'));
-    }
-  });
-
-  io.on('connection', (socket) => {
-    console.log(`✅ User connected: ${socket.userName} (${socket.id})`);
-
-    // Store socket-user mapping
-    socketUsers.set(socket.id, {
-      userId: socket.userId,
-      userName: socket.userName,
-      userEmail: socket.userEmail,
-      connectedAt: new Date()
-    });
-
-    /**
-     * Join a proposal room
-     */
-    socket.on('join-proposal', async ({ proposalId }) => {
-      try {
-        console.log(`👤 ${socket.userName} joining proposal: ${proposalId}`);
-
-        // Verify proposal exists and user has access
-        const proposal = await Proposal.findById(proposalId);
-        if (!proposal) {
-          socket.emit('error', { message: 'Proposal not found' });
-          return;
-        }
-
-        // Check authorization (basic check - expand as needed)
-        const isAuthor = proposal.author.toString() === socket.userId;
-        const isAssignedStaff = proposal.assignedStaff?.some(
-          assignment => assignment.user.toString() === socket.userId
-        );
-        // In real scenario, also check if user is reviewer
-
-        if (!isAuthor && !isAssignedStaff) {
-          socket.emit('error', { message: 'Not authorized to access this proposal' });
-          return;
-        }
-
-        // Join the room
-        socket.join(proposalId);
-        socket.currentProposal = proposalId;
-
-        // Initialize room if it doesn't exist
-        if (!activeRooms.has(proposalId)) {
-          activeRooms.set(proposalId, {
-            users: new Map(),
-            lastActivity: new Date()
-          });
-        }
-
-        const room = activeRooms.get(proposalId);
-
-        // Add user to room
-        room.users.set(socket.id, {
-          userId: socket.userId,
-          userName: socket.userName,
-          userEmail: socket.userEmail,
-          color: generateUserColor(socket.userId), // Assign a color for cursor
-          joinedAt: new Date()
-        });
-
-        room.lastActivity = new Date();
-
-        // Get active users list
-        const activeUsers = Array.from(room.users.values()).map(user => ({
-          userId: user.userId,
-          userName: user.userName,
-          userEmail: user.userEmail,
-          color: user.color,
-          joinedAt: user.joinedAt
-        }));
-
-        // Notify user of successful join
-        socket.emit('joined-proposal', {
-          proposalId,
-          activeUsers,
-          userCount: activeUsers.length
-        });
-
-        // Broadcast to others in the room
-        socket.to(proposalId).emit('user-joined', {
-          user: {
-            userId: socket.userId,
-            userName: socket.userName,
-            userEmail: socket.userEmail,
-            color: room.users.get(socket.id).color
-          },
-          activeUsers,
-          userCount: activeUsers.length
-        });
-
-        console.log(`✅ ${socket.userName} joined proposal ${proposalId}. Active users: ${activeUsers.length}`);
-
-      } catch (error) {
-        console.error('Error joining proposal:', error);
-        socket.emit('error', { message: 'Failed to join proposal' });
-      }
-    });
-
-    /**
-     * Leave a proposal room
-     */
-    socket.on('leave-proposal', async ({ proposalId }) => {
-      await handleLeaveProposal(socket, proposalId, io);
-    });
-
-    /**
-     * DEPRECATED: Editor updates now handled by Yjs
-     * Kept for backward compatibility
-     */
-    socket.on('editor-update', ({ proposalId, formId, changes, wordCount, characterCount }) => {
-      console.warn('⚠️  editor-update event is deprecated. Use Yjs for editor synchronization.');
-      // Event kept for backward compatibility but does nothing
-      // Yjs handles all editor synchronization automatically
-    });
-
-    /**
-     * Broadcast cursor position
-     */
-    socket.on('cursor-position', ({ proposalId, formId, position }) => {
-      if (socket.currentProposal !== proposalId) {
-        return;
-      }
-
-      const room = activeRooms.get(proposalId);
-      if (!room) return;
-
-      socket.to(proposalId).emit('cursor-position', {
-        formId,
-        position,
-        user: {
-          userId: socket.userId,
-          userName: socket.userName,
-          color: room.users.get(socket.id)?.color
-        }
-      });
-    });
-
-    /**
-     * Broadcast selection changes
-     */
-    socket.on('selection-change', ({ proposalId, formId, selection }) => {
-      if (socket.currentProposal !== proposalId) {
-        return;
-      }
-
-      const room = activeRooms.get(proposalId);
-      if (!room) return;
-
-      socket.to(proposalId).emit('selection-change', {
-        formId,
-        selection,
-        user: {
-          userId: socket.userId,
-          userName: socket.userName,
-          color: room.users.get(socket.id)?.color
-        }
-      });
-    });
-
-    /**
-     * DEPRECATED: Sync is now handled by Yjs automatically
-     * Kept for backward compatibility
-     */
-    socket.on('request-sync', async ({ proposalId, formId }) => {
-      console.warn('⚠️  request-sync event is deprecated. Yjs handles synchronization automatically.');
-      // Yjs automatically syncs all connected clients
-      // No manual sync needed
-    });
-
-    /**
-     * Manual save trigger
-     */
-    socket.on('manual-save', async ({ proposalId, formId, editorContent, wordCount, characterCount, comment }) => {
-      if (socket.currentProposal !== proposalId) {
-        return;
-      }
-
-      try {
-        const proposal = await Proposal.findById(proposalId);
-        if (!proposal) {
-          socket.emit('save-error', { message: 'Proposal not found' });
-          return;
-        }
-
-        // Capture old state
-        const oldForm = proposal.getForm(formId);
-        const oldData = oldForm ? { ...oldForm.toObject() } : null;
-
-        // Update form
-        proposal.updateForm(formId, editorContent, wordCount || 0, characterCount || 0, socket.userId);
-        await proposal.save();
-
-        // Create version history
-        const newForm = proposal.getForm(formId);
-        await Version.createVersion({
-          proposalId: proposal._id,
-          oldData: oldData,
-          newData: newForm ? newForm.toObject() : null,
-          changeType: 'form_update',
-          affectedForm: formId,
-          userId: socket.userId,
-          comment: comment || `Manual save by ${socket.userName}`
-        });
-
-        // Notify user
-        socket.emit('save-success', {
-          formId,
-          timestamp: new Date(),
-          totalWordCount: proposal.totalWordCount,
-          totalCharacterCount: proposal.totalCharacterCount
-        });
-
-        // Notify others in the room
-        socket.to(proposalId).emit('document-saved', {
-          formId,
-          by: socket.userName,
-          timestamp: new Date()
-        });
-
-        console.log(`💾 Manual save by ${socket.userName} on form ${formId}`);
-
-      } catch (error) {
-        console.error('Error saving:', error);
-        socket.emit('save-error', { message: 'Failed to save' });
-      }
-    });
-
-    /**
-     * Handle disconnection
-     */
-    socket.on('disconnect', async () => {
-      console.log(`❌ User disconnected: ${socket.userName} (${socket.id})`);
-
-      // Remove from socket-user mapping
-      socketUsers.delete(socket.id);
-
-      // Handle leaving current proposal
-      if (socket.currentProposal) {
-        await handleLeaveProposal(socket, socket.currentProposal, io);
-      }
-    });
-
-    /**
-     * Handle errors
-     */
-    socket.on('error', (error) => {
-      console.error(`Socket error for ${socket.userName}:`, error);
-    });
-  });
-
-  // Cleanup inactive rooms periodically
-  setInterval(() => {
-    cleanupInactiveRooms();
-  }, 5 * 60 * 1000); // Every 5 minutes
-
-  console.log('✅ Socket.IO collaboration service initialized');
-}
-
-/**
- * Handle user leaving a proposal room
- */
-async function handleLeaveProposal(socket, proposalId, io) {
-  try {
-    if (!proposalId) return;
-
-    const room = activeRooms.get(proposalId);
-    if (!room) return;
-
-    // Remove user from room
-    const userData = room.users.get(socket.id);
-    room.users.delete(socket.id);
-
-    // Leave the socket room
-    socket.leave(proposalId);
-
-    const remainingUsers = Array.from(room.users.values());
-
-    console.log(`👋 ${socket.userName} left proposal ${proposalId}. Remaining users: ${remainingUsers.length}`);
-
-    // Broadcast to remaining users
-    if (remainingUsers.length > 0) {
-      io.to(proposalId).emit('user-left', {
-        user: {
-          userId: socket.userId,
-          userName: socket.userName
-        },
-        activeUsers: remainingUsers.map(u => ({
-          userId: u.userId,
-          userName: u.userName,
-          userEmail: u.userEmail,
-          color: u.color,
-          joinedAt: u.joinedAt
-        })),
-        userCount: remainingUsers.length
-      });
-    }
-
-    // If no users left, trigger auto-save and cleanup
-    if (remainingUsers.length === 0) {
-      console.log(`💾 Last user left proposal ${proposalId}. Triggering auto-save...`);
-      
-      // Auto-save asynchronously (don't wait for it)
-      autoSaveProposal(proposalId, userData?.userId).catch(err => {
-        console.error(`Failed to auto-save proposal ${proposalId}:`, err);
-      });
-
-      // Remove room after a delay (in case someone reconnects quickly)
-      setTimeout(() => {
-        const currentRoom = activeRooms.get(proposalId);
-        if (currentRoom && currentRoom.users.size === 0) {
-          activeRooms.delete(proposalId);
-          console.log(`🗑️  Cleaned up empty room: ${proposalId}`);
-        }
-      }, 30000); // 30 seconds grace period
-    }
-
-  } catch (error) {
-    console.error('Error handling leave proposal:', error);
+    console.log('🔧 Collaboration Service initialized');
   }
-}
 
-/**
- * Auto-save proposal when last user disconnects
- */
-async function autoSaveProposal(proposalId, userId) {
-  try {
-    console.log(`💾 Auto-saving proposal ${proposalId}...`);
+  /**
+   * Create or get a room for a proposal
+   */
+  async getOrCreateRoom(proposalId) {
+    if (this.rooms.has(proposalId)) {
+      const room = this.rooms.get(proposalId);
+      room.lastActivity = Date.now();
+      return room;
+    }
 
-    const proposal = await Proposal.findById(proposalId);
+    console.log(`📦 Creating new room for proposal: ${proposalId}`);
+    
+    // Load proposal from database
+    const proposal = await this._loadProposalFromDB(proposalId);
+    
     if (!proposal) {
-      console.log(`Proposal ${proposalId} not found, skipping auto-save`);
-      return;
+      throw new Error('Proposal not found');
     }
 
-    // Just ensure it's saved (it might already be saved by auto-save)
-    // We're not creating version history here as that's for manual saves
-    await proposal.save();
+    const room = {
+      proposalId,
+      proposalCode: proposal.proposalCode,
+      
+      // Proposal state (loaded from DB, kept in sync)
+      proposalData: this._sanitizeProposalData(proposal),
+      
+      // Active users in this room
+      activeUsers: new Map(), // socketId -> { userId, user, joinedAt, lastActivity }
+      
+      // Pending changes (not yet saved to DB)
+      pendingChanges: {
+        forms: {},
+        metadata: {},
+        lastModified: null,
+        modifiedBy: null
+      },
+      
+      // Room metadata
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+      lastSyncedAt: Date.now(),
+      isDirty: false, // Has unsaved changes
+      
+      // Lock for concurrent updates
+      isLocked: false,
+      lockOwner: null,
+      
+      // Version tracking
+      currentVersion: proposal.currentVersion || 0.1,
+      lastAutoSaveVersion: proposal.currentVersion || 0.1
+    };
 
-    console.log(`✅ Auto-saved proposal ${proposalId}`);
-
-  } catch (error) {
-    console.error(`Error auto-saving proposal ${proposalId}:`, error);
-    throw error;
+    this.rooms.set(proposalId, room);
+    
+    // Start auto-save timer for this room
+    this._startAutoSaveTimer(proposalId);
+    
+    return room;
   }
-}
 
-/**
- * Cleanup inactive rooms
- */
-function cleanupInactiveRooms() {
-  const now = new Date();
-  const timeout = 60 * 60 * 1000; // 1 hour
-
-  for (const [proposalId, room] of activeRooms.entries()) {
-    if (room.users.size === 0 && (now - room.lastActivity) > timeout) {
-      activeRooms.delete(proposalId);
-      console.log(`🗑️  Cleaned up inactive room: ${proposalId}`);
+  /**
+   * Add user to a room
+   */
+  async joinRoom(proposalId, socket, user) {
+    const room = await this.getOrCreateRoom(proposalId);
+    
+    // Check user access permissions
+    const hasAccess = await this._checkUserAccess(room.proposalData, user);
+    if (!hasAccess) {
+      throw new Error('Access denied to this proposal');
     }
-  }
-}
 
-/**
- * Generate a consistent color for a user based on their ID
- */
-function generateUserColor(userId) {
-  const colors = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
-    '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B195', '#C06C84',
-    '#6C5B7B', '#355C7D', '#F67280', '#C06C84', '#355C7D'
-  ];
+    // Add user to room
+    const userSession = {
+      socketId: socket.id,
+      userId: user._id.toString(),
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        roles: user.roles
+      },
+      joinedAt: Date.now(),
+      lastActivity: Date.now(),
+      cursor: null,
+      selection: null
+    };
 
-  // Generate consistent index from userId
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
-  }
+    room.activeUsers.set(socket.id, userSession);
+    this.sessions.set(socket.id, {
+      proposalId,
+      userId: user._id.toString(),
+      user: userSession.user
+    });
 
-  return colors[Math.abs(hash) % colors.length];
-}
+    room.lastActivity = Date.now();
 
-/**
- * Get active users for a proposal (for REST API)
- */
-export function getActiveUsers(proposalId) {
-  const room = activeRooms.get(proposalId);
-  if (!room) {
-    return [];
-  }
+    console.log(`👤 User ${user.fullName} joined room ${proposalId} (${room.activeUsers.size} active users)`);
 
-  return Array.from(room.users.values()).map(user => ({
-    userId: user.userId,
-    userName: user.userName,
-    userEmail: user.userEmail,
-    color: user.color,
-    joinedAt: user.joinedAt
-  }));
-}
-
-/**
- * Get room status (for REST API)
- */
-export function getRoomStatus(proposalId) {
-  const room = activeRooms.get(proposalId);
-  if (!room) {
     return {
-      active: false,
-      userCount: 0,
-      users: []
+      room,
+      userSession,
+      activeUsers: this._getActiveUsersList(room)
     };
   }
 
-  return {
-    active: true,
-    userCount: room.users.size,
-    users: Array.from(room.users.values()).map(user => ({
-      userId: user.userId,
-      userName: user.userName,
-      userEmail: user.userEmail,
-      color: user.color,
-      joinedAt: user.joinedAt
-    })),
-    lastActivity: room.lastActivity
-  };
-}
+  /**
+   * Remove user from a room
+   */
+  async leaveRoom(proposalId, socketId) {
+    const room = this.rooms.get(proposalId);
+    if (!room) return;
 
-/**
- * Get all active rooms (for monitoring)
- */
-export function getAllActiveRooms() {
-  const rooms = [];
-  for (const [proposalId, room] of activeRooms.entries()) {
-    rooms.push({
-      proposalId,
-      userCount: room.users.size,
-      lastActivity: room.lastActivity
-    });
+    const userSession = room.activeUsers.get(socketId);
+    if (userSession) {
+      console.log(`👋 User ${userSession.user.fullName} left room ${proposalId}`);
+      room.activeUsers.delete(socketId);
+      this.sessions.delete(socketId);
+    }
+
+    room.lastActivity = Date.now();
+
+    // If room is empty and has no pending changes, schedule cleanup
+    if (room.activeUsers.size === 0 && !room.isDirty) {
+      this._scheduleRoomCleanup(proposalId);
+    }
+
+    return {
+      room,
+      activeUsers: this._getActiveUsersList(room)
+    };
   }
-  return rooms;
+
+  /**
+   * Convert frontend form ID to database form key
+   * Frontend: 'formi', 'formia', 'formix', etc.
+   * Database: 'formI', 'formIA', 'formIX', etc.
+   */
+  _normalizeFormKey(formId) {
+    const mapping = {
+      'formi': 'formI',
+      'formia': 'formIA',
+      'formix': 'formIX',
+      'formx': 'formX',
+      'formxi': 'formXI',
+      'formxii': 'formXII'
+    };
+    return mapping[formId.toLowerCase()] || formId;
+  }
+
+  /**
+   * Update proposal content in room (forms, metadata)
+   * Handles Plate.js editor content for individual forms
+   */
+  async updateProposalContent(proposalId, updates, userId) {
+    const room = this.rooms.get(proposalId);
+    if (!room) {
+      throw new Error('Room not found');
+    }
+
+    // Acquire lock if needed
+    if (room.isLocked && room.lockOwner !== userId) {
+      throw new Error('Proposal is locked by another user');
+    }
+
+    // Handle Plate.js form-specific updates
+    if (updates.formId && updates.editorContent !== undefined) {
+      // Initialize forms object if not exists
+      if (!room.pendingChanges.forms) {
+        room.pendingChanges.forms = room.proposalData?.forms || {};
+      }
+
+      // Convert frontend formId to database key (e.g., 'formia' -> 'formIA')
+      const dbFormKey = this._normalizeFormKey(updates.formId);
+
+      // Update specific form with Plate.js content
+      room.pendingChanges.forms[dbFormKey] = {
+        ...room.pendingChanges.forms[dbFormKey],
+        editorContent: updates.editorContent,
+        wordCount: updates.wordCount || 0,
+        characterCount: updates.characterCount || 0,
+        lastModifiedBy: userId,
+        lastModifiedAt: Date.now()
+      };
+
+      console.log(`✏️ Form ${updates.formId} (${dbFormKey}) in proposal ${proposalId} updated by user ${userId}`);
+    } 
+    // Handle bulk form updates
+    else if (updates.forms) {
+      room.pendingChanges.forms = {
+        ...room.pendingChanges.forms,
+        ...updates.forms
+      };
+    }
+
+    // Handle metadata updates
+    if (updates.metadata) {
+      room.pendingChanges.metadata = {
+        ...room.pendingChanges.metadata,
+        ...updates.metadata
+      };
+    }
+
+    room.pendingChanges.lastModified = Date.now();
+    room.pendingChanges.modifiedBy = userId;
+    room.isDirty = true;
+    room.lastActivity = Date.now();
+
+    // Schedule database sync (debounced)
+    this._scheduleDatabaseSync(proposalId);
+
+    return {
+      success: true,
+      pendingChanges: room.pendingChanges,
+      version: room.currentVersion,
+      formId: updates.formId
+    };
+  }
+
+  /**
+   * Get current room state (for client)
+   */
+  getRoomState(proposalId) {
+    const room = this.rooms.get(proposalId);
+    if (!room) {
+      return null;
+    }
+
+    return {
+      proposalId: room.proposalId,
+      proposalCode: room.proposalCode,
+      proposalData: this._mergeProposalWithPendingChanges(room),
+      activeUsers: this._getActiveUsersList(room),
+      currentVersion: room.currentVersion,
+      isDirty: room.isDirty,
+      lastModified: room.pendingChanges.lastModified,
+      modifiedBy: room.pendingChanges.modifiedBy
+    };
+  }
+
+  /**
+   * Force save room state to database
+   */
+  async saveRoomToDatabase(proposalId, options = {}) {
+    const room = this.rooms.get(proposalId);
+    if (!room) {
+      throw new Error('Room not found');
+    }
+
+    if (!room.isDirty && !options.force) {
+      console.log(`⏭️ Skipping save for ${proposalId} - no changes`);
+      return { success: true, message: 'No changes to save' };
+    }
+
+    console.log(`💾 Saving room ${proposalId} to database...`);
+
+    try {
+      // Find proposal in database
+      const proposal = await Proposal.findOne({
+        $or: [
+          { _id: mongoose.Types.ObjectId.isValid(proposalId) ? proposalId : null },
+          { proposalCode: proposalId }
+        ]
+      });
+
+      if (!proposal) {
+        throw new Error('Proposal not found in database');
+      }
+
+      // Apply pending changes
+      if (Object.keys(room.pendingChanges.forms).length > 0) {
+        proposal.forms = {
+          ...proposal.forms,
+          ...room.pendingChanges.forms
+        };
+      }
+
+      if (Object.keys(room.pendingChanges.metadata).length > 0) {
+        Object.assign(proposal, room.pendingChanges.metadata);
+      }
+
+      // Update version if this is an auto-save
+      if (options.isAutoSave) {
+        // Increment minor version (x.1, x.2, etc.)
+        const baseVersion = Math.floor(room.currentVersion);
+        const minorVersion = Math.round((room.currentVersion - baseVersion) * 10) / 10;
+        room.currentVersion = baseVersion + minorVersion + 0.1;
+        proposal.currentVersion = room.currentVersion;
+      }
+
+      await proposal.save();
+
+      // Clear pending changes
+      room.pendingChanges = {
+        forms: {},
+        metadata: {},
+        lastModified: null,
+        modifiedBy: null
+      };
+      room.isDirty = false;
+      room.lastSyncedAt = Date.now();
+
+      // Update room's proposal data
+      room.proposalData = this._sanitizeProposalData(proposal);
+
+      console.log(`✅ Room ${proposalId} saved to database (version ${room.currentVersion})`);
+
+      return {
+        success: true,
+        version: room.currentVersion,
+        syncedAt: room.lastSyncedAt
+      };
+
+    } catch (error) {
+      console.error(`❌ Error saving room ${proposalId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a major version (commit)
+   */
+  async createMajorVersion(proposalId, commitMessage, userId) {
+    const room = this.rooms.get(proposalId);
+    if (!room) {
+      throw new Error('Room not found');
+    }
+
+    // First, save any pending changes
+    if (room.isDirty) {
+      await this.saveRoomToDatabase(proposalId);
+    }
+
+    // Load fresh proposal from DB
+    const proposal = await this._loadProposalFromDB(proposalId);
+    if (!proposal) {
+      throw new Error('Proposal not found');
+    }
+
+    // Increment major version
+    const newVersion = Math.floor(room.currentVersion) + 1;
+
+    // Create version snapshot
+    const version = await ProposalVersion.create({
+      proposalId: proposal._id,
+      versionNumber: newVersion,
+      commitMessage: commitMessage || `Version ${newVersion}`,
+      forms: proposal.forms,
+      proposalInfo: {
+        title: proposal.title,
+        fundingMethod: proposal.fundingMethod,
+        principalAgency: proposal.principalAgency,
+        subAgencies: proposal.subAgencies,
+        projectLeader: proposal.projectLeader,
+        projectCoordinator: proposal.projectCoordinator,
+        durationMonths: proposal.durationMonths,
+        outlayLakhs: proposal.outlayLakhs
+      },
+      createdBy: userId
+    });
+
+    // Update proposal version
+    proposal.currentVersion = newVersion;
+    await proposal.save();
+
+    // Update room state
+    room.currentVersion = newVersion;
+    room.lastAutoSaveVersion = newVersion;
+    room.proposalData = this._sanitizeProposalData(proposal);
+
+    console.log(`📝 Major version ${newVersion} created for proposal ${proposalId}`);
+
+    return {
+      success: true,
+      version: version,
+      newVersionNumber: newVersion
+    };
+  }
+
+  /**
+   * Get all active rooms (for monitoring)
+   */
+  getActiveRooms() {
+    const rooms = [];
+    for (const [proposalId, room] of this.rooms.entries()) {
+      rooms.push({
+        proposalId,
+        proposalCode: room.proposalCode,
+        activeUsers: room.activeUsers.size,
+        isDirty: room.isDirty,
+        lastActivity: room.lastActivity,
+        currentVersion: room.currentVersion
+      });
+    }
+    return rooms;
+  }
+
+  /**
+   * Cleanup inactive rooms
+   */
+  cleanupInactiveRooms() {
+    const now = Date.now();
+    const timeout = this.config.roomTimeout;
+
+    for (const [proposalId, room] of this.rooms.entries()) {
+      if (room.activeUsers.size === 0 && 
+          (now - room.lastActivity) > timeout && 
+          !room.isDirty) {
+        console.log(`🧹 Cleaning up inactive room: ${proposalId}`);
+        this._clearRoom(proposalId);
+      }
+    }
+  }
+
+  // ==================== PRIVATE METHODS ====================
+
+  /**
+   * Load proposal from database
+   */
+  async _loadProposalFromDB(proposalId) {
+    try {
+      const proposal = await Proposal.findOne({
+        $or: [
+          { _id: mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24 ? proposalId : null },
+          { proposalCode: proposalId }
+        ]
+      })
+      .populate('createdBy', 'fullName email roles')
+      .populate('coInvestigators', 'fullName email roles')
+      .lean();
+
+      return proposal;
+    } catch (error) {
+      console.error(`Error loading proposal ${proposalId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Sanitize proposal data for room storage
+   */
+  _sanitizeProposalData(proposal) {
+    return {
+      _id: proposal._id,
+      proposalCode: proposal.proposalCode,
+      title: proposal.title,
+      status: proposal.status,
+      fundingMethod: proposal.fundingMethod,
+      principalAgency: proposal.principalAgency,
+      subAgencies: proposal.subAgencies,
+      projectLeader: proposal.projectLeader,
+      projectCoordinator: proposal.projectCoordinator,
+      durationMonths: proposal.durationMonths,
+      outlayLakhs: proposal.outlayLakhs,
+      forms: proposal.forms || {},
+      createdBy: proposal.createdBy,
+      coInvestigators: proposal.coInvestigators || [],
+      collaborators: proposal.collaborators || [],
+      currentVersion: proposal.currentVersion,
+      createdAt: proposal.createdAt,
+      updatedAt: proposal.updatedAt
+    };
+  }
+
+  /**
+   * Merge proposal data with pending changes
+   */
+  _mergeProposalWithPendingChanges(room) {
+    const merged = { ...room.proposalData };
+
+    if (room.pendingChanges.forms && Object.keys(room.pendingChanges.forms).length > 0) {
+      merged.forms = {
+        ...merged.forms,
+        ...room.pendingChanges.forms
+      };
+    }
+
+    if (room.pendingChanges.metadata && Object.keys(room.pendingChanges.metadata).length > 0) {
+      Object.assign(merged, room.pendingChanges.metadata);
+    }
+
+    return merged;
+  }
+
+  /**
+   * Check if user has access to proposal
+   */
+  async _checkUserAccess(proposalData, user) {
+    const userId = user._id.toString();
+    
+    // PI check
+    if (proposalData.createdBy && 
+        (proposalData.createdBy._id?.toString() === userId || 
+         proposalData.createdBy.toString() === userId)) {
+      return true;
+    }
+
+    // CI check
+    if (proposalData.coInvestigators?.some(ci => 
+      (ci._id?.toString() === userId || ci.toString() === userId))) {
+      return true;
+    }
+
+    // Collaborator check
+    if (proposalData.collaborators?.some(collab => 
+      (collab.userId?._id?.toString() === userId || 
+       collab.userId?.toString() === userId))) {
+      return true;
+    }
+
+    // Admin/Committee check
+    if (user.roles?.includes('SUPER_ADMIN') ||
+        user.roles?.some(role => ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER'].includes(role))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get list of active users in room
+   */
+  _getActiveUsersList(room) {
+    const users = [];
+    for (const [socketId, session] of room.activeUsers.entries()) {
+      users.push({
+        socketId,
+        userId: session.userId,
+        user: session.user,
+        joinedAt: session.joinedAt,
+        lastActivity: session.lastActivity
+      });
+    }
+    return users;
+  }
+
+  /**
+   * Start auto-save timer for a room
+   */
+  _startAutoSaveTimer(proposalId) {
+    // Clear existing timer
+    if (this.autoSaveTimers.has(proposalId)) {
+      clearInterval(this.autoSaveTimers.get(proposalId));
+    }
+
+    const timer = setInterval(async () => {
+      const room = this.rooms.get(proposalId);
+      if (!room) {
+        clearInterval(timer);
+        this.autoSaveTimers.delete(proposalId);
+        return;
+      }
+
+      // Only auto-save if there are changes and active users
+      if (room.isDirty && room.activeUsers.size > 0) {
+        try {
+          await this.saveRoomToDatabase(proposalId, { isAutoSave: true });
+          console.log(`💾 Auto-saved proposal ${proposalId}`);
+        } catch (error) {
+          console.error(`Error auto-saving proposal ${proposalId}:`, error);
+        }
+      }
+    }, this.config.autoSaveInterval);
+
+    this.autoSaveTimers.set(proposalId, timer);
+  }
+
+  /**
+   * Schedule database sync (debounced)
+   */
+  _scheduleDatabaseSync(proposalId) {
+    // Clear existing timeout
+    if (this.syncQueue.has(proposalId)) {
+      clearTimeout(this.syncQueue.get(proposalId));
+    }
+
+    // Schedule new sync
+    const timeout = setTimeout(async () => {
+      try {
+        await this.saveRoomToDatabase(proposalId);
+      } catch (error) {
+        console.error(`Error syncing proposal ${proposalId}:`, error);
+      }
+      this.syncQueue.delete(proposalId);
+    }, this.config.syncDebounce);
+
+    this.syncQueue.set(proposalId, timeout);
+  }
+
+  /**
+   * Schedule room cleanup
+   */
+  _scheduleRoomCleanup(proposalId) {
+    setTimeout(() => {
+      const room = this.rooms.get(proposalId);
+      if (room && room.activeUsers.size === 0 && !room.isDirty) {
+        this._clearRoom(proposalId);
+      }
+    }, this.config.roomTimeout);
+  }
+
+  /**
+   * Clear room and free memory
+   */
+  _clearRoom(proposalId) {
+    // Clear auto-save timer
+    if (this.autoSaveTimers.has(proposalId)) {
+      clearInterval(this.autoSaveTimers.get(proposalId));
+      this.autoSaveTimers.delete(proposalId);
+    }
+
+    // Clear sync queue
+    if (this.syncQueue.has(proposalId)) {
+      clearTimeout(this.syncQueue.get(proposalId));
+      this.syncQueue.delete(proposalId);
+    }
+
+    // Remove room
+    this.rooms.delete(proposalId);
+    console.log(`🗑️ Room ${proposalId} cleared from memory`);
+  }
+
+  /**
+   * Shutdown service gracefully
+   */
+  async shutdown() {
+    console.log('🔄 Shutting down Collaboration Service...');
+
+    // Save all dirty rooms
+    for (const [proposalId, room] of this.rooms.entries()) {
+      if (room.isDirty) {
+        try {
+          await this.saveRoomToDatabase(proposalId, { force: true });
+          console.log(`💾 Saved room ${proposalId} before shutdown`);
+        } catch (error) {
+          console.error(`Error saving room ${proposalId} during shutdown:`, error);
+        }
+      }
+    }
+
+    // Clear all timers
+    for (const timer of this.autoSaveTimers.values()) {
+      clearInterval(timer);
+    }
+    for (const timeout of this.syncQueue.values()) {
+      clearTimeout(timeout);
+    }
+
+    // Clear all data
+    this.rooms.clear();
+    this.sessions.clear();
+    this.autoSaveTimers.clear();
+    this.syncQueue.clear();
+
+    console.log('✅ Collaboration Service shutdown complete');
+  }
 }
 
-export default {
-  initializeCollaboration,
-  getActiveUsers,
-  getRoomStatus,
-  getAllActiveRooms
-};
+// Singleton instance
+const collaborationService = new CollaborationService();
+
+// Cleanup inactive rooms every 5 minutes
+setInterval(() => {
+  collaborationService.cleanupInactiveRooms();
+}, 300000);
+
+// Graceful shutdown handlers
+process.on('SIGTERM', async () => {
+  await collaborationService.shutdown();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  await collaborationService.shutdown();
+  process.exit(0);
+});
+
+export default collaborationService;

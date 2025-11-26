@@ -11,25 +11,24 @@ import {
   Award
 } from "lucide-react";
 
-// Proposal Status Constants
+// Proposal Status Constants - Match backend enum values exactly
 export const PROPOSAL_STATUS = {
-  DRAFT: 'draft',
-  AI_EVALUATION: 'ai_evaluation',
-  SUBMITTED: 'submitted',
-  CMPDI_REVIEW: 'cmpdi_review',
-  CMPDI_CLARIFICATION: 'cmpdi_clarification_requested',
-  EXPERT_REVIEW: 'expert_review',
-  CMPDI_APPROVED: 'cmpdi_approved',
-  CMPDI_REJECTED: 'cmpdi_rejected',
-  TSSRC_REVIEW: 'tssrc_review',
-  TSSRC_CLARIFICATION: 'tssrc_clarification_requested',
-  TSSRC_APPROVED: 'tssrc_approved',
-  TSSRC_REJECTED: 'tssrc_rejected',
-  SSRC_REVIEW: 'ssrc_review',
-  SSRC_APPROVED: 'ssrc_approved',
-  SSRC_REJECTED: 'ssrc_rejected',
-  PROJECT_ONGOING: 'project_ongoing',
-  PROJECT_COMPLETED: 'project_completed'
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
+  AI_EVALUATION: 'AI_EVALUATION',
+  CMPDI_REVIEW: 'CMPDI_REVIEW',
+  CMPDI_EXPERT_REVIEW: 'CMPDI_EXPERT_REVIEW',
+  CMPDI_APPROVED: 'CMPDI_APPROVED',
+  CMPDI_REJECTED: 'CMPDI_REJECTED',
+  TSSRC_REVIEW: 'TSSRC_REVIEW',
+  TSSRC_APPROVED: 'TSSRC_APPROVED',
+  TSSRC_REJECTED: 'TSSRC_REJECTED',
+  SSRC_REVIEW: 'SSRC_REVIEW',
+  SSRC_APPROVED: 'SSRC_APPROVED',
+  SSRC_REJECTED: 'SSRC_REJECTED',
+  ACCEPTED: 'ACCEPTED',
+  ONGOING: 'ONGOING',
+  COMPLETED: 'COMPLETED'
 };
 
 // Status Display Configuration with professional icons
@@ -40,17 +39,17 @@ export const STATUS_CONFIG = {
     Icon: FileText,
     description: 'Proposal is being prepared'
   },
+  [PROPOSAL_STATUS.SUBMITTED]: {
+    label: 'Submitted',
+    color: 'bg-blue-100 text-black border-blue-300',
+    Icon: TrendingUp,
+    description: 'Submitted for evaluation'
+  },
   [PROPOSAL_STATUS.AI_EVALUATION]: {
     label: 'AI Evaluation',
     color: 'bg-purple-100 text-black border-purple-300',
     Icon: BarChart,
     description: 'Being evaluated by AI'
-  },
-  [PROPOSAL_STATUS.SUBMITTED]: {
-    label: 'Submitted',
-    color: 'bg-blue-100 text-black border-blue-300',
-    Icon: TrendingUp,
-    description: 'Awaiting initial review'
   },
   [PROPOSAL_STATUS.CMPDI_REVIEW]: {
     label: 'CMPDI Review',
@@ -58,13 +57,7 @@ export const STATUS_CONFIG = {
     Icon: Search,
     description: 'Under CMPDI scrutiny'
   },
-  [PROPOSAL_STATUS.CMPDI_CLARIFICATION]: {
-    label: 'Clarification Required',
-    color: 'bg-orange-100 text-black border-orange-300',
-    Icon: AlertCircle,
-    description: 'CMPDI has requested clarifications'
-  },
-  [PROPOSAL_STATUS.EXPERT_REVIEW]: {
+  [PROPOSAL_STATUS.CMPDI_EXPERT_REVIEW]: {
     label: 'Expert Review',
     color: 'bg-indigo-100 text-black border-indigo-300',
     Icon: Users,
@@ -87,12 +80,6 @@ export const STATUS_CONFIG = {
     color: 'bg-cyan-100 text-black border-cyan-300',
     Icon: Search,
     description: 'Under Technical Sub-Committee review'
-  },
-  [PROPOSAL_STATUS.TSSRC_CLARIFICATION]: {
-    label: 'TSSRC Clarification',
-    color: 'bg-amber-100 text-black border-amber-300',
-    Icon: AlertCircle,
-    description: 'TSSRC has requested clarifications'
   },
   [PROPOSAL_STATUS.TSSRC_APPROVED]: {
     label: 'TSSRC Approved',
@@ -124,14 +111,20 @@ export const STATUS_CONFIG = {
     Icon: XCircle,
     description: 'Final rejection'
   },
-  [PROPOSAL_STATUS.PROJECT_ONGOING]: {
-    label: 'Project Ongoing',
+  [PROPOSAL_STATUS.ACCEPTED]: {
+    label: 'Accepted',
+    color: 'bg-green-200 text-black border-green-400',
+    Icon: Award,
+    description: 'Project accepted for implementation'
+  },
+  [PROPOSAL_STATUS.ONGOING]: {
+    label: 'Ongoing',
     color: 'bg-blue-200 text-black border-blue-400',
     Icon: Clock,
     description: 'Project is in progress'
   },
-  [PROPOSAL_STATUS.PROJECT_COMPLETED]: {
-    label: 'Project Completed',
+  [PROPOSAL_STATUS.COMPLETED]: {
+    label: 'Completed',
     color: 'bg-green-200 text-black border-green-400',
     Icon: CheckCircle,
     description: 'Project successfully completed'
