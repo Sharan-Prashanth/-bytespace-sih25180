@@ -119,7 +119,7 @@ export default function Profile() {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await apiClient.put('/api/auth/profile', formData);
+      const response = await apiClient.put(`/api/users/${user._id}`, formData);
       console.log('Response received:', response.status, response.data);
 
       setMessage({ type: "success", text: "Profile updated successfully!" });

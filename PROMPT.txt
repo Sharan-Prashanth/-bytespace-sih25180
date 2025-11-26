@@ -1,0 +1,293 @@
+the proposal submission process.
+
+we expect Reputed Research Organisations/ Academic Institutes in Public & private sector
+(affiliated/recognised by Ministry of Education / DST or any Govt. Body) from India, who have past
+track records and expertise may participate in the research projects alone or along with any Govt.
+Research & Academic Institutions / Organisations and/or any subsidiary of CIL, SCCL, NLCIL.
+Organisation / institute from abroad may participate in the project along with Indian Govt. agencies.
+In above case of multi-institutional projects, the Principal Implementing Agency will enter into a
+formal agreement with all the Sub-implementing agency(s).
+
+they will be the agency who wants to do the project.
+
+for submission, the principal investigator would fill out those six forms and then click on the submit button. after submitting the following process continues.
+
+Central Mine Planning and Design Institute, Ranchi, a Mini Ratna Subsidiary Company of Coal India
+Limited is the Nodal Agency for coordinating and monitoring of S&T projects of MoC. The job of coordination
+involves inviting new research project proposals, carrying out first level scrutiny, placing the
+proposals for consideration of Technical Sub-Committee of SSRC and SSRC, monitor the progress of
+the on-going projects at regular intervals, preparation of S&T Budget Estimates/ Revised Estimates,
+disbursement of funds to the implementing agencies based on the progress of the project, dissemination
+of research findings and provide assistance to the nodal officers of the concerned subsidiary/company
+for promoting their replication in field operations.
+The project proposals, if required, may be sent for expert opinion within CMPDI and outside for their
+opinion on scientific and technical merits of the projects. Nodal Agency may interact with Principal
+Implementing / Sub-implementing Agency(s) regarding any clarification or modification in the project
+proposal. If necessary, Nodal agency may call for / visit the institute/organization and discuss with Project
+leader / Coordinator regarding project proposal. After 1st level scrutiny, Nodal agency will send the Soft
+copies of all project proposal (with comments received from experts), which conforms to S&T Guidelines,
+to all the members of the Technical Sub-Committee of SSRC for their views, as the projects shall be
+deliberated in the meeting of Technical sub-committee of SSRC.
+The Nodal Agency, will keep MoC informed of the commencement and progress of the approved S&T
+projects and provide Agenda papers to Member Secretary for arranging meetings of the Technical Sub-
+Committee of SSRC and SSRC and provide draft minutes of the meeting to the Member secretary of the
+committee(s).
+
+proposal process.
+first the principal investigator submits the proposal, next, cmpdi will carry out first level of scrutiny, placing the
+proposals for consideration of Technical Sub-Committee of SSRC and SSRC
+
+The project proposals, if required, may be sent for expert opinion within CMPDI and outside for their
+opinion on scientific and technical merits of the projects. Nodal Agency may interact with Principal
+Implementing / Sub-implementing Agency(s) regarding any clarification or modification in the project
+proposal. If necessary, Nodal agency may call for / visit the institute/organization and discuss with Project
+leader / Coordinator regarding project proposal.
+
+after this process, Nodal agency will send the Soft
+copies of all project proposal (with comments received from experts), which conforms to S&T Guidelines,
+to all the members of the Technical Sub-Committee of SSRC for their views, as the projects shall be
+deliberated in the meeting of Technical sub-committee of SSRC.
+
+the tssrc committe will check if the proposal is valid and then approves it for the ssrc to consider. the ssrc will be the final one to accept the project.
+
+so, here there are multiple levels. first by cmpdi, they may ask for clarifications, changes, and send the proposal to domain experts within or outside for review.
+
+if they accept, the next thing would be tssrc. the proposal will be discussed in their committee meeting. and they should approve it. after that, ssrc would be given this proposal and they should approve it.
+
+there will be continuous monitoring done after proposal acceptance till the project ends.
+
+PROCEDURE FOR PROCESSING S&T PROJECT PROPOSAL
+Initial scrutiny of the project proposal will be made by the Central Mine Planning and Design Institute
+(CMPDI), which may interact, seek additional information, clarifications and if necessary call for /visit the
+institute for first hand discussions with the project leader/coordinator concerned. While scrutinizing, the
+nodal agency may seek the views of the internal and external experts on the proposal. After 1st level
+scrutiny, Nodal agency will send the Soft copies of all project proposal with comments of the experts, to
+all the members of the Technical Sub-Committee of SSRC before projects are deliberated in the meeting
+of Technical sub-committee of SSRC. The Technical Sub-committee of SSRC will evaluate the project
+proposals and if necessary, may call for clarifications/modifications.
+The project proposals which are found feasible and beneficial to Coal industry, the Technical Subcommittee
+of SSRC will recommend it for consideration and approval of SSRC. If the project proposal
+are found not feasible and/or beneficial to Coal industry, Technical Sub-committee of SSRC may reject
+the proposal for funding under S&T Grant of MoC. Decision of Technical Sub-committee of SSRC
+regarding recommendation/rejection of project proposal shall be treated as final.
+The SSRC may approve the project proposal as recommended by Technical Sub-committee of SSRC,
+after detailed deliberation. Decision of SSRC regarding approval/rejection of project proposal shall be
+treated as final.
+
+so, we are building the project to streamline the entire proposal submission process.
+
+first, the principal investigator can create a new proposal by filling out the six forms. right after he goes into filling out the first form, the proposal will be in draft stage and must be stored in db even if he hasn't submitted it.
+the user may take back the proposal. if he would like to take back the draft proposal, no need to ask the user for confirmation. we can simply remove it and delete from db.
+
+if the user has submitted the proposal (filled out all six forms) and then pressed on submit, ai will evaluate the proposal (for now, let us simply mock the ai process).
+
+the user can monitor the proposals submitted by him in his dashboard and the status should be displayed clearly.
+
+draft -> not yet submitted the proposal but currently is working on one.
+after submission, the proposal status should be marked with something relevant.
+
+then, cmpdi will review it, and can ask the principal investigator to make any changes in the collaborative editor. the investigator can make changes in the editor as well. no need to mark it as collaborative, just naming it as editor is enough. we can remove the editor page since it is handled by collaborative editor itself. at first, only the principal investigator wiill be the collaborator, he can add upto 5 collaborators iin the proposal editor as collaborators (they can be from the sub implemeting agency). also, the members from cmpdi members can add themselves as collaborators and can ask for clarifications on the proposal and ask to make any changes. they may even ask the investigator to meet them in person. these things can be added as comments or in the chat window of the collaborative editor page.
+
+if the cmpdi members want, they can assign experts to look into this and ask for review, they may submit a report for that. after that, they can make a decision to accept or reject with a report.
+
+once the cmpdi members approve, the status should be updated. even when the cmpdi has asked for expert review, the status should be updated.
+
+after cmpdi, the control will be to tssrc. the tssrc members can then carry out the process of asking for any clarifications or changes. then, they can make decision of approve or reject. status update. then the ssrc will review and make a decision to approve or reject. status should be updated.
+
+the accpeted proposal will be communicated with the investivator. they have to start the project and the project will be marked as ongoing and updated to the db.
+after this, the agency will continously monitor the project fully. till it is completed.
+
+so, for this, we have to model the frontend and backend. for proposal editor, we have plate.js, for collaboartion, we have yjs and hocuspocus. structure the backend and frontend.
+
+
+the submitted proposal will get an id. the submitted email will receive a mail saying that the proposal has been submitted successfully. whenever the proposal status changes, they will get notified. the user can view the submitted proposals in the dashboard.
+
+he can view the proposal, track the progress (like what changes have been made so far since the initial submission). in the edit page, the user collaborately edit with othher users (upto 5). people of different committes can add comments both inline comments and in the separate comment section.
+
+there should be a super admin dashboard to add new users for the committes and handling everything in the website. 
+
+the users like cmpdi members, experts, tssrc members, ssrc members all will heav a sepaate dashboard. from there they can view the proposal along with all the documents (reports submitted by the committee members and reviewers). all of this will be based on the plate.js editor.
+they can view the proposals assigned to them, access the collaborative editor for that proposal in suggestion mode and can add comments. 
+
+this is the prompt i gave to copilot. just extract the information about the project from this. no need to code anything.
+
+i just want you to tell me what are the things should be present in the db schema of an user. provide me the required criteria for mongo db schema of an user for our application
+
+
+
+
+
+the above is an old prompt which i used as a model for copilot and used it for reference.
+but since we are facing difficulties with backend functionalities, i am planning to purely focus on backend first and then we can move on to the frontend.
+
+NOTE: i will denote principal investigator as PI and co investigator as CI all through this chat. kindly mind it
+
+i have deleted all the models, routes and controllers from backend. basically the entire backend is empty except for the db.js for establishing mongo db connection.
+
+the following are the pages i require with all the contents and the functionality i will require.
+
+dashboard. there is going to be six dashboards, one for each user role
+
+admin dashboard -> for admin related functionalities.
+admin can manage users, only admin can create accounts for committee members and reviewers.
+only normal users can create account themselves. and these normal users can be principal investigators or co investigators based on proposal.
+for admin, the dashboard will be showing a list of all the user's (including the normal user ones). admin will have functionalities like managing the user accounts, deleting accounts, changing the roles of user etc. he should also be able to create new accounts for all the roles (including normal users). he should also be able to view a particular users recent activity, like he submitted a research proposal recently, the ssrc member asked for clarification on this proposal like that.
+also, he will be able to access all the proposals submitted in the platform. he can view and manage them too. global proposals (all the proposals can be managed by him). he can foresee the recent actions on each proposal (just like for the user account), what stage it is currently on, what is the timeline of that proposal (separate page in itself which will be discussed below). view all the reports for the research proposal (will talk about this later) etc
+
+for reviewers, the dashboard would contain things like proposals assigned to him, he can also see the recent actions on that proposal, time line of that proposal, check for the due date for reviewing that proposal.
+
+for cmpdi, tssrc, ssrc committee members, the dashboard would contain things like proposals currently under their control. view recent actions, time line of that proposal.
+
+the user would see the proposals submitted by him, view recent actions, time line. able to create new proposals.
+
+CREATE PAGE.
+the create page is for the users to create new proposals. the user who creates the proposal would automatically become the principal investigator for that proposal.
+each proposal will contain the following data.
+proposal information section.
+will contain these exact things:
+project title (max 150 characters)
+funding method. only two options (S&T of MoC, R&D of CIL)
+principal implementing agency
+sub implementing agency
+project leader
+project coordinator
+project duration (in months)
+project outlay (in lakhs)
+
+after this, there will be six forms to be filled in the plate.js text editor.
+form i, form ia, form ix, form x, form xi, form xii
+
+the form will contain text in plate.js format. slate -> json format.
+the user may insert images into the editor.
+some forms ask the user to sign, add seal of institution. we will provide options to upload image or use signature pad to sign. upload image for seal. those images will be added into the editor. but we should not store the image directly on the editor. we should send the entire contents to backend including the image. the backend will upload the images to s3 bucket and replace the images with just url in the backend and store in mongodb. when some one fetches it, the editor contents should be obtained from db, urls should be replaced with actual images from s3 and then the entire contents (along with images) should be sent to frontend.
+
+in the create page. there are six form right? the forms should be filled one after the other.
+if the user fills atleast one form, we mark the proposal as draft and store it in db with status draft.
+all 6 forms should be stored in the db under a single proposal file.
+
+those six forms need to be filled one after another.
+the user can choose to fill the form from scratch or upload a pdf of the filled form which will be loaded into the editor and they can make minor corrections. that document should be saved as supporting document in db (just the url in db and the actual file in s3 bucket named proposal-files (discussed just below)).
+
+s3 bucket names to user -> "images" for uploading sign, seal, inserted images.
+"proposal-files" for any file related to proposal (you will know about the files as you read through)
+only these two buckets are available in supabase db
+
+there would be an auto-save with 30s interval. for every 30s interval, an api call would be made to update the contents in db.
+(auto save activates only from the second form (because only when the user moves to second form, we store the proposal as draft in db))
+apart from auto-save, a manual save button will also be provided which will do the same. and even this will work from second form onwards.
+also, even when the user moves from one form to another, the save to db should be called, updating the current state of the forms to db.
+the draft versions should be saved as version 0.1
+
+when the user clicks on submit the proposal, ai call will be made (ai is not currently what we are going to focus on, so mock the call). the ai will respond with a pdf report
+that pdf report will be uploaded to s3 bucket proposal-files. and the link will be stored in the proposal. (the reviewers and committee members, admin will be able to view these documents in the review page).
+the proposal would be saved as version 1 in the db. along with the url to ai report version 1.
+
+
+COLLABORATE PAGE
+in the collaborate page. users (PI, CI), committee members and reviewers will be able to collaborate on the editor in this page.
+there will role-based controls on this page.
+
+this page will show the proposal information (the same from the create page)
+only the PI will be able to edit this. not even CI can edit this.
+
+the PI (only PI) can invite upto five CI to collaborate on this proposal. (only here the CI will play a role). PI -> will invite through mail and that user should be added as CI automatically for that proposal.
+
+both PI and CI can collaboratively edit on the editor (all six forms) either simultaneously or in parallel (implemented using yjs + hocuspocus). no upload option for forms here.
+here, the auto-save 30s is enabled for all the forms even form i. manual save button also provided.
+the submit button will actually create a new version. if the current version is version x, a new version version x+1 will be created and updated in db as a separate version. we don't store just the diffs but the actual entire proposal with everything. the user will provide with a commit message, we add that to our db too.
+new version -> ai evalutation will be automatically triggered -> new ai pdf report for version x -> stored in s3 bucket and url in db. the committee members, reviewers should be able to view all ai reports too.
+for auto-save or manual save (not submitting new version), it should be stored as version x.1 in the db if the current version is x or x.1 itself (replacing the old copy if already exists) (already been auto-saved).
+
+at the top of the collaborate page, the current live user's initials must be shown (for all PI, CI, reviewers, committee members involved in that proposal) (to know who are the live users). total count + online count should be shown. if clicked, should show the full name and the role of all the users involved in that proposal along with online/offline status.
+
+
+dedicated version history controlling.
+PI, CI, committee members, reviewers can view the history, just the version number and commit message.
+PI (only PI) -> can revert back to old stage.
+committee members, reviewers, CI, PI can view (view only) the older versions
+
+
+ai review & suggestions section in collaborate page. reviews, suggestions, clarifications requested by ai, reviewers, committee members would be shown here. the unread messages should be highlighted (we must keep track of read, unread messages).
+
+we must store all these reviews, suggestions of this section separately in db attached with the proposal.
+the user can reply to these messages. and this can continue as a thread conversation (one of the three ways of communication)
+the conversation can continue till the user mark it as resolved.
+marked as resolved -> won't be deleted -> removed from the read/unread section and moved to resolved section. PI, CI, committee members, reviewers can view the resolved section (because what if the reviewer asked for any clarification and the user just marked it as resolved without making any changes (it will act as an evidence)).
+
+second way of communication.
+a chatwindow for every proposal in collaboration page.
+everyone involved in that proposal can chat in this window. the chats should be stored in db. just send and receive is enough. no need for edit features and all for the chatwindow.
+
+third way of communication in the collaborators page.
+in the plate.js editor, the reviewers, committee members can directly add inline comments (provided by plate.js itself). this also should be stored in db.
+this also follows a similar form like first way. shown till mark as resolved. each comment is a separate thread conversation in itself. even if marked resovled, we should still store it in db and should show it just like the first way.
+since these are provided by plate.js itself, implement them in a way that is compatible with plate.js while also ensuring that it is stored properly on the db.
+
+in the collaborate page. the PI and CI can enter the editor in edit/view mode (provided by plate.js itself). reviewers, committee members can enter only in suggestion mode (provided by plate.js itself).
+
+
+
+VIEW PAGE
+a simple page which can be accessed by those with access. all roles are allowed here but just the access matters (ownership, assignment).
+
+the view page will just show the contents of the proposal in view only mode. it will contain the proposal information section (from create page). all six forms in text editor (view mode). must not be able to view or add any comments. version history is also allowed to be seen. (cannot revert back to previous version though the previous version can also be viewed).
+
+TRACK PAGE
+common to all the users but based on their perspective.
+the progress of the proposal must be clearly shown this page.
+like when it was submitted, how many versions were created, when they were created, what stage it is currently in, under whose control it is currently in. all such things should be shown in this page. like reviewer assigned, cmpdi approved, (everything with correct dates and times)
+a neat timeline showing when each of the stage was crossed and what are the stages yet to be crossed.
+
+
+REVIEW PAGE
+not for CI, PI but only for reviewers, committee members.
+they can view the proposal information (view only), all forms in editor (view only mode)(all versions through version history (view only)). they can view all the documents (all versions of ai reports, reports submitted by fellow committee members and reviewers). they can ask for any clarifications from here itself (these will be reflected in the reivewer suggestions section of collaborative editor page). (the PI, CI will continue the conversation from the collaborate page while the committee members and reviewers will be replying from this page) or they can reply from the collaborate page also as per their wish. they should be able to view other converstaion threads as well. and also the resolved threads.
+they can create reports about the proposal directly on the editor provided there (again plate.js). the report submitted will be converted into pdf and stored in s3. url in db, attached to proposal. fellow reviewers and committee members can view these reports. they can submit more than one reports too.
+ability to reject or approve a proposal. if cmpdi member approves -> status changed to cmpdi approved / tssrc pending. tssrc member approves -> status changed to tssrc approved / ssrc pending. ssrc member approves -> status changes to accepted / ongoing. then, we don't need to track beyond acceptance though the process continues in reality till the project is completed.
+the ability to send mail to the PI requesting any clarifications directly as mentioned in the process above, like requesting information about the implementing agency like that.
+
+coming back to the dashboard pages since we have enough context
+
+for the user dashboard, he should be able to view all the proposals submitted by him or the proposals for which he is co-investigator.
+should mention clearly whether he is PI or CI
+option to create a new proposal.
+for each proposal under their dashboard, they will be provided with buttons to go to collaborative editor page, track page and view page.
+
+
+for reviewer, committee members, the dashboard should contain all the proposals which were assigned to them / proposals currently under their consideration (tssrc approval pending -> shown in tssrc dashboard).
+also the proposals that just moved to next stage.
+
+for super admin -> two section -> user section, global proposal section.
+user section -> central place to manage all users with crud operations.
+global proposal section -> central place to manage all proposals (he can also view the track, review page, collaborate page and add comments, make decisions).
+super admin rejects -> direct reject. approves -> direct accepted / ongoing. that is why he should be shown a confirmation warning regarding the same.
+
+
+should fully implement all the backend functionalities.
+all the models, controllers, routes for everything.
+db storage, s3 storage, (yjs, hocus-pocus) collaboration all must be handled.
+email service should also be implemented. on collaboration invite, status change, on new comments, email should be sent. the SEND_REAL_EMAILS is currently set to false in the backend so no need to worry about that. i will change it to true when required.
+update operations for user profiles like change in name, address like that. cannot change role. role changed only by super admin.
+
+ai calls can be mocked (for ai evaluation on submission of proposal (for every version))
+the ai features are completely hidden from the user. they know that ai is evaluating their proposal. even though loading animations after submission will say ai evaluation in progress, the user won't get the report. it will only be accessible by reviewers and committee members.
+the submitted proposal should get a human readable id apart from the id provided by mongo db.
+
+the user on registering should submit the following details
+Full Name *
+Email Address *
+Password *
+Phone Number
+Designation *
+e.g., Research Scholar, Professor, Scientist
+Organisation Name *
+Organisation Type *
+e.g., Indian Academic/Research Institution
+Country *
+Address Line 1
+Street address, P.O. Box
+City
+State
+Expertise Domains
+e.g., Coal Mining, Environmental Science (comma-separated)
+Separate multiple domains with commas

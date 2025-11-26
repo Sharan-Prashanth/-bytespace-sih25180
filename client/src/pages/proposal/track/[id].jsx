@@ -7,6 +7,8 @@ import ProtectedRoute from '../../../components/ProtectedRoute';
 import TimelineChart from '../../../components/TimelineChart';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import apiClient from '../../../utils/api';
+import { getProposalTracking } from '../../../utils/proposalApi';
 
 // Custom CSS animations for the track page
 const trackAnimationStyles = `

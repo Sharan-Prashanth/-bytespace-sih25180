@@ -5,9 +5,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import LoadingScreen from '../../../components/LoadingScreen';
-import jsPDF from 'jspdf';
-import { saveAs } from 'file-saver';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, Header } from 'docx';
+import AdvancedProposalEditor from '../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
 import apiClient from '../../../utils/api';
 
 // Custom CSS animations for the view page
@@ -68,24 +66,23 @@ function ViewProposalContent() {
   const { user } = useAuth();
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportType, setExportType] = useState('');
-  const [exportProgress, setExportProgress] = useState(0);
 
   useEffect(() => {
     const loadProposal = async () => {
       try {
         if (id) {
-          console.log('📖 Loading proposal for view:', id);
+          console.log('Loading proposal for view:', id);
           setLoading(true);
           
           const response = await apiClient.get(`/api/proposals/${id}`);
-          setProposal(response.data.proposal || response.data);
-          console.log('✅ Proposal loaded for view');
+          const proposalData = response.data.data || response.data;
+          console.log('✅ Proposal loaded for view:', proposalData.proposalCode);
+          console.log('📋 Forms available:', proposalData.forms ? Object.keys(proposalData.forms) : 'none');
+          setProposal(proposalData);
         }
       } catch (error) {
         console.error('❌ Error loading proposal for view:', error);
-        alert('Failed to load proposal: ' + error.message);
+        alert('Failed to load proposal: ' + (error.response?.data?.message || error.message));
       } finally{
         setLoading(false);
       }
@@ -94,25 +91,36 @@ function ViewProposalContent() {
     loadProposal();
   }, [id]);
 
-  // Helper function to render proposal content safely
+  // Dummy function to satisfy old code structure
   const getProposalContent = () => {
     if (!proposal) return '';
     
-    // If proposal has forms array (new structure from backend)
-    if (proposal.forms && proposal.forms.length > 0) {
-      const mainForm = proposal.forms.find(f => f.formId === 'main') || proposal.forms[0];
-      if (mainForm && mainForm.editorContent) {
-        // Convert Plate.js content to HTML for display
-        return convertPlateToHTML(mainForm.editorContent);
-      }
+    // Backend stores forms as: { formI, formIA, formIX, formX, formXI, formXII }
+    // Each form contains Plate.js JSON content
+    if (proposal.forms) {
+      // Combine all form contents into one HTML view
+      const formKeys = ['formI', 'formIA', 'formIX', 'formX', 'formXI', 'formXII'];
+      const formNames = {
+        formI: 'Form I - Project Details',
+        formIA: 'Form IA - Additional Information',
+        formIX: 'Form IX - Budget Details',
+        formX: 'Form X - Technical Specifications',
+        formXI: 'Form XI - Timeline',
+        formXII: 'Form XII - References'
+      };
+      
+      let combinedContent = '';
+      formKeys.forEach(formKey => {
+        if (proposal.forms[formKey]) {
+          combinedContent += `<h2 style="color: black; font-size: 1.5em; font-weight: bold; margin: 2em 0 1em 0; padding-top: 1em; border-top: 2px solid #f97316;">${formNames[formKey]}</h2>`;
+          combinedContent += convertPlateToHTML(proposal.forms[formKey]);
+        }
+      });
+      
+      if (combinedContent) return combinedContent;
     }
     
-    // Fallback to richContent if available
-    if (proposal.richContent) {
-      return proposal.richContent;
-    }
-    
-    // Generate basic content from proposal data
+    // Generate basic content from proposal metadata
     return generateBasicContent(proposal);
   };
 
@@ -136,16 +144,19 @@ function ViewProposalContent() {
   const generateBasicContent = (prop) => {
     return `
       <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">Project Overview</h2>
-      <p style="color: black; line-height: 1.6; margin-bottom: 1em;">${prop.description || 'No description available.'}</p>
+      <p style="color: black; line-height: 1.6; margin-bottom: 1em;">${prop.title || 'No title available.'}</p>
       
       <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">Project Details</h2>
-      <p style="color: black; line-height: 1.6;"><strong>Domain:</strong> ${prop.domain || 'N/A'}</p>
-      <p style="color: black; line-height: 1.6;"><strong>Budget:</strong> ₹${(prop.budget || 0).toLocaleString()}</p>
-      <p style="color: black; line-height: 1.6;"><strong>Status:</strong> ${(prop.status || 'draft').replace('_', ' ').toUpperCase()}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Funding Method:</strong> ${prop.fundingMethod || 'N/A'}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Budget:</strong> ₹${(prop.outlayLakhs || 0).toLocaleString()} Lakhs</p>
+      <p style="color: black; line-height: 1.6;"><strong>Duration:</strong> ${prop.durationMonths || 0} months</p>
+      <p style="color: black; line-height: 1.6;"><strong>Status:</strong> ${(prop.status || 'DRAFT').replace('_', ' ').toUpperCase()}</p>
       
       <h2 style="color: black; font-weight: bold; font-size: 1.5em; margin: 1.5em 0 1em 0;">Research Team</h2>
-      <p style="color: black; line-height: 1.6;"><strong>Principal Investigator:</strong> ${prop.author?.name || prop.projectLeader || 'N/A'}</p>
-      <p style="color: black; line-height: 1.6;"><strong>Institution:</strong> ${prop.implementingAgency || 'N/A'}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Project Leader:</strong> ${prop.projectLeader || 'N/A'}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Project Coordinator:</strong> ${prop.projectCoordinator || 'N/A'}</p>
+      <p style="color: black; line-height: 1.6;"><strong>Principal Agency:</strong> ${prop.principalAgency || 'N/A'}</p>
+      ${prop.subAgencies && prop.subAgencies.length > 0 ? `<p style="color: black; line-height: 1.6;"><strong>Sub-Agencies:</strong> ${prop.subAgencies.join(', ')}</p>` : ''}
     `;
   };
 
@@ -188,13 +199,15 @@ function ViewProposalContent() {
         pdf.setFont(undefined, 'normal');
         
         const infoItems = [
-          [`Project Leader:`, proposal.author?.name || proposal.projectLeader || 'N/A'],
-          [`Implementing Agency:`, proposal.implementingAgency || proposal.author?.institution || 'N/A'],
-          [`Research Domain:`, proposal.domain || 'N/A'],
-          [`Budget:`, `₹${(proposal.budget || 0).toLocaleString()}`],
-          [`Duration:`, proposal.duration || '24 months'],
-          [`Status:`, (proposal.status || 'draft').replace('_', ' ').toUpperCase()],
-          [`Submitted Date:`, proposal.submittedDate || new Date(proposal.createdAt).toLocaleDateString() || 'N/A']
+          [`Proposal Code:`, proposal.proposalCode || 'N/A'],
+          [`Project Leader:`, proposal.projectLeader || 'N/A'],
+          [`Project Coordinator:`, proposal.projectCoordinator || 'N/A'],
+          [`Principal Agency:`, proposal.principalAgency || 'N/A'],
+          [`Funding Method:`, proposal.fundingMethod || 'N/A'],
+          [`Budget (Lakhs):`, `₹${(proposal.outlayLakhs || 0).toLocaleString()}`],
+          [`Duration:`, `${proposal.durationMonths || 0} months`],
+          [`Status:`, (proposal.status || 'DRAFT').replace('_', ' ').toUpperCase()],
+          [`Submitted Date:`, proposal.createdAt ? new Date(proposal.createdAt).toLocaleDateString() : 'N/A']
         ];
         
         infoItems.forEach(([label, value]) => {
@@ -496,11 +509,11 @@ function ViewProposalContent() {
                   <span className="text-blue-200 font-medium text-sm">Department of Coal</span>
                 </div>
                 <div className="flex items-center gap-4 mt-2 text-sm text-blue-200 animate-slideInUp" style={{ animationDelay: '0.4s' }}>
-                  <span>Proposal ID: #{id}</span>
+                  <span>Proposal Code: {proposal?.proposalCode || id}</span>
                   <span>•</span>
-                  <span>Researcher: {proposal?.researcher}</span>
+                  <span>Project Leader: {proposal?.projectLeader || 'Loading...'}</span>
                   <span>•</span>
-                  <span>Status: {proposal?.status?.replace('_', ' ').toUpperCase()}</span>
+                  <span>Status: {proposal?.status ? proposal.status.replace('_', ' ').toUpperCase() : 'LOADING'}</span>
                 </div>
               </div>
             </div>
@@ -572,42 +585,56 @@ function ViewProposalContent() {
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-black mb-1">Project Title</label>
               <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
-                {proposal.title}
+                {proposal.title || 'N/A'}
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-black mb-1">Implementing Agency</label>
+              <label className="block text-xs font-semibold text-black mb-1">Proposal Code</label>
               <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
-                {proposal.implementingAgency}
+                {proposal.proposalCode || 'N/A'}
               </div>
             </div>
 
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-black mb-1">Project Leader</label>
               <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
-                {proposal.projectLeader}
+                {proposal.projectLeader || 'N/A'}
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-black mb-1">Co-Investigators</label>
+              <label className="block text-xs font-semibold text-black mb-1">Project Coordinator</label>
               <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
-                {proposal.coInvestigators}
+                {proposal.projectCoordinator || 'N/A'}
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-black mb-1">Research Domain</label>
+              <label className="block text-xs font-semibold text-black mb-1">Principal Agency</label>
               <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
-                {proposal.domain}
+                {proposal.principalAgency || 'N/A'}
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-black mb-1">Budget</label>
+              <label className="block text-xs font-semibold text-black mb-1">Funding Method</label>
               <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
-                ₹{proposal.budget.toLocaleString()}
+                {proposal.fundingMethod || 'N/A'}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-black mb-1">Budget (Lakhs)</label>
+              <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
+                ₹{(proposal.outlayLakhs || 0).toLocaleString()}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-black mb-1">Sub-Agencies</label>
+              <div className="w-full px-2 py-1.5 border border-orange-200 rounded-md bg-orange-50 text-black text-xs">
+                {proposal.subAgencies && proposal.subAgencies.length > 0 ? proposal.subAgencies.join(', ') : 'None'}
               </div>
             </div>
           </div>
@@ -615,113 +642,52 @@ function ViewProposalContent() {
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
               <div className="text-orange-600 text-xs font-semibold mb-1">Duration</div>
-              <div className="text-black font-semibold text-sm">{proposal.duration}</div>
+              <div className="text-black font-semibold text-sm">{proposal.durationMonths || 0} months</div>
             </div>
             <div className="bg-green-50 rounded-lg p-3 border border-green-200">
               <div className="text-green-600 text-xs font-semibold mb-1">Status</div>
               <div className={`px-2 py-1 rounded-full text-xs font-semibold inline-block ${
-                proposal.status === 'approved' ? 'bg-green-100 text-green-800' :
-                proposal.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                proposal.status === 'ACCEPTED' || proposal.status === 'SSRC_APPROVED' ? 'bg-green-100 text-green-800' :
+                proposal.status?.includes('REJECTED') ? 'bg-red-100 text-red-800' :
+                proposal.status?.includes('REVIEW') ? 'bg-blue-100 text-blue-800' :
                 'bg-amber-100 text-amber-800'
               }`}>
-                {proposal.status.replace('_', ' ').toUpperCase()}
+                {(proposal.status || 'DRAFT').replace('_', ' ').toUpperCase()}
               </div>
             </div>
             <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-              <div className="text-blue-600 text-xs font-semibold mb-1">Submitted</div>
-              <div className="text-black font-semibold text-sm">{proposal.submittedDate}</div>
+              <div className="text-blue-600 text-xs font-semibold mb-1">Created</div>
+              <div className="text-black font-semibold text-sm">{proposal.createdAt ? new Date(proposal.createdAt).toLocaleDateString() : 'N/A'}</div>
             </div>
           </div>
         </div>
 
-        {/* Proposal Content Section */}
+        {/* Proposal Content Section - Using AdvancedProposalEditor in View-Only Mode */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '0.4s' }}>
-          <h2 className="text-2xl font-bold text-black mb-6 flex items-center">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
+              <div>
+                <h4 className="font-semibold text-blue-900 mb-1">View-Only Mode</h4>
+                <p className="text-sm text-blue-700">
+                  This proposal is displayed in read-only mode. You can view all forms, switch between tabs, and export as PDF. 
+                  Editing and commenting features are disabled.
+                </p>
+              </div>
             </div>
-            Proposal Content
-          </h2>
+          </div>
           
-          {/* Read-only Document Viewer */}
-          <div className="prose max-w-none">
-            <div className="border border-orange-200 rounded-lg min-h-[600px] p-6 bg-orange-50">
-              <div 
-                className="focus:outline-none min-h-[550px] text-black"
-                dangerouslySetInnerHTML={{ __html: proposal.richContent }}
-                style={{ color: 'black' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Export Controls - Between Content and Action Buttons */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '0.5s' }}>
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-bold text-black mb-2 flex items-center">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                Export Options
-              </h2>
-              <p className="text-black text-sm">Download this proposal in your preferred format</p>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleExport('pdf')}
-                disabled={isExporting}
-                className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105 cursor-pointer ${
-                  isExporting && exportType === 'pdf' 
-                    ? 'bg-red-400 text-white cursor-not-allowed' 
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
-              >
-                {isExporting && exportType === 'pdf' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Generating PDF... {exportProgress}%</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    Export as PDF
-                  </>
-                )}
-              </button>
-              
-              <button
-                onClick={() => handleExport('docx')}
-                disabled={isExporting}
-                className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105 cursor-pointer ${
-                  isExporting && exportType === 'docx' 
-                    ? 'bg-blue-400 text-white cursor-not-allowed' 
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                {isExporting && exportType === 'docx' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Generating DOCX... {exportProgress}%</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export as DOCX
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          {/* Advanced Proposal Editor in View-Only Mode */}
+          <AdvancedProposalEditor
+            proposalId={id}
+            mode="view"
+            initialContent={proposal?.forms || null}
+            proposalTitle={proposal?.title || 'Research Proposal'}
+            showStats={false}
+            readOnly={true}
+          />
         </div>
 
         {/* Action Buttons - Redesigned */}

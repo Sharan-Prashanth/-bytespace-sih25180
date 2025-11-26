@@ -41,9 +41,16 @@ export const AuthProvider = ({ children }) => {
         if (token) {
             apiClient.get('/api/auth/me')
                 .then(response => {
-                    if (response.data.user) setUser(response.data.user);
+                    // Backend returns user directly in response.data.data
+                    if (response.data && response.data.data) {
+                        setUser(response.data.data);
+                    }
                 })
-                .catch(() => setUser(null))
+                .catch(() => {
+                    // Token is invalid or expired, clear it
+                    localStorage.removeItem("token");
+                    setUser(null);
+                })
                 .finally(() => setLoading(false));
         } else {
             setLoading(false);
@@ -54,12 +61,12 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         try {
             const response = await apiClient.post('/api/auth/login', { email, password });
-            const { token, user: userData } = response.data;
+            const { data } = response.data;
             
             if (typeof window !== 'undefined') {
-                localStorage.setItem("token", token);
+                localStorage.setItem("token", data.token);
             }
-            setUser(userData);
+            setUser(data.user);
         } catch (error) {
             throw new Error(error.response?.data?.message || "Login failed");
         }
@@ -69,12 +76,12 @@ export const AuthProvider = ({ children }) => {
     const register = async (formData) => {
         try {
             const response = await apiClient.post('/api/auth/register', formData);
-            const { token, user: userData } = response.data;
+            const { data } = response.data;
             
             if (typeof window !== 'undefined') {
-                localStorage.setItem("token", token);
+                localStorage.setItem("token", data.token);
             }
-            setUser(userData);
+            setUser(data.user);
         } catch (error) {
             throw new Error(error.response?.data?.message || "Registration failed");
         }
