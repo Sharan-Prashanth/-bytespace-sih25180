@@ -10,6 +10,8 @@ const Footer = dynamic(() => import("../components/Footer"), { ssr: false });
 const Counter = dynamic(() => import("../components/Counter"), { ssr: false });
 const ScanningCard = dynamic(() => import("../components/ScanningCard"), { ssr: false });
 const ServicesContent = dynamic(() => import("../components/ServicesContent"), { ssr: false });
+const TimelineChart = dynamic(() => import("../components/TimelineChart"), { ssr: false });
+const ProcessFlow = dynamic(() => import("../components/ProcessFlow"), { ssr: false });
 
 export default function Home() {
   const [activeInfoTab, setActiveInfoTab] = useState('whats-new');
@@ -22,7 +24,7 @@ export default function Home() {
   const [selectedState, setSelectedState] = useState('West Bengal');
   const [hoveredState, setHoveredState] = useState(null);
   const [textWidth, setTextWidth] = useState(300);
-  const [showNavbar, setShowNavbar] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
   const [currentMiningSlide, setCurrentMiningSlide] = useState(0);
   const textRef = useRef(null);
@@ -79,19 +81,7 @@ export default function Home() {
     }
   }, [selectedState]);
 
-  // Handle navbar visibility on scroll
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 100) {
-        setShowNavbar(true);
-      } else {
-        setShowNavbar(false);
-      }
-    };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // IntersectionObserver for counter animation
   useEffect(() => {
@@ -279,7 +269,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-200 selection:text-blue-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 font-sans text-slate-900 selection:bg-blue-200 selection:text-blue-900">
 
       {/* Custom Preloader - Prism Theme */}
       <div className={`fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center transition-all duration-1000 ease-in-out ${isLoading ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
@@ -300,11 +290,7 @@ export default function Home() {
 
         <p className="mt-4 text-slate-500 font-medium text-xs tracking-[0.3em] uppercase animate-pulse">Initializing Portal</p>
       </div>
-      {showNavbar && (
-        <div className="fixed top-0 left-0 right-0 z-50 animate-slide-down shadow-xl">
-          <Navbar />
-        </div>
-      )}
+      <Navbar />
       <style jsx>{`
         @keyframes slideDown {
           from { transform: translateY(-100%); opacity: 0; }
@@ -395,6 +381,17 @@ export default function Home() {
           font-size: 40px;
           font-weight: bold;
         }
+        @keyframes gradient-xy {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .animate-gradient-xy { animation: gradient-xy 6s ease infinite; }
+        
+        @keyframes bounce-slow {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+        .animate-bounce-slow { animation: bounce-slow 3s infinite ease-in-out; }
       `}</style>
 
       {/* Hero Section - Shopify Style (Cinematic & Minimal) */}
@@ -413,31 +410,7 @@ export default function Home() {
           </video>
         </div>
 
-        {/* Transparent Header (Hero Only) */}
-        <header className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-6 py-6 md:px-12">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-lg flex items-center justify-center border border-white/20">
-              <img src="/images/prism brand logo.png" alt="Logo" className="w-6 h-6 object-contain brightness-0 invert" />
-            </div>
-            <span className="font-bold text-xl tracking-tight">NaCCER</span>
-          </div>
 
-          <nav className="hidden md:flex items-center gap-8 font-medium text-sm text-white/80">
-            <a href="#about" className="hover:text-white transition-colors">Why NaCCER?</a>
-            <a href="#services" className="hover:text-white transition-colors">Services</a>
-            <a href="#research" className="hover:text-white transition-colors">Research</a>
-            <a href="#leadership" className="hover:text-white transition-colors">Enterprise</a>
-          </nav>
-
-          <div className="flex items-center gap-6">
-            <Link href="/login" className="text-sm font-medium hover:text-white/80 transition-colors hidden sm:block">Log in</Link>
-            <Link href="/register">
-              <button className="bg-white text-slate-900 px-6 py-3 rounded-full text-sm font-bold hover:bg-slate-100 transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]">
-                New Registration
-              </button>
-            </Link>
-          </div>
-        </header>
 
         {/* Main Hero Content */}
         <div className="relative z-30 h-full flex flex-col justify-end pb-24 px-6 md:px-12 max-w-8xl mx-auto w-full">
@@ -508,47 +481,61 @@ export default function Home() {
       </section>
 
       {/* Main Content Area */}
-      <section className="py-16 bg-slate-50">
+      <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid lg:grid-cols-12 gap-12 items-start">
+          <div className="grid lg:grid-cols-12 gap-8 items-start">
             {/* Left Content - 8 Columns */}
-            <div className="lg:col-span-8 space-y-12">
-              {/* Welcome Text */}
-              <div className="space-y-6">
-                <h1 className="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">
-                  Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">NaCCER</span>
-                </h1>
-                <p className="text-xl text-slate-600 leading-relaxed font-light">
-                  The <strong className="text-slate-900 font-semibold">National Coal Committee for Environmental Research</strong> presents an advanced R&D Proposal Management System. We are dedicated to fostering sustainable coal research, promoting environmental stewardship, and driving technological innovation in India's energy sector.
-                </p>
-              </div>
+            <div className="lg:col-span-8">
+              {/* PRISM Main Feature Section */}
+              <div className="bg-white rounded-3xl p-8 md:p-10 shadow-xl relative overflow-hidden group">
+                {/* Background Decoration */}
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600"></div>
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 group-hover:scale-110 transition-transform duration-1000"></div>
 
-              {/* PRISM Card - Modern Dashboard Style */}
-              <div className="group relative bg-white rounded-3xl p-1 overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-500">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <div className="relative bg-white rounded-[20px] p-8 flex flex-col md:flex-row items-center gap-8 z-10">
-                  <div className="w-40 h-40 bg-slate-50 rounded-2xl flex items-center justify-center p-6 shadow-inner group-hover:scale-105 transition-transform duration-500">
-                    <img
-                      src="/images/prism brand logo.png"
-                      alt="PRISM Logo"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <div className="text-center md:text-left flex-1">
-                    <div className="flex items-center justify-center md:justify-start gap-3 mb-3">
-                      <h2 className="text-3xl font-bold text-slate-900 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-purple-600 transition-all">PRISM</h2>
-                      <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full uppercase tracking-wider border border-blue-100">Core System</span>
+                <div className="relative z-10">
+                  <div className="flex flex-col md:flex-row items-center gap-8 mb-10">
+                    <div className="w-32 h-32 bg-slate-50 rounded-2xl flex items-center justify-center p-4 shadow-inner shrink-0 border border-slate-100">
+                      <img
+                        src="/images/prism brand logo.png"
+                        alt="PRISM Logo"
+                        className="w-full h-full object-contain"
+                      />
                     </div>
-                    <p className="text-lg text-slate-600 font-medium mb-4">
-                      Proposal Review & Innovation Support Mechanism
-                    </p>
-                    <p className="text-slate-500 leading-relaxed mb-6">
-                      A cutting-edge platform designed to streamline the research proposal lifecycle, ensuring transparency, efficiency, and merit-based selection for national coal research projects.
-                    </p>
-                    <button className="text-blue-600 font-semibold flex items-center gap-2 group/btn hover:gap-3 transition-all">
-                      Learn more about PRISM
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                    </button>
+                    <div className="text-center md:text-left flex-1">
+                      <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+                        <h2 className="text-4xl font-black text-slate-900 tracking-tight">PRISM</h2>
+                        <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full uppercase tracking-wider border border-blue-100">Core System</span>
+                      </div>
+                      <h3 className="text-xl text-slate-700 font-bold mb-3">
+                        Proposal Review & Innovation Support Mechanism
+                      </h3>
+                      <p className="text-slate-500 leading-relaxed">
+                        A cutting-edge platform designed to streamline the research proposal lifecycle, ensuring transparency, efficiency, and merit-based selection for national coal research projects.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Unique Selling Points Grid */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {[
+                      { text: "Smart AI Based scoring system", icon: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z", color: "blue" },
+                      { text: "Live Updated Real Time Insights", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z", color: "indigo" },
+                      { text: "Trusted and Verified Templates and Guides", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z", color: "emerald" },
+                      { text: "Smart Future Needs Forecaster", icon: "M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z", color: "purple" },
+                      { text: "Collaborative Team Editing system", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z", color: "orange" },
+                      { text: "Secure Blockchain Powered Records", icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z", color: "cyan" }
+                    ].map((usp, idx) => (
+                      <div key={idx} className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all duration-300 group/feature">
+                        <div className={`w-12 h-12 rounded-xl bg-${usp.color}-100 text-${usp.color}-600 flex items-center justify-center shrink-0 group-hover/feature:scale-110 transition-transform duration-300`}>
+                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={usp.icon} />
+                          </svg>
+                        </div>
+                        <span className="text-sm font-bold text-slate-700 group-hover/feature:text-slate-900 leading-tight">
+                          {usp.text}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -643,103 +630,112 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Statistics Strip */}
-      <section className="bg-[#020617] py-10 border-t border-slate-800 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-transparent to-transparent"></div>
-        <div className="max-w-7xl mx-auto px-4 relative z-10">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 md:gap-4">
-            {[
-              {
-                count: "14237",
-                label: "ONLINE SERVICES",
-                icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              },
-              {
-                count: "4373",
-                label: "GOVT. SCHEMES",
-                icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              },
-              {
-                count: "5424",
-                label: "CITIZEN ENGAGEMENTS",
-                icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              },
-              {
-                count: "3851",
-                label: "TOURIST PLACES",
-                icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              },
-              {
-                count: "2847",
-                label: "RESEARCH PAPERS",
-                icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              },
-              {
-                count: "1543",
-                label: "ACTIVE RESEARCHERS",
-                icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              }
-            ].map((stat, idx) => (
-              <div key={idx} className="flex flex-col items-center group p-2">
-                <div className="text-blue-500 mb-3 transform group-hover:scale-110 transition-transform duration-300">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {stat.icon}
-                  </svg>
-                </div>
-                <div className="relative inline-block mb-2 text-center">
-                  <span className="text-3xl font-bold text-white tracking-wider block">{stat.count}</span>
-                  <div className="h-0.5 w-12 bg-slate-700 mx-auto mt-1 group-hover:bg-blue-500 transition-colors duration-300"></div>
-                </div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest group-hover:text-blue-400 transition-colors text-center leading-tight">
-                  {stat.label.split(' ').map((word, i) => (
-                    <span key={i} className="block">{word}</span>
-                  ))}
-                </span>
-              </div>
-            ))}
-          </div>
+      <div className="bg-slate-50">
+        <ProcessFlow />
+      </div>
+
+      {/* CTA Section - Redesigned to match landing page aesthetic */}
+      <section className="relative py-16 bg-slate-900 overflow-hidden">
+        {/* Sophisticated Background Pattern */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px]"></div>
         </div>
-      </section>
 
+        {/* Accent Gradients */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-20 animate-pulse"></div>
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-600 rounded-full blur-[120px] opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
+        </div>
 
+        <div className="max-w-6xl mx-auto px-4 relative z-10">
+          {/* Content Container */}
+          <div className="text-center space-y-6">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-400/20 backdrop-blur-sm text-blue-400 text-xs font-bold uppercase tracking-widest">
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+              Get Started Today
+            </div>
 
-      <section id="services" className="py-16 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-10 animate-fade-in-up">
-            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">Our Services</h2>
-            <div className="w-24 h-1.5 bg-blue-600 mx-auto rounded-full mb-4"></div>
-            <p className="text-xl text-slate-600 max-w-2xl mx-auto font-light">
-              Comprehensive support for the entire research lifecycle, from proposal submission to project monitoring and evaluation.
+            {/* Heading */}
+            <h2 className="text-4xl md:text-6xl font-bold text-white tracking-tight leading-tight">
+              Ready to transform<br />your research?
+            </h2>
+
+            {/* Subheading */}
+            <p className="text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
+              Join thousands of researchers already accessing India's premier research funding platform
+            </p>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+              <Link href="/register">
+                <button className="group px-8 py-4 bg-white text-slate-900 rounded-full font-bold text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-105 flex items-center gap-3">
+                  Create Free Account
+                  <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+              </Link>
+              <button className="px-8 py-4 bg-transparent border-2 border-white/20 text-white rounded-full font-bold text-lg hover:bg-white/5 hover:border-white/40 transition-all backdrop-blur-sm">
+                Schedule Demo
+              </button>
+            </div>
+
+            {/* Bottom Text */}
+            <p className="text-sm text-slate-500 font-medium pt-2">
+              No credit card required • Start submitting research proposals in minutes
             </p>
           </div>
 
+          {/* Decorative Elements */}
+          <div className="absolute top-1/2 left-0 w-px h-32 bg-gradient-to-b from-transparent via-blue-500/50 to-transparent -translate-y-1/2 hidden lg:block"></div>
+          <div className="absolute top-1/2 right-0 w-px h-32 bg-gradient-to-b from-transparent via-indigo-500/50 to-transparent -translate-y-1/2 hidden lg:block"></div>
+        </div>
+      </section>
+
+      <section id="services" className="py-12 bg-gradient-to-b from-white to-slate-50">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-10 animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-xs font-bold uppercase tracking-widest mb-6">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Our Services
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 tracking-tight">Comprehensive Research Support</h2>
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
+              End-to-end support for the entire research lifecycle, from proposal submission to project monitoring and evaluation.
+            </p>
+          </div>
 
           {/* Services Content - Full Width */}
           <ServicesContent />
         </div>
       </section>
 
-      <section id="research" className="py-24 bg-indigo-50 relative overflow-hidden">
+      <section id="research" className="py-12 bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-50 relative overflow-hidden">
         {/* Background Elements */}
-        <div className="absolute inset-0 bg-[radial-gradient(#e0e7ff_1px,transparent_1px)] [background-size:20px_20px] opacity-50"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(#dbeafe_1px,transparent_1px)] [background-size:20px_20px] opacity-40"></div>
+        <div className="absolute top-20 right-20 w-96 h-96 bg-blue-300 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+        <div className="absolute bottom-20 left-20 w-96 h-96 bg-indigo-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
 
         <div className="max-w-7xl mx-auto px-4 relative z-10">
           {/* Header */}
-          <div className="flex flex-col items-center justify-center gap-4 mb-12 text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold uppercase tracking-widest">
+          <div className="flex flex-col items-center justify-center gap-3 mb-10 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-xs font-bold uppercase tracking-widest shadow-sm">
               <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
               Live Data Visualization
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">
               NaCCER's Indian Footprint
             </h2>
-            <p className="text-slate-600 max-w-2xl text-lg font-normal">
+            <p className="text-slate-600 max-w-3xl text-lg leading-relaxed">
               Visualizing the distribution of research proposals and scientific contributions across the nation in real-time.
             </p>
           </div>
 
           {/* Main Content Area */}
-          <div className="grid lg:grid-cols-12 gap-8 items-start">
+          <div className="grid lg:grid-cols-12 gap-6 items-start">
             {/* Left: State Info and Chart - 4 Columns */}
             <div className="lg:col-span-4 space-y-6">
               {/* Selected State Card */}
@@ -906,7 +902,7 @@ export default function Home() {
           </div>
 
           {/* Statistics Summary */}
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: "States Covered", value: Object.keys(stateProposalsData).length, color: "blue", speed: 50, increment: 1 },
               { label: "Total Proposals", value: Object.values(stateProposalsData).reduce((sum, state) => sum + state.count, 0), color: "green", speed: 30, increment: 2 },
@@ -914,7 +910,7 @@ export default function Home() {
             ].map((stat, idx) => (
               <div
                 key={idx}
-                className={`metric-card bg-white rounded-2xl p-6 text-center border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-500 relative overflow-hidden group hover:-translate-y-2 cursor-default`}
+                className={`metric-card bg-white rounded-2xl p-6 text-center border border-blue-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-500 relative overflow-hidden group hover:-translate-y-2 cursor-default`}
                 data-start="0"
                 data-end={typeof stat.value === 'number' ? stat.value : 0}
                 data-increment={stat.increment}
@@ -943,20 +939,21 @@ export default function Home() {
       </section>
 
       {/* About Ministry & Vision/Mission Section */}
-      <section id="about" className="pt-24 pb-96 bg-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-30 pointer-events-none">
-          <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-blue-100 blur-3xl mix-blend-multiply"></div>
-          <div className="absolute top-1/2 right-0 w-64 h-64 rounded-full bg-purple-100 blur-3xl mix-blend-multiply"></div>
+      <section id="about" className="py-12 pb-72 bg-gradient-to-b from-white to-blue-50/30 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20 pointer-events-none">
+          <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-blue-300 blur-3xl animate-pulse"></div>
+          <div className="absolute top-1/2 right-0 w-96 h-96 rounded-full bg-indigo-300 blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+          <div className="absolute bottom-0 left-1/2 w-96 h-96 rounded-full bg-blue-200 blur-3xl animate-pulse" style={{ animationDelay: '3s' }}></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
 
             {/* About Ministry/Department Component */}
-            <div className="space-y-8 animate-fade-in-up">
-              <div className="inline-block">
+            <div className="space-y-6 animate-fade-in-up">
+              <div className="inline-block mb-4">
                 <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">About Ministry</h2>
-                <div className="h-1.5 w-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full"></div>
+                <div className="h-1.5 w-24 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full"></div>
               </div>
 
               <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 p-8 relative overflow-hidden group hover:shadow-[0_20px_50px_rgba(8,_112,_184,_0.1)] transition-all duration-500">
@@ -992,12 +989,12 @@ export default function Home() {
             </div>
 
             {/* Vision & Mission Component */}
-            <div className="space-y-8">
+            <div className="space-y-6">
               {/* Vision Card - Flip */}
               <div className="h-[300px] cursor-pointer [perspective:1200px] group animate-fade-in-up animation-delay-200">
                 <div className="relative w-full h-full duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] shadow-xl hover:shadow-2xl rounded-3xl transition-shadow">
                   {/* FRONT */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl flex flex-col items-center justify-center [backface-visibility:hidden] p-8 text-white overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl flex flex-col items-center justify-center [backface-visibility:hidden] p-8 text-white overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-full bg-[url('/images/noise.png')] opacity-10 mix-blend-overlay"></div>
 
                     {/* Decorative Elements */}
@@ -1040,7 +1037,7 @@ export default function Home() {
               <div className="h-[300px] cursor-pointer [perspective:1200px] group animate-fade-in-up animation-delay-400">
                 <div className="relative w-full h-full duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] shadow-xl hover:shadow-2xl rounded-3xl transition-shadow">
                   {/* FRONT */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl flex flex-col items-center justify-center [backface-visibility:hidden] p-8 text-white overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-3xl flex flex-col items-center justify-center [backface-visibility:hidden] p-8 text-white overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-full bg-[url('/images/noise.png')] opacity-10 mix-blend-overlay"></div>
 
                     {/* Decorative Elements */}
@@ -1051,7 +1048,7 @@ export default function Home() {
                     {/* Title with gradient underline */}
                     <div className="text-center relative">
                       <h2 className="text-5xl font-extrabold tracking-widest mb-3 drop-shadow-lg">
-                        <span className="bg-gradient-to-r from-white via-emerald-100 to-white bg-clip-text text-transparent animate-gradient-x">MISSION</span>
+                        <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent animate-gradient-x">MISSION</span>
                       </h2>
                       <div className="h-1 w-24 mx-auto bg-gradient-to-r from-transparent via-white to-transparent rounded-full"></div>
                     </div>
@@ -1060,19 +1057,19 @@ export default function Home() {
 
                   {/* BACK */}
                   <div className="absolute inset-0 bg-white text-slate-800 rounded-3xl p-8 [transform:rotateY(180deg)] [backface-visibility:hidden] overflow-auto border border-slate-100 flex flex-col justify-center">
-                    <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-600 mb-4">Our Mission</h3>
+                    <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600 mb-4">Our Mission</h3>
                     <ul className="space-y-4 text-sm text-slate-600 mb-6">
                       <li className="flex items-start group/item">
-                        <span className="w-2 h-2 bg-emerald-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
+                        <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
                         <span>Adopt clean coal technologies for safety & sustainability.</span>
                       </li>
                       <li className="flex items-start group/item">
-                        <span className="w-2 h-2 bg-emerald-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
+                        <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
                         <span>Develop infrastructure for efficient coal evacuation.</span>
                       </li>
                     </ul>
-                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                      <p className="text-xs font-bold text-emerald-800 text-center uppercase tracking-wide">
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                      <p className="text-xs font-bold text-blue-800 text-center uppercase tracking-wide">
                         Driving sustainable development through innovation
                       </p>
                     </div>
@@ -1086,11 +1083,11 @@ export default function Home() {
       </section>
 
       {/* Our Ministers Section with Overlapping Banner */}
-      <section id="leadership" className="pt-72 pb-16 bg-slate-900 relative">
+      <section id="leadership" className="pt-60 pb-12 bg-slate-900 relative">
 
         {/* Overlapping Coal Mining Carousel */}
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-4 z-30">
-          <div className="relative aspect-[21/9] overflow-hidden rounded-3xl shadow-2xl border border-slate-200 bg-slate-900 group">
+          <div className="relative aspect-[21/9] overflow-hidden rounded-3xl shadow-2xl border border-slate-700 bg-slate-900 group">
 
             {/* Slides */}
             {miningSlides.map((slide, index) => (
@@ -1144,7 +1141,7 @@ export default function Home() {
                 <button
                   key={idx}
                   onClick={() => setCurrentMiningSlide(idx)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentMiningSlide ? 'w-8 bg-blue-500' : 'w-2 bg-white/50 hover:bg-white'
+                  className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentMiningSlide ? 'w-8 bg-blue-500 shadow-lg shadow-blue-500/50' : 'w-2 bg-white/50 hover:bg-white'
                     }`}
                 />
               ))}
@@ -1155,14 +1152,14 @@ export default function Home() {
         {/* Background Pattern Container (Overflow Hidden) */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px]"></div>
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-blue-600 blur-[100px] opacity-20"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-purple-600 blur-[100px] opacity-20"></div>
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-blue-600 blur-[100px] opacity-20 animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-indigo-600 blur-[100px] opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 relative z-10">
-          <div className="text-center mb-6">
-            <h2 className="text-4xl font-bold text-white mb-4">Leadership</h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">Guiding the nation towards energy security and sustainable development.</p>
+          <div className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">Leadership</h2>
+            <p className="text-slate-400 max-w-2xl mx-auto text-lg">Guiding the nation towards energy security and sustainable development.</p>
           </div>
 
           <div className="grid lg:grid-cols-12 gap-6 items-center">
@@ -1237,114 +1234,29 @@ export default function Home() {
       </section>
 
       {/* 9. Timeline of Achievements */}
-      {/* 9. Timeline of Achievements */}
-      <div className="bg-gray-50 py-24">
+      <div className="bg-gradient-to-b from-slate-50 to-white py-12">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Our Journey</h2>
-            <div className="w-20 h-1.5 bg-blue-600 mx-auto rounded-full mb-4"></div>
-            <p className="text-slate-600 max-w-2xl mx-auto">Key milestones in NaCCER's evolution towards excellence in coal research.</p>
-          </div>
-
-          <div className="max-w-7xl mx-auto relative">
-            {/* Desktop View - Interactive Hover Timeline */}
-            <div className="hidden md:grid grid-cols-4 gap-4 relative min-h-[450px]">
-              {/* Central Horizontal Line */}
-              <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-200 -translate-y-1/2 rounded-full z-0"></div>
-
-              {[
-                { year: "2014", title: "NaCCER Established", desc: "Ministry of Coal launches National Centre for Coal Excellence & Research" },
-                { year: "2018", title: "1000+ Proposals", desc: "Crossed 1000 research proposals submitted across India" },
-                { year: "2022", title: "Digital Transformation", desc: "Launched paperless online proposal submission portal" },
-                { year: "2025", title: "AI-Powered Evaluation", desc: "Revolutionary AI/ML-based automated evaluation system deployed" }
-              ].map((milestone, idx) => (
-                <div key={idx} className="grid grid-rows-[1fr_auto_1fr] h-full group cursor-pointer">
-
-                  {/* Top Row */}
-                  <div className="flex flex-col justify-end items-center pb-6 px-2 relative">
-                    {idx % 2 === 0 ? (
-                      // Even: Year Card (Always Visible)
-                      <div className="w-full flex flex-col items-center z-10">
-                        <div className="bg-white rounded-2xl py-6 px-8 shadow-sm border border-slate-100 group-hover:shadow-xl group-hover:border-blue-400 group-hover:-translate-y-2 transition-all duration-300">
-                          <span className="text-5xl font-black text-slate-200 group-hover:text-blue-600 transition-colors duration-300 block text-center">{milestone.year}</span>
-                        </div>
-                        <div className="h-6 w-0.5 bg-slate-200 group-hover:bg-blue-500 transition-colors duration-300 mt-2"></div>
-                      </div>
-                    ) : (
-                      // Odd: Content Card (Visible on Hover)
-                      <div className="absolute bottom-6 w-full flex flex-col items-center opacity-0 group-hover:opacity-100 translate-y-8 group-hover:translate-y-0 transition-all duration-500 ease-out z-20 pointer-events-none group-hover:pointer-events-auto">
-                        <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-2xl border-l-4 border-blue-500 w-full transform transition-transform">
-                          <h3 className="text-lg font-bold text-slate-900 mb-2">{milestone.title}</h3>
-                          <p className="text-slate-600 text-sm leading-relaxed">{milestone.desc}</p>
-                        </div>
-                        <div className="h-6 w-0.5 bg-blue-500"></div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Middle Row (Dot) */}
-                  <div className="relative z-10 flex items-center justify-center h-4">
-                    <div className="w-4 h-4 bg-slate-300 rounded-full group-hover:bg-blue-600 group-hover:scale-150 group-hover:ring-4 ring-blue-100 transition-all duration-300"></div>
-                  </div>
-
-                  {/* Bottom Row */}
-                  <div className="flex flex-col justify-start items-center pt-6 px-2 relative">
-                    {idx % 2 !== 0 ? (
-                      // Odd: Year Card (Always Visible)
-                      <div className="w-full flex flex-col items-center z-10">
-                        <div className="h-6 w-0.5 bg-slate-200 group-hover:bg-blue-500 transition-colors duration-300 mb-2"></div>
-                        <div className="bg-white rounded-2xl py-6 px-8 shadow-sm border border-slate-100 group-hover:shadow-xl group-hover:border-blue-400 group-hover:translate-y-2 transition-all duration-300">
-                          <span className="text-5xl font-black text-slate-200 group-hover:text-blue-600 transition-colors duration-300 block text-center">{milestone.year}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      // Even: Content Card (Visible on Hover)
-                      <div className="absolute top-6 w-full flex flex-col items-center opacity-0 group-hover:opacity-100 -translate-y-8 group-hover:translate-y-0 transition-all duration-500 ease-out z-20 pointer-events-none group-hover:pointer-events-auto">
-                        <div className="h-6 w-0.5 bg-blue-500"></div>
-                        <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-2xl border-l-4 border-blue-500 w-full transform transition-transform">
-                          <h3 className="text-lg font-bold text-slate-900 mb-2">{milestone.title}</h3>
-                          <p className="text-slate-600 text-sm leading-relaxed">{milestone.desc}</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              ))}
-            </div>
-
-            {/* Mobile View (Vertical) */}
-            <div className="md:hidden relative pl-8 border-l-2 border-blue-200 ml-4 space-y-12">
-              {[
-                { year: "2014", title: "NaCCER Established", desc: "Ministry of Coal launches National Centre for Coal Excellence & Research" },
-                { year: "2018", title: "1000+ Proposals", desc: "Crossed 1000 research proposals submitted across India" },
-                { year: "2022", title: "Digital Transformation", desc: "Launched paperless online proposal submission portal" },
-                { year: "2025", title: "AI-Powered Evaluation", desc: "Revolutionary AI/ML-based automated evaluation system deployed" }
-              ].map((milestone, idx) => (
-                <div key={idx} className="relative">
-                  <div className="absolute -left-[41px] top-0 w-5 h-5 bg-white border-4 border-blue-600 rounded-full"></div>
-                  <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100">
-                    <div className="text-xl font-bold text-blue-600 mb-2">{milestone.year}</div>
-                    <h3 className="text-lg font-bold text-slate-900 mb-2">{milestone.title}</h3>
-                    <p className="text-slate-600 text-sm leading-relaxed">{milestone.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-          </div>
+          <TimelineChart />
         </div>
       </div>
 
+
+
       {/* Gallery Section */}
-      <section className="py-8 bg-white">
+      <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-6">
-            <div>
-              <h2 className="text-4xl font-bold text-slate-900 mb-4">Media Gallery</h2>
-              <p className="text-slate-500 max-w-xl">Highlights from recent events, conferences, and technological milestones in the coal sector.</p>
+          <div className="flex flex-col md:flex-row justify-between items-center md:items-end mb-8 gap-4">
+            <div className="text-center md:text-left">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest mb-4">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Gallery
+              </div>
+              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">Media Gallery</h2>
+              <p className="text-slate-600 max-w-xl text-lg">Highlights from recent events, conferences, and technological milestones in the coal sector.</p>
             </div>
-            <a href="#" className="text-blue-600 font-bold hover:text-blue-800 transition-colors flex items-center gap-2 group">
+            <a href="#" className="text-blue-600 font-bold hover:text-blue-800 transition-all flex items-center gap-2 group hover:gap-3">
               View All Gallery
               <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
@@ -1392,6 +1304,6 @@ export default function Home() {
         </div>
       </section>
       <Footer />
-    </div>
+    </div >
   );
 }
