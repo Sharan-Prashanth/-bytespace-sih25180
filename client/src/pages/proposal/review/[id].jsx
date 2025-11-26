@@ -1,13 +1,25 @@
 'use client';
 
-import jsPDF from 'jspdf';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import Chatbot from '../../../components/Saarthi';
-import { useAuth } from '../../../context/AuthContext';
+import jsPDF from 'jspdf';
+import { createPortal } from 'react-dom';
 import apiClient from '../../../utils/api';
+import {
+  createReport,
+  updateReport,
+  submitReport,
+  getReports,
+  addComment
+} from '../../../utils/proposalApi';
+import {
+  updateProposalStatus,
+  requestClarification,
+  assignReviewer
+} from '../../../utils/workflowApi';
 
 // Custom CSS animations matching other pages
 const reviewAnimationStyles = `
@@ -69,6 +81,8 @@ function ReviewProposalContent() {
   const [submittedDecision, setSubmittedDecision] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [showChatbot, setShowChatbot] = useState(true);
+  const [showClarificationModal, setShowClarificationModal] = useState(false);
+  const [clarificationMessage, setClarificationMessage] = useState('');
 
   useEffect(() => {
     const loadProposal = async () => {
@@ -76,11 +90,11 @@ function ReviewProposalContent() {
         if (id) {
           console.log('📖 Loading proposal for review:', id);
           setLoading(true);
-
+          
           const response = await apiClient.get(`/api/proposals/${id}`);
-          const proposalData = response.data.proposal || response.data;
+          const proposalData = response.data.data.proposal;
           setProposal(proposalData);
-          setReviewStatus(proposalData.status || 'under_review');
+          setReviewStatus(proposalData.status || 'CMPDI_REVIEW');
           console.log('✅ Proposal loaded for review');
         }
       } catch (error) {
@@ -103,25 +117,23 @@ function ReviewProposalContent() {
 
     try {
       console.log('💬 Submitting feedback for proposal:', id);
-
-      // Call backend API to submit feedback
-      const response = await apiClient.post(`/api/proposals/${id}/feedback`, {
-        feedback,
-        reviewStatus
+      
+      // Add feedback as a comment
+      await addComment(id, {
+        text: feedback,
+        category: 'GENERAL'
       });
-
-      // Update local state with the updated proposal
-      setProposal(response.data.proposal || response.data);
+      
       setFeedback('');
       setShowSuccessModal(true);
-
+      
       console.log('✅ Feedback submitted successfully');
-
+      
       // Auto-hide success modal after 3 seconds
       setTimeout(() => {
         setShowSuccessModal(false);
       }, 3000);
-
+      
     } catch (error) {
       console.error('❌ Error submitting feedback:', error);
       alert("Failed to submit feedback: " + error.message);
@@ -131,7 +143,7 @@ function ReviewProposalContent() {
   // PDF Export Function with Government Logos
   const handleExportReview = async () => {
     setIsExporting(true);
-
+    
     try {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -207,7 +219,7 @@ function ReviewProposalContent() {
 
       pdf.setFontSize(10);
       pdf.setTextColor(51, 51, 51);
-
+      
       const reviewInfo = [
         [`Proposal ID:`, proposal.id],
         [`Title:`, proposal.title],
@@ -229,7 +241,7 @@ function ReviewProposalContent() {
         pdf.setFont(undefined, 'bold');
         pdf.text(label, 20, yPosition);
         pdf.setFont(undefined, 'normal');
-
+        
         const splitValue = pdf.splitTextToSize(value, pageWidth - 70);
         pdf.text(splitValue, 70, yPosition);
         yPosition += splitValue.length * 5 + 2;
@@ -260,7 +272,7 @@ function ReviewProposalContent() {
           pdf.setFont(undefined, 'bold');
           pdf.text(`${index + 1}. ${feedback.reviewer} (${feedback.date})`, 20, yPosition);
           yPosition += 6;
-
+          
           pdf.setFont(undefined, 'normal');
           pdf.setTextColor(107, 114, 128);
           const splitComment = pdf.splitTextToSize(feedback.comment, pageWidth - 40);
@@ -282,7 +294,7 @@ function ReviewProposalContent() {
       // Save PDF
       const fileName = `PRISM_Review_Report_${proposal.id}_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
-
+      
     } catch (error) {
       console.error('PDF Export failed:', error);
       alert('PDF export failed. Please try again.');
@@ -293,6 +305,34 @@ function ReviewProposalContent() {
 
   const handleStatusChange = (newStatus) => {
     setReviewStatus(newStatus);
+  };
+
+  const handleRequestClarification = async () => {
+    if (!clarificationMessage.trim()) {
+      alert("Please enter clarification message.");
+      return;
+    }
+
+    try {
+      console.log("Requesting clarification for proposal:", id);
+      
+      await requestClarification(id, {
+        message: clarificationMessage
+      });
+      
+      setClarificationMessage('');
+      setShowClarificationModal(false);
+      
+      alert('Clarification request sent successfully!');
+      
+      // Reload proposal to reflect updated status
+      const response = await apiClient.get(`/api/proposals/${id}`);
+      setProposal(response.data.data.proposal);
+      
+    } catch (error) {
+      console.error("Error requesting clarification:", error);
+      alert("Failed to request clarification. Please try again.");
+    }
   };
 
   const handleSubmitDecision = async () => {
@@ -314,29 +354,31 @@ function ReviewProposalContent() {
     }
 
     setCommitting(true);
-
+    
     try {
-      // API call to submit decision (real implementation would go here)
       console.log("Submitting decision:", { proposalId: id, reviewStatus, commitMessage });
-
-      // Mock decision submission
-      setProposal(prev => ({
-        ...prev,
-        status: reviewStatus
-      }));
-
+      
+      // Update proposal status via backend API
+      const response = await updateProposalStatus(id, {
+        newStatus: reviewStatus,
+        comments: commitMessage
+      });
+      
+      // Update local state with the updated proposal
+      setProposal(response.proposal);
+      
       setShowCommitModal(false);
       setCommitting(false);
-
+      
       // Show success popup
       setSubmittedDecision(reviewStatus);
       setShowDecisionSuccess(true);
-
+      
       // Auto-hide success modal after 4 seconds
       setTimeout(() => {
         setShowDecisionSuccess(false);
       }, 4000);
-
+      
     } catch (error) {
       console.error("Error submitting decision:", error);
       alert("Failed to submit decision. Please try again.");
@@ -376,9 +418,9 @@ function ReviewProposalContent() {
             <div className="absolute bottom-12 left-32 w-8 h-8 bg-blue-500/10 rounded-full animate-bounce"></div>
             <div className="absolute top-12 right-40 w-4 h-4 bg-indigo-400/20 rounded-full animate-ping"></div>
           </div>
-
+          
           <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
-
+          
           {/* Header Content */}
           <div className="relative z-10 max-w-7xl mx-auto px-6 py-10" style={{ overflow: 'visible' }}>
             <div className="group animate-fadeIn">
@@ -390,7 +432,7 @@ function ReviewProposalContent() {
                     </svg>
                   </div>
                 </div>
-
+                
                 <div className="ml-6">
                   <div className="flex items-center mb-2">
                     <h1 className="text-white text-4xl font-black tracking-tight bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent animate-slideInUp">
@@ -417,16 +459,16 @@ function ReviewProposalContent() {
                   </div>
                 </div>
               </div>
-
+              
               {/* PRISM Banner */}
               <div className="bg-orange-600 backdrop-blur-md rounded-2xl p-4 border border-orange-300/40 shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 animate-slideInUp" style={{ animationDelay: '0.6s' }}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div className="flex-shrink-0">
                       <div className="w-10 h-10 bg-gradient-to-br from-white to-orange-50 rounded-lg flex items-center justify-center shadow-lg overflow-hidden border border-orange-200/50">
-                        <img
-                          src="/images/prism brand logo.png"
-                          alt="PRISM Logo"
+                        <img 
+                          src="/images/prism brand logo.png" 
+                          alt="PRISM Logo" 
                           className="w-10 h-10 object-contain"
                         />
                       </div>
@@ -452,7 +494,7 @@ function ReviewProposalContent() {
 
         {/* Main Content Container */}
         <div className="max-w-7xl mx-auto px-6 py-8">
-
+          
           {/* Navigation and Export Buttons */}
           <div className="flex justify-between items-center mb-6">
             <button
@@ -467,7 +509,7 @@ function ReviewProposalContent() {
               Back to Dashboard
             </button>
 
-            <button
+            <button 
               onClick={handleExportReview}
               disabled={isExporting}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-800 border border-blue-300 transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
@@ -491,7 +533,7 @@ function ReviewProposalContent() {
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Main Content - Left 2 columns */}
             <div className="lg:col-span-2 space-y-6">
-
+              
               {/* Proposal Overview */}
               <div className="bg-white rounded-xl shadow-lg p-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
                 <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
@@ -502,7 +544,7 @@ function ReviewProposalContent() {
                   </div>
                   Proposal Overview
                 </h2>
-
+                
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-xl font-bold text-black mb-2">{proposal.title}</h3>
@@ -521,7 +563,7 @@ function ReviewProposalContent() {
                       </div>
                     </div>
                   </div>
-
+                  
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                       <div className="text-gray-500 text-sm font-semibold mb-1">Budget</div>
@@ -550,17 +592,18 @@ function ReviewProposalContent() {
                   </div>
                   Supporting Documents
                 </h3>
-
+                
                 <div className="grid md:grid-cols-2 gap-4">
                   {proposal.documents.map((doc, index) => (
                     <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${doc.type === 'proposal' ? 'bg-orange-100 text-orange-600' :
-                            doc.type === 'technical' ? 'bg-blue-100 text-blue-600' :
-                              doc.type === 'financial' ? 'bg-green-100 text-green-600' :
-                                doc.type === 'research' ? 'bg-purple-100 text-purple-600' :
-                                  'bg-gray-100 text-gray-600'
-                          }`}>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          doc.type === 'proposal' ? 'bg-orange-100 text-orange-600' :
+                          doc.type === 'technical' ? 'bg-blue-100 text-blue-600' :
+                          doc.type === 'financial' ? 'bg-green-100 text-green-600' :
+                          doc.type === 'research' ? 'bg-purple-100 text-purple-600' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
@@ -588,7 +631,7 @@ function ReviewProposalContent() {
                   </div>
                   Review History
                 </h3>
-
+                
                 <div className="space-y-4">
                   {proposal.existingFeedback.map((feedback) => (
                     <div key={feedback.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -615,7 +658,7 @@ function ReviewProposalContent() {
             {/* Review Panel - Right column */}
             <div className="lg:col-span-1">
               <div className="sticky top-8 space-y-6">
-
+                
                 {/* Review Decision */}
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-green-200 animate-slideInUp" style={{ animationDelay: '0.8s' }}>
                   <h3 className="text-xl font-bold text-black mb-4 flex items-center">
@@ -626,12 +669,12 @@ function ReviewProposalContent() {
                     </div>
                     Review Decision
                   </h3>
-
+                  
                   <div className="space-y-3">
                     {[
-                      { value: 'approved', label: 'Approve', color: 'green' },
-                      { value: 'needs_revision', label: 'Needs Revision', color: 'yellow' },
-                      { value: 'rejected', label: 'Reject', color: 'red' }
+                      { value: 'APPROVED', label: 'Approve', color: 'green' },
+                      { value: 'REVISION_REQUESTED', label: 'Needs Revision', color: 'yellow' },
+                      { value: 'REJECTED', label: 'Reject', color: 'red' }
                     ].map((option) => (
                       <label key={option.value} className="flex items-center cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
                         <input
@@ -642,23 +685,25 @@ function ReviewProposalContent() {
                           onChange={(e) => setReviewStatus(e.target.value)}
                           className="sr-only"
                         />
-                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center transition-colors ${reviewStatus === option.value
+                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center transition-colors ${
+                          reviewStatus === option.value
                             ? `border-${option.color}-500 bg-${option.color}-500`
                             : 'border-gray-300'
-                          }`}>
+                        }`}>
                           {reviewStatus === option.value && (
                             <div className="w-2 h-2 bg-white rounded-full"></div>
                           )}
                         </div>
-                        <span className={`font-medium ${reviewStatus === option.value ? 'text-black' : 'text-gray-500'
-                          }`}>
+                        <span className={`font-medium ${
+                          reviewStatus === option.value ? 'text-black' : 'text-gray-500'
+                        }`}>
                           {option.label}
                         </span>
                       </label>
                     ))}
                   </div>
 
-                  {reviewStatus !== 'under_review' && (
+                  {reviewStatus !== 'CMPDI_REVIEW' && reviewStatus !== 'AI_EVALUATION' && (
                     <button
                       onClick={handleSubmitDecision}
                       className="w-full mt-4 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105"
@@ -666,6 +711,13 @@ function ReviewProposalContent() {
                       Submit Decision
                     </button>
                   )}
+                  
+                  <button
+                    onClick={() => setShowClarificationModal(true)}
+                    className="w-full mt-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-yellow-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105"
+                  >
+                    Request Clarification
+                  </button>
                 </div>
 
                 {/* Feedback Section */}
@@ -678,14 +730,14 @@ function ReviewProposalContent() {
                     </div>
                     Review Comments
                   </h3>
-
+                  
                   <textarea
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                     placeholder="Enter your detailed review comments, suggestions, and recommendations here..."
                     className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-black placeholder-gray-500"
                   />
-
+                  
                   <button
                     onClick={handleSubmitFeedback}
                     disabled={!feedback.trim()}
@@ -783,7 +835,7 @@ function ReviewProposalContent() {
                   </div>
                   <h3 className="text-xl font-bold text-black mb-2">Add Commit Message</h3>
                   <p className="text-gray-500 mb-6">Describe your review decision for tracking purposes</p>
-
+                  
                   <div className="mb-6">
                     <textarea
                       value={commitMessage}
@@ -793,7 +845,7 @@ function ReviewProposalContent() {
                       rows="3"
                     />
                   </div>
-
+                  
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowCommitModal(false)}
@@ -829,10 +881,11 @@ function ReviewProposalContent() {
                 <h3 className="text-2xl font-bold text-black mb-3">Decision Submitted Successfully!</h3>
                 <div className="mb-4">
                   <p className="text-gray-500 mb-2">Your review decision has been recorded:</p>
-                  <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${submittedDecision === 'approved' ? 'bg-green-100 text-green-800' :
-                      submittedDecision === 'needs_revision' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                    }`}>
+                  <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${
+                    submittedDecision === 'approved' ? 'bg-green-100 text-green-800' :
+                    submittedDecision === 'needs_revision' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
                     {submittedDecision === 'approved' && (
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -864,9 +917,53 @@ function ReviewProposalContent() {
           document.body
         )}
 
+        {/* Clarification Request Modal */}
+        {showClarificationModal && createPortal(
+          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
+            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-black mb-2">Request Clarification</h3>
+                <p className="text-gray-500 mb-6">Ask the Principal Investigator for additional information or clarification</p>
+                
+                <textarea
+                  value={clarificationMessage}
+                  onChange={(e) => setClarificationMessage(e.target.value)}
+                  placeholder="Enter your clarification request here..."
+                  className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-black placeholder-gray-500 mb-4"
+                />
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowClarificationModal(false);
+                      setClarificationMessage('');
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRequestClarification}
+                    disabled={!clarificationMessage.trim()}
+                    className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-2 px-6 rounded-lg font-semibold hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+                  >
+                    Send Request
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
         {/* AI Chatbot - Always visible */}
         <div className="fixed bottom-6 right-6 z-40">
-          <Chatbot
+          <Chatbot 
             context="reviewer"
             proposalData={proposal}
           />

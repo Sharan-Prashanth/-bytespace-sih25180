@@ -1,12 +1,13 @@
 'use client';
 
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import AdvancedProposalEditor from '../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
-import ProtectedRoute from '../../components/ProtectedRoute';
-import Chatbot from '../../components/Saarthi';
-import { ToastContainer, useToast } from '../../components/ui (plate files)/toast';
 import { useAuth } from '../../context/AuthContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
+import AdvancedProposalEditor from '../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
+import Chatbot from '../../components/Saarthi';
+import { useToast, ToastContainer } from '../../components/ui (plate files)/toast';
+import apiClient from '../../utils/api';
 
 function CreateNewProposalContent() {
   const router = useRouter();
@@ -153,48 +154,43 @@ function CreateNewProposalContent() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch('http://localhost:5000/api/proposals/drafts', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.drafts && data.drafts.length > 0) {
+      // Get all proposals and find drafts
+      const response = await apiClient.get('/api/proposals?status=DRAFT');
+      
+      const proposalsData = response.data.data?.proposals || [];
+      
+      if (proposalsData.length > 0) {
         // Load the most recent draft
-        const latestDraft = data.drafts[0];
+        const latestDraft = proposalsData[0];
         setProposalId(latestDraft._id);
-
+        
         setProposalInfo({
           title: latestDraft.title || '',
-          fundingMethod: latestDraft.researchFundingMethod || 'S&T_OF_MOC',
-          principalImplementingAgency: latestDraft.principalImplementingAgency || '',
-          subImplementingAgency: latestDraft.subImplementingAgency || '',
+          fundingMethod: latestDraft.fundingMethod || 'S&T of MoC',
+          principalImplementingAgency: latestDraft.principalAgency || '',
+          subImplementingAgency: latestDraft.subAgencies?.[0] || '',
           projectLeader: latestDraft.projectLeader || '',
           projectCoordinator: latestDraft.projectCoordinator || '',
-          projectDurationMonths: latestDraft.projectDuration || '',
-          projectOutlayLakhs: latestDraft.projectOutlay || '',
+          projectDurationMonths: latestDraft.durationMonths || '',
+          projectOutlayLakhs: latestDraft.outlayLakhs || '',
         });
 
-        // Load form status
+        // Load form status - check which forms have content
         const status = {};
-        latestDraft.forms?.forEach(form => {
-          status[form.formKey] = true;
-        });
-        setFormStatus(status);
-
-        // Load signatures from metadata
-        if (latestDraft.metadata?.signatures) {
-          setSignatures(latestDraft.metadata.signatures);
+        if (latestDraft.forms) {
+          Object.keys(latestDraft.forms).forEach(formKey => {
+            const normalizedKey = formKey.toLowerCase();
+            if (latestDraft.forms[formKey] && Array.isArray(latestDraft.forms[formKey]) && latestDraft.forms[formKey].length > 0) {
+              status[normalizedKey] = true;
+            }
+          });
         }
+        setFormStatus(status);
 
         info('Draft loaded successfully');
       }
     } catch (error) {
       console.error('Error loading draft:', error);
-      error('Failed to load draft');
     }
   };
 
@@ -258,37 +254,30 @@ function CreateNewProposalContent() {
     try {
       setIsAutoSaving(true);
 
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      const payload = {
+        title: proposalInfo.title,
+        fundingMethod: proposalInfo.fundingMethod,
+        principalAgency: proposalInfo.principalImplementingAgency,
+        subAgencies: proposalInfo.subImplementingAgency ? [proposalInfo.subImplementingAgency] : [],
+        projectLeader: proposalInfo.projectLeader,
+        projectCoordinator: proposalInfo.projectCoordinator,
+        durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
+        outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0
+      };
 
-      const response = await fetch('http://localhost:5000/api/proposals/draft', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          proposalId,
-          title: proposalInfo.title,
-          researchFundingMethod: proposalInfo.fundingMethod,
-          principalImplementingAgency: proposalInfo.principalImplementingAgency,
-          subImplementingAgency: proposalInfo.subImplementingAgency,
-          projectLeader: proposalInfo.projectLeader,
-          projectCoordinator: proposalInfo.projectCoordinator,
-          projectDuration: proposalInfo.projectDurationMonths,
-          projectOutlay: proposalInfo.projectOutlayLakhs,
-          signatures
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        if (!proposalId && data.proposal?._id) {
-          setProposalId(data.proposal._id);
+      let response;
+      if (proposalId) {
+        // Update existing draft
+        response = await apiClient.put(`/api/proposals/${proposalId}`, payload);
+      } else {
+        // Create new draft
+        response = await apiClient.post('/api/proposals', payload);
+        if (response.data.data?.proposal?._id) {
+          setProposalId(response.data.data.proposal._id);
         }
-        setLastSavedTime(new Date());
       }
+
+      setLastSavedTime(new Date());
     } catch (error) {
       console.error('Error auto-saving draft:', error);
     } finally {
@@ -299,66 +288,60 @@ function CreateNewProposalContent() {
   // Handle auto-save from editor
   const handleAutoSave = useCallback(async (editorFormData) => {
     try {
-      console.log('💾 handleAutoSave called with', editorFormData ? Object.keys(editorFormData).length : 0, 'forms');
+      console.log('handleAutoSave called with', editorFormData ? Object.keys(editorFormData).length : 0, 'forms');
       setIsAutoSaving(true);
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('❌ No auth token found');
-        return null;
+      // Prepare forms object with Plate.js content
+      const formsObject = {};
+      if (editorFormData) {
+        Object.keys(editorFormData).forEach(formKey => {
+          // Map formKey to backend form names (formI, formIA, formIX, formX, formXI, formXII)
+          const backendFormKey = formKey.replace('form', 'form').toUpperCase();
+          formsObject[backendFormKey] = editorFormData[formKey].content;
+        });
       }
 
       const payload = {
-        proposalId,
         title: proposalInfo.title,
-        researchFundingMethod: proposalInfo.fundingMethod,
-        principalImplementingAgency: proposalInfo.principalImplementingAgency,
-        subImplementingAgency: proposalInfo.subImplementingAgency,
+        fundingMethod: proposalInfo.fundingMethod,
+        principalAgency: proposalInfo.principalImplementingAgency,
+        subAgencies: proposalInfo.subImplementingAgency ? [proposalInfo.subImplementingAgency] : [],
         projectLeader: proposalInfo.projectLeader,
         projectCoordinator: proposalInfo.projectCoordinator,
-        projectDuration: proposalInfo.projectDurationMonths,
-        projectOutlay: proposalInfo.projectOutlayLakhs,
-        forms: editorFormData ? Object.keys(editorFormData).map(formKey => ({
-          formKey,
-          formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
-          editorContent: editorFormData[formKey].content,
-          wordCount: editorFormData[formKey].wordCount,
-          characterCount: editorFormData[formKey].characterCount
-        })) : undefined,
-        signatures
+        durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
+        outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0,
+        forms: formsObject
       };
 
-      console.log('📦 Auto-save payload:', {
+      console.log('Auto-save payload:', {
         hasProposalId: !!proposalId,
-        formsCount: payload.forms?.length || 0,
-        formKeys: payload.forms?.map(f => f.formKey) || []
+        formsCount: Object.keys(formsObject).length,
+        formKeys: Object.keys(formsObject)
       });
 
-      const response = await fetch('http://localhost:5000/api/proposals/draft', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      let response;
+      let savedProposalId = proposalId;
 
-      const data = await response.json();
+      if (proposalId) {
+        // Update existing draft
+        response = await apiClient.put(`/api/proposals/${proposalId}`, payload);
+      } else {
+        // Create new draft
+        response = await apiClient.post('/api/proposals', payload);
+        savedProposalId = response.data.data?.proposal?._id;
+        if (savedProposalId) {
+          setProposalId(savedProposalId);
+        }
+      }
 
-      if (data.success) {
-        const savedProposalId = data.proposal?._id;
-        console.log('✅ Draft saved successfully:', savedProposalId);
+      console.log('Draft saved successfully:', savedProposalId);
         if (!proposalId && savedProposalId) {
           setProposalId(savedProposalId);
         }
         setLastSavedTime(new Date());
-        return savedProposalId || proposalId;
-      } else {
-        console.error('❌ Draft save failed:', data.message);
-        return proposalId;
-      }
-    } catch (error) {
-      console.error('❌ Error auto-saving draft:', error);
+        return savedProposalId;
+      } catch (error) {
+      console.error('Error auto-saving draft:', error);
       return proposalId;
     } finally {
       setIsAutoSaving(false);
@@ -390,29 +373,20 @@ function CreateNewProposalContent() {
       // Convert file to base64
       const reader = new FileReader();
       reader.readAsDataURL(file);
-
+      
       reader.onload = async () => {
         try {
           setExtractingForm(formId);
           setExtractionProgress(50);
 
           // Extract content from file via backend
-          const response = await fetch('http://localhost:5000/api/upload/extract-form', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              file: reader.result,
-              formId,
-              fileName: file.name
-            })
+          const response = await apiClient.post('/api/upload/extract-form', {
+            file: reader.result,
+            formId,
+            fileName: file.name
           });
 
-          const data = await response.json();
-
-          if (data.success) {
+          if (response.data.success) {
             setUploadedFiles((prev) => ({
               ...prev,
               [formId]: { name: file.name, extracted: true },
@@ -420,9 +394,9 @@ function CreateNewProposalContent() {
 
             // TODO: Load extracted content into editor
             // This would require passing the content to the editor ref
-
+            
             setExtractionProgress(100);
-
+            
             // Mark form as complete
             setFormStatus((prev) => ({
               ...prev,
@@ -430,7 +404,7 @@ function CreateNewProposalContent() {
             }));
 
             success(`${FORM_CONFIGS.find(f => f.id === formId)?.label} content extracted successfully`);
-
+            
             setTimeout(() => {
               setUploadingForm(null);
               setExtractingForm(null);
@@ -477,43 +451,34 @@ function CreateNewProposalContent() {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/api/proposals/draft', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          proposalId,
-          title: proposalInfo.title,
-          researchFundingMethod: proposalInfo.fundingMethod,
-          principalImplementingAgency: proposalInfo.principalImplementingAgency,
-          subImplementingAgency: proposalInfo.subImplementingAgency,
-          projectLeader: proposalInfo.projectLeader,
-          projectCoordinator: proposalInfo.projectCoordinator,
-          projectDuration: proposalInfo.projectDurationMonths,
-          projectOutlay: proposalInfo.projectOutlayLakhs,
-          forms: editorFormData ? Object.keys(editorFormData).map(formKey => ({
-            formKey,
-            formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
-            editorContent: editorFormData[formKey].content,
-            wordCount: editorFormData[formKey].wordCount,
-            characterCount: editorFormData[formKey].characterCount
-          })) : undefined,
-          signatures
-        })
+      const response = await apiClient.post('/api/proposals/draft', {
+        proposalId,
+        title: proposalInfo.title,
+        researchFundingMethod: proposalInfo.fundingMethod,
+        principalImplementingAgency: proposalInfo.principalImplementingAgency,
+        subImplementingAgency: proposalInfo.subImplementingAgency,
+        projectLeader: proposalInfo.projectLeader,
+        projectCoordinator: proposalInfo.projectCoordinator,
+        projectDuration: proposalInfo.projectDurationMonths,
+        projectOutlay: proposalInfo.projectOutlayLakhs,
+        forms: editorFormData ? Object.keys(editorFormData).map(formKey => ({
+          formKey,
+          formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
+          editorContent: editorFormData[formKey].content,
+          wordCount: editorFormData[formKey].wordCount,
+          characterCount: editorFormData[formKey].characterCount
+        })) : undefined,
+        signatures
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        if (!proposalId && data.proposal?._id) {
-          setProposalId(data.proposal._id);
+      if (response.data.success) {
+        if (!proposalId && response.data.data?.proposal?._id) {
+          setProposalId(response.data.data.proposal._id);
         }
         setLastSavedTime(new Date());
         success('Draft saved successfully');
       } else {
-        error(data.message || 'Failed to save draft');
+        error(response.data.message || 'Failed to save draft');
       }
     } catch (err) {
       console.error('Error saving draft:', err);
@@ -586,50 +551,41 @@ function CreateNewProposalContent() {
     try {
       info('Uploading images to cloud storage...');
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
       // Prepare images for upload (only base64 strings need upload)
-      const imagesToUpload = [];
-
-      Object.entries(signatures).forEach(([key, value]) => {
-        if (value && typeof value === 'string' && value.startsWith('data:image')) {
-          imagesToUpload.push({ key, image: value, fileName: `${key}_${Date.now()}` });
-        }
-      });
-
-      if (imagesToUpload.length === 0) {
-        // No images to upload
-        return signatures;
-      }
-
-      // Upload all images to backend
-      const response = await fetch('http://localhost:5000/api/upload/images', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          images: imagesToUpload.map(img => ({ image: img.image, fileName: img.fileName })),
-          folder: 'signatures'
-        })
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.message || 'Upload failed');
-      }
-
-      // Replace base64 with uploaded URLs
       const uploadedUrls = { ...signatures };
-      data.data.successful.forEach((result, index) => {
-        const imageKey = imagesToUpload[index].key;
-        uploadedUrls[imageKey] = result.url;
-      });
+      
+      for (const [key, value] of Object.entries(signatures)) {
+        if (value && typeof value === 'string' && value.startsWith('data:image')) {
+          // Convert base64 to Blob
+          const base64Data = value.split(',')[1];
+          const mimeType = value.match(/data:(.*?);base64/)[1];
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: mimeType });
+          
+          // Create File object
+          const file = new File([blob], `${key}_${Date.now()}.png`, { type: mimeType });
+          
+          // Upload to backend
+          const formData = new FormData();
+          formData.append('image', file);
+          formData.append('folder', 'signatures');
+          
+          const response = await apiClient.post('/api/collaboration/upload/image', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+          
+          if (response.data.success) {
+            uploadedUrls[key] = response.data.data.url;
+          }
+        }
+      }
 
       success('Images uploaded successfully');
       return uploadedUrls;
@@ -687,10 +643,10 @@ function CreateNewProposalContent() {
       if (!currentProposalId) {
         setSubmissionStage('Saving draft...');
         setSubmissionProgress(15);
-
+        
         const editorFormDataTemp = editorRef.current?.getFormData?.() || {};
         currentProposalId = await handleAutoSave(editorFormDataTemp);
-
+        
         if (!currentProposalId) {
           throw new Error('Failed to create draft. Please try again.');
         }
@@ -710,75 +666,53 @@ function CreateNewProposalContent() {
       setSubmissionStage('Submitting proposal...');
       setSubmissionProgress(50);
 
-      // Prepare submission payload
+      // Prepare submission payload with commitMessage
       const submissionPayload = {
-        forms: Object.keys(editorFormData).map(formKey => ({
-          formKey,
-          formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
-          editorContent: editorFormData[formKey].content,
-          wordCount: editorFormData[formKey].wordCount,
-          characterCount: editorFormData[formKey].characterCount
-        })),
-        signatures: uploadedSignatures
+        commitMessage: 'Initial submission'
       };
 
-      console.log('📦 Submission payload:', {
+      console.log('Submission payload:', {
         proposalId: currentProposalId,
-        formsCount: submissionPayload.forms.length,
-        formKeys: submissionPayload.forms.map(f => f.formKey),
-        signaturesCount: Object.keys(uploadedSignatures).length,
-        signatureKeys: Object.keys(uploadedSignatures)
+        commitMessage: submissionPayload.commitMessage
       });
 
-      const response = await fetch(`http://localhost:5000/api/proposals/${currentProposalId}/submit`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(submissionPayload)
-      });
+      const response = await apiClient.post(`/api/proposals/${currentProposalId}/submit`, submissionPayload);
 
-      const data = await response.json();
+      const data = response.data;
 
-      console.log('📤 Submission response:', {
+      console.log('Submission response:', {
         success: data.success,
         message: data.message,
-        statusCode: response.status,
-        proposal: data.proposal ? {
-          id: data.proposal._id,
-          status: data.proposal.status,
-          formsCount: data.proposal.forms?.length
+        proposal: data.data?.proposal ? {
+          id: data.data.proposal._id,
+          status: data.data.proposal.status,
+          proposalCode: data.data.proposal.proposalCode
         } : null
       });
 
       if (!data.success) {
-        console.error('❌ Submission failed:', data.message);
+        console.error('Submission failed:', data.message);
         throw new Error(data.message || 'Submission failed');
       }
 
-      console.log('✅ Proposal submitted successfully:', data.proposal);
+      console.log('Proposal submitted successfully:', data.data.proposal);
 
-      setSubmissionStage('AI Evaluation: Checking novelty and originality...');
+      setSubmissionStage('AI Evaluation in progress...');
       setSubmissionProgress(65);
 
-      // TODO: Trigger AI evaluation endpoint
-      // await fetch(`http://localhost:5000/api/proposals/${proposalId}/ai-evaluation/trigger`, ...)
-
-      setSubmissionStage('AI Evaluation: Verifying compliance with guidelines...');
-      setSubmissionProgress(75);
-
-      setSubmissionStage('AI Evaluation: Assessing technical feasibility...');
-      setSubmissionProgress(85);
+      // Wait for AI evaluation (backend handles this automatically)
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       setSubmissionStage('Finalizing submission...');
-      setSubmissionProgress(95);
+      setSubmissionProgress(85);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       setSubmissionProgress(100);
       setSubmissionStage('Submission complete!');
 
-      const submittedProposalNumber = data.proposal?.proposalNumber || 'Unknown';
-      setSubmittedProposalId(submittedProposalNumber);
+      const submittedProposalCode = data.data?.proposal?.proposalCode || 'Unknown';
+      setSubmittedProposalId(submittedProposalCode);
 
       // Show success modal
       setTimeout(() => {
@@ -802,7 +736,7 @@ function CreateNewProposalContent() {
     <div className="min-h-screen bg-white">
       {/* Toast Container */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-
+      
       {/* Header */}
       <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -1048,7 +982,7 @@ function CreateNewProposalContent() {
 
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
             <p className="text-black text-sm">
-              <strong>Note:</strong> You can upload any subset of forms (1-6) and their content will be loaded into the editor.
+              <strong>Note:</strong> You can upload any subset of forms (1-6) and their content will be loaded into the editor. 
               You can then make minor corrections directly in the editor, or you can choose to fill all forms directly in the editor without uploading.
             </p>
           </div>
@@ -1058,10 +992,11 @@ function CreateNewProposalContent() {
             {FORM_CONFIGS.map((form) => (
               <div
                 key={form.id}
-                className={`border-2 rounded-xl p-4 transition-all ${formStatus[form.id]
+                className={`border-2 rounded-xl p-4 transition-all ${
+                  formStatus[form.id]
                     ? 'border-green-500 bg-green-50'
                     : 'border-orange-200 bg-white hover:border-orange-400'
-                  }`}
+                }`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -1210,10 +1145,11 @@ function CreateNewProposalContent() {
             <button
               onClick={handleSubmit}
               disabled={!isFormValid || isSubmitting}
-              className={`px-8 py-3 rounded-lg font-bold text-white transition-all shadow-lg ${isFormValid && !isSubmitting
+              className={`px-8 py-3 rounded-lg font-bold text-white transition-all shadow-lg ${
+                isFormValid && !isSubmitting
                   ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 cursor-pointer'
                   : 'bg-gray-400 cursor-not-allowed'
-                }`}
+              }`}
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">

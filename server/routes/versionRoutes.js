@@ -1,13 +1,21 @@
 import express from 'express';
-import { saveDraft, history } from '../controllers/versionController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import {
+  getVersions,
+  getVersionContent,
+  createVersion,
+  revertToVersion
+} from '../controllers/versionController.js';
+import { authenticate } from '../middleware/auth.js';
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
-// Save a draft version (protected)
-router.post('/saveDraft', protect, saveDraft);
+router.use(authenticate);
 
-// Get version history for a proposal
-router.get('/history/:proposalId', protect, history);
+router.route('/')
+  .get(getVersions)
+  .post(createVersion);
+
+router.get('/:versionNumber', getVersionContent);
+router.put('/:versionNumber/revert', revertToVersion);
 
 export default router;
