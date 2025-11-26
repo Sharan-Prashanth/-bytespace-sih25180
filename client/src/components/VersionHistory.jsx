@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect } from "react";
 import apiClient from "@/utils/api";
+import { useEffect, useState } from "react";
 
-export default function VersionHistory({ 
-  proposalId, 
+export default function VersionHistory({
+  proposalId,
   formId = null,
   currentVersion = 1,
-  showVersionHistory, 
-  setShowVersionHistory, 
-  showSaarthi 
+  showVersionHistory,
+  setShowVersionHistory,
+  showSaarthi
 }) {
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -34,10 +34,10 @@ export default function VersionHistory({
 
     try {
       // Use form-specific or proposal-level endpoint based on formId presence
-      const url = formId 
+      const url = formId
         ? `/api/proposals/${proposalId}/forms/${formId}/versions?limit=50`
         : `/api/proposals/${proposalId}/versions?limit=50`;
-      
+
       const response = await apiClient.get(url);
       setVersions(response.data.versions || []);
     } catch (err) {
@@ -74,10 +74,10 @@ export default function VersionHistory({
       );
 
       alert(`✅ Successfully rolled back to version ${versionNumber}!\n\nNew version ${response.data.newVersion} created.`);
-      
+
       // Refresh version list
       fetchVersionHistory();
-      
+
       // Reload page to reflect changes
       setTimeout(() => {
         window.location.reload();
@@ -112,9 +112,8 @@ export default function VersionHistory({
       {/* Version History Toggle Button removed - now controlled by editor */}
 
       {/* Version History Panel */}
-      <div className={`fixed inset-y-0 left-0 z-40 w-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${
-        showVersionHistory ? 'translate-x-0' : '-translate-x-full'
-      }`}>
+      <div className={`fixed inset-y-0 left-0 z-40 w-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${showVersionHistory ? 'translate-x-0' : '-translate-x-full'
+        }`}>
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 text-white p-6 shadow-lg">
           <div className="flex items-center justify-between">
@@ -184,7 +183,7 @@ export default function VersionHistory({
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
               <p className="text-red-800 font-medium">Error loading versions</p>
               <p className="text-red-600 text-sm mt-1">{error}</p>
-              <button 
+              <button
                 onClick={fetchVersionHistory}
                 className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
               >
@@ -200,94 +199,92 @@ export default function VersionHistory({
               <p className="text-orange-600 text-sm mt-1">Versions will appear after you save changes</p>
             </div>
           ) : (
-          <div className="space-y-3">
-            {versions.map((version) => (
-              <div
-                key={version._id}
-                className="group bg-white border border-orange-200 rounded-lg p-4 hover:shadow-lg hover:border-orange-300 transition-all duration-200"
-              >
-                {/* Version Header */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      version.versionType === 'snapshot' ? 'bg-blue-500' : 'bg-orange-400'
-                    }`}></div>
-                    <span className="font-bold text-orange-900 text-lg">Version {version.versionNumber}</span>
+            <div className="space-y-3">
+              {versions.map((version) => (
+                <div
+                  key={version._id}
+                  className="group bg-white border border-orange-200 rounded-lg p-4 hover:shadow-lg hover:border-orange-300 transition-all duration-200"
+                >
+                  {/* Version Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${version.versionType === 'snapshot' ? 'bg-blue-500' : 'bg-orange-400'
+                        }`}></div>
+                      <span className="font-bold text-orange-900 text-lg">Version {version.versionNumber}</span>
+                    </div>
+                    <div className={`px-2 py-1 text-xs rounded-full font-medium ${version.versionType === 'snapshot'
+                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                        : 'bg-orange-100 text-orange-800 border border-orange-200'
+                      }`}>
+                      {version.versionType}
+                    </div>
                   </div>
-                  <div className={`px-2 py-1 text-xs rounded-full font-medium ${
-                    version.versionType === 'snapshot'
-                      ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                      : 'bg-orange-100 text-orange-800 border border-orange-200'
-                  }`}>
-                    {version.versionType}
+
+                  {/* Timestamp */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm text-orange-700 font-medium">
+                      {formatDate(version.createdAt)} at {formatTime(version.createdAt)}
+                    </span>
+                  </div>
+
+                  {/* Author */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="text-sm text-orange-800 font-medium">
+                      {version.createdBy?.name || 'Unknown'}
+                    </span>
+                  </div>
+
+                  {/* Change Type & Metadata */}
+                  <div className="flex items-start gap-2 mb-3">
+                    <svg className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <div className="text-sm text-orange-700 leading-relaxed">
+                      <div className="font-medium">{version.changeType?.replace(/_/g, ' ')}</div>
+                      {version.comment && <div className="text-xs mt-1">{version.comment}</div>}
+                      {version.metadata?.wordCountDelta !== undefined && (
+                        <div className="text-xs mt-1 text-slate-600">
+                          {version.metadata.wordCountDelta > 0 ? '+' : ''}
+                          {version.metadata.wordCountDelta} words
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Rollback Button */}
+                  <div className="mt-4">
+                    <button
+                      onClick={() => handleRollback(version.versionNumber)}
+                      disabled={loadingRollback === version.versionNumber}
+                      className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 hover:shadow-md"
+                    >
+                      {loadingRollback === version.versionNumber ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Rolling back...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                          Rollback to This Version
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-
-                {/* Timestamp */}
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className="text-sm text-orange-700 font-medium">
-                    {formatDate(version.createdAt)} at {formatTime(version.createdAt)}
-                  </span>
-                </div>
-
-                {/* Author */}
-                <div className="flex items-center gap-2 mb-3">
-                  <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <span className="text-sm text-orange-800 font-medium">
-                    {version.createdBy?.name || 'Unknown'}
-                  </span>
-                </div>
-
-                {/* Change Type & Metadata */}
-                <div className="flex items-start gap-2 mb-3">
-                  <svg className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <div className="text-sm text-orange-700 leading-relaxed">
-                    <div className="font-medium">{version.changeType?.replace(/_/g, ' ')}</div>
-                    {version.comment && <div className="text-xs mt-1">{version.comment}</div>}
-                    {version.metadata?.wordCountDelta !== undefined && (
-                      <div className="text-xs mt-1 text-slate-600">
-                        {version.metadata.wordCountDelta > 0 ? '+' : ''}
-                        {version.metadata.wordCountDelta} words
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Rollback Button */}
-                <div className="mt-4">
-                  <button 
-                    onClick={() => handleRollback(version.versionNumber)}
-                    disabled={loadingRollback === version.versionNumber}
-                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 hover:shadow-md"
-                  >
-                    {loadingRollback === version.versionNumber ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Rolling back...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                        Rollback to This Version
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
           )}
         </div>
       </div>

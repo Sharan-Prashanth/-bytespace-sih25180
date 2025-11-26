@@ -24,7 +24,7 @@
     }
 
     .page {
-      width: 210mm;
+      width: 214mm;
       min-height: 297mm;
       margin: 8px auto;
       /* Government-themed page background (saffron -> white -> green) */
@@ -34,8 +34,8 @@
       box-shadow: 0 0 4px rgba(0, 0, 0, 0.12);
       page-break-after: always;
       /* subtle left/right accent lines matching gov colors */
-      border-left: 6px solid rgba(255,153,51,0.12);
-      border-right: 6px solid rgba(19,136,8,0.07);
+      border-left: 3px solid rgba(255,153,51,0.12);
+      border-right: 3px solid rgba(19,136,8,0.07);
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -417,8 +417,8 @@
       width: 100%;
       height: 92px;
       background-color: var(--paper-bg);
-      border-left: 6px solid var(--gov-saffron);
-      border-right: 6px solid var(--gov-green);
+      border-left: 3px solid var(--gov-saffron);
+      border-right: 3px solid var(--gov-green);
       border-radius: 6px;
       display: flex;
       align-items: center;
@@ -512,6 +512,9 @@
       flex-direction: column;
       gap: 20px;
       align-items: center;
+      padding-bottom: 4px;
+      padding-left: 2px;
+      padding-right: 4px;
       padding-top: 6px;
     }
 
@@ -677,7 +680,7 @@
     }
     .dashboard-top {
       display:flex;
-      gap:14px;
+      gap:7px;
       margin-top:12px;
     }
     .big-cost-card {
@@ -702,7 +705,7 @@
       background: linear-gradient(180deg, #fff3e6 0%, #ffffff 48%, #eef8f0 100%);
       color: #233447; /* dark slate for body text */
       padding: 18px;
-      border-radius: 6px;
+      border-radius: 2px;
       box-shadow: inset 0 1px 0 rgba(0,0,0,0.02);
       border: 1px solid rgba(0,0,0,0.04);
     }
@@ -740,7 +743,7 @@
 <!-- ================= PAGE 1 ================= -->
 <div class="page">
   <div class="banner">
-    <div class="banner-left" style="display:flex;align-items:center;gap:12px;">
+    <div class="banner-left" style="display:flex;align-items:center;gap:2px;">
       <img src="../assets/moc.jpg" style="height:56px;" alt="MoC" />
     </div>
 
