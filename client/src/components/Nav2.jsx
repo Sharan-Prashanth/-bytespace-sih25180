@@ -11,19 +11,46 @@ export default function Nav2() {
     const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
     const [fontSize, setFontSize] = useState(16);
     const [isScrolled, setIsScrolled] = useState(false);
+    const [isVisible, setIsVisible] = useState(true);
+    const [lastScrollY, setLastScrollY] = useState(0);
     const userMenuRef = useRef(null);
     const languageMenuRef = useRef(null);
 
-    // Scroll detection for enhanced shadow
+    // Scroll detection for enhanced shadow and auto-hide
     useEffect(() => {
+        let ticking = false;
+
         const handleScroll = () => {
-            const scrollTop = window.scrollY;
-            setIsScrolled(scrollTop > 10);
+            if (!ticking) {
+                window.requestAnimationFrame(() => {
+                    const currentScrollY = window.scrollY;
+
+                    // Update scrolled state
+                    setIsScrolled(currentScrollY > 10);
+
+                    // Show/hide navbar based on scroll direction
+                    if (currentScrollY < lastScrollY || currentScrollY < 100) {
+                        // Scrolling up or near top - show navbar
+                        setIsVisible(true);
+                    } else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+                        // Scrolling down and past 100px - hide navbar
+                        setIsVisible(false);
+                        // Close any open menus when hiding
+                        setIsUserMenuOpen(false);
+                        setIsLanguageMenuOpen(false);
+                    }
+
+                    setLastScrollY(currentScrollY);
+                    ticking = false;
+                });
+
+                ticking = true;
+            }
         };
 
-        window.addEventListener('scroll', handleScroll);
+        window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
+    }, [lastScrollY]);
 
     // Close menus when clicking outside
     useEffect(() => {
@@ -78,8 +105,10 @@ export default function Nav2() {
 
     return (
         <>
-            {/* Navbar with Solid Background - Always Visible */}
-            <nav className={`fixed top-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-md text-white transition-shadow duration-300 ${isScrolled ? 'shadow-2xl border-b border-slate-800' : 'shadow-lg border-b border-slate-800/50'}`}>
+            {/* Navbar with Solid Background - Auto-hide on scroll */}
+            <nav className={`fixed top-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-md text-white transition-all duration-300 ${isScrolled ? 'shadow-2xl border-b border-slate-800' : 'shadow-lg border-b border-slate-800/50'
+                } ${isVisible ? 'translate-y-0' : '-translate-y-full'
+                }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-20 gap-6">
                         {/* Left Section: Government & Logos */}
