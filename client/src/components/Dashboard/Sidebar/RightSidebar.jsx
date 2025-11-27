@@ -6,8 +6,12 @@ export default function RightSidebar({
     allMetrics = [],
     selectedMetrics = [],
     toggleMetric,
-    resetMetrics
+    resetMetrics,
+    theme
 }) {
+    const isDark = theme === 'dark' || theme === 'darkest';
+    const isDarkest = theme === 'darkest';
+
     // Color mapping for selected backgrounds and borders
     const containerStyles = {
         blue: 'bg-blue-50 border-blue-200',
@@ -21,6 +25,34 @@ export default function RightSidebar({
         amber: 'bg-amber-50 border-amber-200',
         teal: 'bg-teal-50 border-teal-200',
         pink: 'bg-pink-50 border-pink-200',
+    };
+
+    const darkContainerStyles = {
+        blue: 'bg-blue-900/30 border-blue-800',
+        emerald: 'bg-emerald-900/30 border-emerald-800',
+        red: 'bg-red-900/30 border-red-800',
+        green: 'bg-green-900/30 border-green-800',
+        indigo: 'bg-indigo-900/30 border-indigo-800',
+        purple: 'bg-purple-900/30 border-purple-800',
+        cyan: 'bg-cyan-900/30 border-cyan-800',
+        orange: 'bg-orange-900/30 border-orange-800',
+        amber: 'bg-amber-900/30 border-amber-800',
+        teal: 'bg-teal-900/30 border-teal-800',
+        pink: 'bg-pink-900/30 border-pink-800',
+    };
+
+    const darkestContainerStyles = {
+        blue: 'bg-neutral-900 border-neutral-800',
+        emerald: 'bg-neutral-900 border-neutral-800',
+        red: 'bg-neutral-900 border-neutral-800',
+        green: 'bg-neutral-900 border-neutral-800',
+        indigo: 'bg-neutral-900 border-neutral-800',
+        purple: 'bg-neutral-900 border-neutral-800',
+        cyan: 'bg-neutral-900 border-neutral-800',
+        orange: 'bg-neutral-900 border-neutral-800',
+        amber: 'bg-neutral-900 border-neutral-800',
+        teal: 'bg-neutral-900 border-neutral-800',
+        pink: 'bg-neutral-900 border-neutral-800',
     };
 
     // Color mapping for checkbox backgrounds and borders
@@ -53,23 +85,47 @@ export default function RightSidebar({
         pink: 'text-pink-900',
     };
 
+    const darkTextStyles = {
+        blue: 'text-blue-300',
+        emerald: 'text-emerald-300',
+        red: 'text-red-300',
+        green: 'text-green-300',
+        indigo: 'text-indigo-300',
+        purple: 'text-purple-300',
+        cyan: 'text-cyan-300',
+        orange: 'text-orange-300',
+        amber: 'text-amber-300',
+        teal: 'text-teal-300',
+        pink: 'text-pink-300',
+    };
+
+    const getContainerClass = () => {
+        if (isDarkest) return 'bg-black border-neutral-900';
+        if (isDark) return 'bg-slate-900 border-slate-800';
+        return 'bg-white border-slate-100';
+    };
+
     return (
-        <div className="w-72 bg-white border-l border-slate-100 flex flex-col hidden xl:flex shrink-0 rounded-l-3xl">
+        <div className={`w-72 border-l flex flex-col hidden xl:flex shrink-0 rounded-l-3xl transition-colors duration-300 ${getContainerClass()}`}>
 
             {/* Header */}
-            <div className="p-5 border-b border-slate-50 flex items-center justify-between">
+            <div className={`p-5 border-b flex items-center justify-between ${isDarkest ? 'border-neutral-900' : isDark ? 'border-slate-800' : 'border-slate-50'}`}>
                 <div>
-                    <h3 className="font-bold text-slate-900 text-lg">Dashboard Metrics</h3>
-                    <p className="text-sm text-slate-500 mt-1">Select up to 5 metrics to display</p>
+                    <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Dashboard Metrics</h3>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Select up to 5 metrics to display</p>
                 </div>
 
                 {/* Reset Button */}
                 <button
                     onClick={resetMetrics}
-                    className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition"
+                    className={`p-2 rounded-lg transition 
+                        ${isDarkest ? 'bg-neutral-900 hover:bg-neutral-800 text-neutral-300' :
+                            isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' :
+                                'bg-slate-100 hover:bg-slate-200 text-slate-700'}
+                    `}
                     title="Reset Metrics"
                 >
-                    <RotateCcw size={16} className="text-slate-700" />
+                    <RotateCcw size={16} />
                 </button>
             </div>
 
@@ -80,6 +136,17 @@ export default function RightSidebar({
                         const isSelected = selectedMetrics.includes(metric.key);
                         const color = metric.color || 'blue';
 
+                        const getMetricStyle = () => {
+                            if (isSelected) {
+                                if (isDarkest) return darkestContainerStyles[color] || darkestContainerStyles.blue;
+                                if (isDark) return darkContainerStyles[color] || darkContainerStyles.blue;
+                                return containerStyles[color] || containerStyles.blue;
+                            }
+                            if (isDarkest) return 'bg-black border-neutral-900 hover:bg-neutral-900 hover:border-neutral-800';
+                            if (isDark) return 'bg-slate-900 border-slate-800 hover:bg-slate-800 hover:border-slate-700';
+                            return 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300';
+                        };
+
                         return (
                             <div
                                 key={metric.key}
@@ -87,14 +154,14 @@ export default function RightSidebar({
                                 className={`
                                     flex items-center justify-between px-3 py-2 rounded-2xl border cursor-pointer 
                                     transition-all text-sm duration-200
-                                    ${isSelected
-                                        ? `${containerStyles[color] || containerStyles.blue}`
-                                        : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                                    }
+                                    ${getMetricStyle()}
                                 `}
                             >
                                 {/* Title */}
-                                <span className={`font-medium ${isSelected ? (textStyles[color] || 'text-slate-900') : 'text-slate-600'}`}>
+                                <span className={`font-medium ${isSelected
+                                    ? (isDark ? (darkTextStyles[color] || 'text-slate-100') : (textStyles[color] || 'text-slate-900'))
+                                    : (isDark ? 'text-slate-400' : 'text-slate-600')
+                                    }`}>
                                     {metric.title}
                                 </span>
 
@@ -104,7 +171,7 @@ export default function RightSidebar({
                                         w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-200
                                         ${isSelected
                                             ? `${checkboxStyles[color] || checkboxStyles.blue} text-white`
-                                            : 'border-slate-300 bg-white'
+                                            : (isDarkest ? 'border-neutral-800 bg-neutral-900' : isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-300 bg-white')
                                         }
                                     `}
                                 >

@@ -1,17 +1,21 @@
 'use client';
 
-import { Calendar } from 'lucide-react';
+import { Calendar, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Sidebar from '../Sidebar/Sidebar';
+import CalendarWidget from '../Widgets/CalendarWidget';
 
 export default function DashboardLayout({
     children,
     activeSection,
     setActiveSection,
     user,
-    logout
+    logout,
+    theme,
+    toggleTheme
 }) {
     const [isMobile, setIsMobile] = useState(false);
+    const [showCalendar, setShowCalendar] = useState(false);
 
     useEffect(() => {
         const handleResize = () => {
@@ -31,33 +35,71 @@ export default function DashboardLayout({
         year: 'numeric'
     });
 
+    const isDark = theme === 'dark' || theme === 'darkest';
+
     return (
-        <div className="flex h-screen bg-[#f3f4f6] font-sans text-slate-900 overflow-hidden">
+        <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-300
+            ${theme === 'darkest' ? 'bg-black text-slate-100' : theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900'}
+        `}>
             {/* Left Sidebar */}
             <Sidebar
                 activeSection={activeSection}
                 setActiveSection={setActiveSection}
                 onLogout={logout}
+                theme={theme}
             />
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
                 {/* Header */}
-                <header className="px-8 py-6 flex items-start justify-between bg-[#f3f4f6] shrink-0">
+                <header className="px-8 py-6 flex items-start justify-between bg-transparent shrink-0 relative z-20">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome, Admin</h1>
-                        <p className="text-slate-500 text-sm mt-1">Track proposals and manage your team</p>
+                        {activeSection === 'overview' && (
+                            <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+                                <h1 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Welcome, Admin</h1>
+                                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Track proposals and manage your team</p>
+                            </div>
+                        )}
                     </div>
-                    <div className="flex items-center gap-3 text-slate-500 font-medium text-sm">
+                    <div className={`flex items-center gap-3 font-medium text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         <span>{formattedDate}</span>
-                        <div className="p-2 bg-white rounded-xl shadow-sm">
-                            <Calendar size={18} />
+
+                        {/* Theme Toggle */}
+                        <button
+                            onClick={toggleTheme}
+                            className={`p-2 rounded-xl shadow-sm transition-colors 
+                                ${theme === 'darkest' ? 'bg-neutral-900 text-yellow-400 border border-neutral-800 hover:bg-neutral-800' :
+                                    theme === 'dark' ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' :
+                                        'bg-white text-slate-600 hover:text-slate-900'}
+                            `}
+                        >
+                            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+                        </button>
+
+                        {/* Calendar Widget Trigger */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowCalendar(!showCalendar)}
+                                className={`p-2 rounded-xl shadow-sm transition-all
+                                    ${showCalendar
+                                        ? 'bg-blue-600 text-white shadow-blue-500/30'
+                                        : theme === 'darkest' ? 'bg-neutral-900 text-slate-200 border border-neutral-800 hover:bg-neutral-800' : theme === 'dark' ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-white text-slate-600 hover:text-slate-900'}
+                                `}
+                            >
+                                <Calendar size={18} />
+                            </button>
+
+                            {showCalendar && (
+                                <CalendarWidget onClose={() => setShowCalendar(false)} theme={theme} />
+                            )}
                         </div>
                     </div>
                 </header>
 
-                {/* Content - Unscrollable */}
-                <main className="flex-1 overflow-hidden px-8 pb-8 flex flex-col">
+                {/* Content - Scrollable based on section */}
+                <main className={`flex-1 px-8 pb-8 flex flex-col transition-all duration-300
+                    ${activeSection === 'overview' ? 'overflow-hidden' : 'overflow-y-auto h-full'}
+                `}>
                     {children}
                 </main>
             </div>

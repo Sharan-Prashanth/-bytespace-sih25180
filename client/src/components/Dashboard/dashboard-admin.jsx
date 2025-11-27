@@ -19,6 +19,15 @@ function AdminDashboardContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [activeSection, setActiveSection] = useState('overview');
+  const [theme, setTheme] = useState('light'); // 'light' | 'dark' | 'darkest'
+
+  const toggleTheme = () => {
+    setTheme(prev => {
+      if (prev === 'light') return 'dark';
+      if (prev === 'dark') return 'darkest';
+      return 'light';
+    });
+  };
 
   // Metric State
   const [metrics, setMetrics] = useState([]);
@@ -52,21 +61,32 @@ function AdminDashboardContent() {
       // Deselect
       if (selectedMetrics.length > 1) {
         setSelectedMetrics(prev => prev.filter(k => k !== metricKey));
+        // If we removed the active metric, switch to the last one in the list (most recently added)
         if (activeMetric?.key === metricKey) {
           const remaining = selectedMetrics.filter(k => k !== metricKey);
-          const nextMetric = metrics.find(m => m.key === remaining[0]);
+          const nextMetricKey = remaining[remaining.length - 1]; // Switch to most recent
+          const nextMetric = metrics.find(m => m.key === nextMetricKey);
           setActiveMetric(nextMetric);
         }
       }
     } else {
-      // Select with FIFO logic
-      setSelectedMetrics(prev => {
-        if (prev.length >= 5) {
-          // Remove the first one (FIFO) and add the new one
-          return [...prev.slice(1), metricKey];
-        }
-        return [...prev, metricKey];
-      });
+      // Select with FIFO logic (Queue)
+      let newSelection = [...selectedMetrics];
+
+      if (newSelection.length >= 5) {
+        // Remove the first one (FIFO)
+        newSelection.shift();
+      }
+
+      // Add new one to the end
+      newSelection.push(metricKey);
+      setSelectedMetrics(newSelection);
+
+      // AUTO-SELECT the newly added metric
+      const newMetric = metrics.find(m => m.key === metricKey);
+      if (newMetric) {
+        setActiveMetric(newMetric);
+      }
     }
   };
 
@@ -97,17 +117,18 @@ function AdminDashboardContent() {
           resetMetrics={resetMetrics}
           activeMetric={activeMetric}
           onMetricClick={handleMetricClick}
+          theme={theme}
         />;
       case 'users':
-        return <UsersSection />;
+        return <UsersSection theme={theme} />;
       case 'staff':
-        return <StaffSection />;
+        return <StaffSection theme={theme} />;
       case 'proposals':
-        return <ProposalsSection />;
+        return <ProposalsSection theme={theme} />;
       case 'finance':
-        return <FinanceSection />;
+        return <FinanceSection theme={theme} />;
       case 'roles':
-        return <RolesSection />;
+        return <RolesSection theme={theme} />;
       default:
         return <OverviewSection />;
     }
@@ -119,6 +140,8 @@ function AdminDashboardContent() {
       setActiveSection={setActiveSection}
       user={user}
       logout={logout}
+      theme={theme}
+      toggleTheme={toggleTheme}
     >
       {renderSection()}
     </DashboardLayout>
