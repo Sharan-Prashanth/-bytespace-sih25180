@@ -29,3 +29,8 @@ lightgbm
 joblib
 tqdm
 openpyxl
+torchvision 
+opencv-python 
+regex
+paddlepaddle 
+paddleocr 
