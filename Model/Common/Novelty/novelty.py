@@ -491,6 +491,115 @@ def compute_novelty_score(total_innovations: int, truly_new_count: int) -> int:
     # clamp
     return max(0, min(100, score))
 
+
+def extract_lines_similar_to_past(full_text: str, past_jsons: List[Dict[str, Any]], max_results: int = 25, sim_threshold: float = 0.55) -> List[Dict[str, Any]]:
+    """Find sentences/lines in `full_text` that are similar to content in past_jsons.
+
+    Returns list of {line_number, text, best_match_file, similarity, matched_excerpt}.
+    Uses precomputed embedding store (SBERT) when available for faster, semantic matching,
+    otherwise falls back to SequenceMatcher string similarity against past 'unique_sections' and 'raw'.
+    """
+    results: List[Dict[str, Any]] = []
+    if not full_text:
+        return results
+
+    # split into sentences (fallback to lines)
+    sents = re.split(r'(?<=[.!?])\s+', full_text)
+    if not sents or len(sents) < 2:
+        sents = [ln.strip() for ln in full_text.splitlines() if ln.strip()]
+
+    # prepare past text corpus (simple list of excerpts with file refs)
+    corpus = []
+    for p in past_jsons:
+        fname = p.get('filename') or p.get('file') or 'unknown'
+        for sec in (p.get('unique_sections') or [])[:10]:
+            if sec and len(sec.strip()) > 20:
+                corpus.append({'file': fname, 'text': sec.strip()[:800]})
+        raw = (p.get('raw') or '')
+        if raw and len(raw.strip()) > 80:
+            corpus.append({'file': fname, 'text': raw.strip()[:800]})
+
+    # if nothing in corpus, return empty
+    if not corpus:
+        return results
+
+    # If SBERT embedder + store available, use embeddings
+    embedder = get_sbert_embedder()
+    store_texts = _NOVELTY_STORE.get('texts', []) or []
+    store_embs = _NOVELTY_STORE.get('embs', None)
+    store_nn = _NOVELTY_STORE.get('nn', None)
+
+    # Build a local corpus list of texts and map indices to filenames
+    local_texts = [c['text'] for c in corpus]
+    local_files = [c['file'] for c in corpus]
+
+    # Precompute embeddings for local corpus if embedder available
+    local_embs = None
+    if embedder is not None and local_texts:
+        try:
+            embs = embedder.encode(local_texts, convert_to_tensor=False, show_progress_bar=False)
+            local_embs = [np.array(e).astype(np.float32) for e in embs]
+            local_embs_arr = np.vstack(local_embs)
+        except Exception:
+            local_embs = None
+
+    for si, sent in enumerate(sents):
+        txt = sent.strip()
+        if not txt or len(txt) < 30:
+            continue
+        best = None
+        best_sim = 0.0
+        best_file = None
+        best_excerpt = None
+
+        # semantic matching via SBERT if possible
+        if embedder is not None and local_embs is not None:
+            try:
+                q_emb = np.array(embedder.encode([txt], convert_to_tensor=False))[0].astype(np.float32)
+                # cosine similarity with local_embs_arr
+                norms = np.linalg.norm(local_embs_arr, axis=1) * (np.linalg.norm(q_emb) + 1e-12)
+                sims = (local_embs_arr @ q_emb) / (norms + 1e-12)
+                for idx, s in enumerate(sims.tolist()):
+                    if s > best_sim:
+                        best_sim = float(s)
+                        best_file = local_files[idx]
+                        best_excerpt = local_texts[idx]
+            except Exception:
+                best_sim = 0.0
+
+        # fallback to string similarity against corpus (cheaper)
+        if best_sim < sim_threshold:
+            for idx, item in enumerate(corpus):
+                try:
+                    sim = similarity(txt[:500], item['text'][:500])
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_file = item.get('file')
+                        best_excerpt = item.get('text')
+                except Exception:
+                    continue
+
+        if best_sim >= sim_threshold:
+            # approximate line number
+            ln_num = None
+            try:
+                pos = full_text.find(txt)
+                if pos >= 0:
+                    ln_num = full_text[:pos].count('\n') + 1
+            except Exception:
+                ln_num = None
+            results.append({
+                'line_number': ln_num,
+                'text': txt[:400].strip(),
+                'best_match_file': best_file,
+                'similarity': round(float(best_sim), 3),
+                'matched_excerpt': (best_excerpt or '')[:300]
+            })
+
+    # sort by similarity desc and trim
+    results = sorted(results, key=lambda x: x.get('similarity', 0.0), reverse=True)[:max_results]
+    return results
+
 # ---------------------------
 # MAIN ROUTE
 # ---------------------------
@@ -587,6 +696,12 @@ async def process_innovations(file: UploadFile = File(...)):
         }
         self_validation_report = run_self_validation(full_text, final_json_for_validation)
 
+        # 6.1) Find lines in the document that are similar to past projects
+        try:
+            similar_lines = extract_lines_similar_to_past(full_text, past_jsons, max_results=25, sim_threshold=0.55)
+        except Exception:
+            similar_lines = []
+
         # 7) Suggestions (non-destructive)
         suggestions = {
             "recommendations": [],
@@ -611,6 +726,8 @@ async def process_innovations(file: UploadFile = File(...)):
                 "already_existing_innovations": already_existing,
                 "unique_sections": final_unique_sections,
                 "detailed_context": detailed_context,
+                "similar_lines": similar_lines,
+                "similar_count": len(similar_lines),
                 "self_validation": self_validation_report,
                 "suggestions": suggestions,
                 "raw_text": full_text[:20000]  # store snippet for future matching
@@ -759,7 +876,9 @@ Produce exactly the structure shown above. Keep each recommended action short (<
 
         return JSONResponse({
             "novelty_percentage": novelty_score,
-            "comment": verbose_comment
+            "comment": verbose_comment,
+            "similar_lines": similar_lines,
+            "similar_count": len(similar_lines)
         })
     except Exception as e:
         import traceback

@@ -235,6 +235,73 @@ def heuristic_score_from_components(checklist: List[Dict], total_months: float, 
     return int(max(0, min(100, score)))
 
 
+def extract_feasibility_lines(full_text: str, max_results: int = 25) -> List[Dict]:
+    """Extract lines/sentences relevant to technical feasibility.
+
+    The function searches for checklist keywords, budget mentions, and timeline/duration phrases.
+    Returns list of {line_number, text, matched_topics, matched_keywords, match_count} sorted by match_count.
+    """
+    if not full_text:
+        return []
+
+    # Prepare sentence list
+    sents = re.split(r'(?<=[.!?])\s+', full_text)
+    if not sents or len(sents) < 2:
+        sents = [ln.strip() for ln in full_text.splitlines() if ln.strip()]
+
+    # aggregate keywords from CHECKLIST plus timeline and budget keywords
+    topic_map = {}
+    for item in CHECKLIST:
+        for kw in item.get('keywords', []):
+            topic_map[kw.lower()] = item['id']
+
+    extra_kws = ['budget', 'cost', 'capital', 'manpower', 'fte', 'timeline', 'milestone', 'gantt', 'pilot', 'prototype', 'schedule', 'kpi', 'risk']
+    for kw in extra_kws:
+        topic_map.setdefault(kw.lower(), 'other')
+
+    results = []
+    for sent in sents:
+        txt = sent.strip()
+        if not txt or len(txt) < 20:
+            continue
+        low = txt.lower()
+        matched_topics = set()
+        matched_keywords = []
+        for kw, topic in topic_map.items():
+            if kw in low:
+                matched_topics.add(topic)
+                matched_keywords.append(kw)
+
+        # Also check for explicit numeric durations or budget mentions
+        if re.search(r'\b(\d+[\d,]*\.?\d*)\s*(years?|months?|weeks?|days?|lakh|lakhs|rs\b|inr)\b', low):
+            matched_topics.add('timeline')
+            matched_keywords.append('duration')
+        if re.search(r'\b(\d+[\d,]*\.?\d*)\s*(rs\.?|inr|lakh|lakhs|crore|%)\b', low):
+            matched_topics.add('budget')
+            matched_keywords.append('amount')
+
+        if matched_topics:
+            # approximate line number
+            line_number = None
+            try:
+                pos = full_text.find(txt)
+                if pos >= 0:
+                    line_number = full_text[:pos].count('\n') + 1
+            except Exception:
+                line_number = None
+
+            results.append({
+                'line_number': line_number,
+                'text': txt[:400].strip(),
+                'matched_topics': sorted(list(matched_topics)),
+                'matched_keywords': sorted(list(set(matched_keywords))),
+                'match_count': len(matched_keywords)
+            })
+
+    results = sorted(results, key=lambda x: x.get('match_count', 0), reverse=True)[:max_results]
+    return results
+
+
 def assess(paper_path: str, guidelines_path: str = None, horizon_months: int = 24) -> Dict:
     report = {'paper_path': paper_path, 'horizon_months': horizon_months}
     full_text = extract_text_from_path(paper_path)
@@ -375,6 +442,12 @@ async def technical_feasibility(file: UploadFile = File(...), horizon: int = 24)
         }
         comment_para, recommendations = _format_comment_and_recs(report)
 
+        # extract lines relevant to feasibility (budget, timeline, methodology, KPIs)
+        try:
+            flagged_lines = extract_feasibility_lines(full_text, max_results=25)
+        except Exception:
+            flagged_lines = []
+
         header = f"Score: {score_int}/100    Changeable: {changeable}%"
         comment_text = f"{header}\n{comment_para}"
 
@@ -383,7 +456,9 @@ async def technical_feasibility(file: UploadFile = File(...), horizon: int = 24)
             'changeable_percent': changeable,
             'feasibility_decision': decision,
             'comment': comment_text,
-            'recommended_actions': recommendations
+            'recommended_actions': recommendations,
+            'flagged_lines': flagged_lines,
+            'flagged_count': len(flagged_lines)
         })
     except HTTPException:
         raise
