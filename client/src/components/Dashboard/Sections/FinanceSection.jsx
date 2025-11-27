@@ -7,7 +7,6 @@ import {
     ChevronDown,
     CreditCard,
     DollarSign,
-    PieChart,
     TrendingUp,
     Wallet
 } from "lucide-react";
@@ -22,6 +21,7 @@ import {
     Line,
     LineChart,
     Pie,
+    PieChart,
     ResponsiveContainer,
     Tooltip,
     XAxis,
