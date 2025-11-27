@@ -27,7 +27,7 @@ export default function MetricsScroller({ metrics, activeMetric, onMetricClick }
 
     return (
         <div className="relative group">
-            {/* Scroll Controls */}
+            {/* Left Scroll Button */}
             {showLeftArrow && (
                 <button
                     onClick={() => scroll('left')}
@@ -37,6 +37,7 @@ export default function MetricsScroller({ metrics, activeMetric, onMetricClick }
                 </button>
             )}
 
+            {/* Right Scroll Button */}
             {showRightArrow && (
                 <button
                     onClick={() => scroll('right')}
@@ -46,11 +47,11 @@ export default function MetricsScroller({ metrics, activeMetric, onMetricClick }
                 </button>
             )}
 
-            {/* Scroller Container */}
+            {/* Metrics Scroller */}
             <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
-                className="flex items-center gap-5 overflow-x-auto pb-4 pt-2 px-1 scrollbar-hide snap-x snap-mandatory"
+                className="flex items-center gap-5 overflow-x-auto pb-4 pt-2 px-1 scrollbar-hide snap-x snap-mandatory min-h-[180px]"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {metrics.map((metric) => (
@@ -62,8 +63,8 @@ export default function MetricsScroller({ metrics, activeMetric, onMetricClick }
                     />
                 ))}
 
-                {/* Show More Button (End of list) */}
-                <button className="flex flex-col items-center justify-center min-w-[100px] h-[140px] rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600 transition-all snap-start">
+                {/* Show More Button */}
+                <button className="flex flex-col items-center justify-center min-w-[100px] h-[180px] rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600 transition-all snap-start">
                     <div className="p-3 bg-slate-50 rounded-full mb-2">
                         <Grid size={20} />
                     </div>

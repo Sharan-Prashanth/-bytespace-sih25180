@@ -2,10 +2,15 @@
 
 import { Calendar } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import RightSidebar from '../Sidebar/RightSidebar';
 import Sidebar from '../Sidebar/Sidebar';
 
-export default function DashboardLayout({ children, activeSection, setActiveSection, user, logout }) {
+export default function DashboardLayout({
+    children,
+    activeSection,
+    setActiveSection,
+    user,
+    logout
+}) {
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -38,10 +43,10 @@ export default function DashboardLayout({ children, activeSection, setActiveSect
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
                 {/* Header */}
-                <header className="px-8 py-8 flex items-start justify-between bg-[#f3f4f6]">
+                <header className="px-8 py-6 flex items-start justify-between bg-[#f3f4f6] shrink-0">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome, Admin</h1>
-                        <p className="text-slate-500 mt-2">Track proposals and manage your team</p>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Welcome, Admin</h1>
+                        <p className="text-slate-500 text-sm mt-1">Track proposals and manage your team</p>
                     </div>
                     <div className="flex items-center gap-3 text-slate-500 font-medium text-sm">
                         <span>{formattedDate}</span>
@@ -51,8 +56,8 @@ export default function DashboardLayout({ children, activeSection, setActiveSect
                     </div>
                 </header>
 
-                {/* Scrollable Content */}
-                <main className="flex-1 overflow-y-auto px-8 pb-8 scrollbar-hide">
+                {/* Content - Unscrollable */}
+                <main className="flex-1 overflow-hidden px-8 pb-8 flex flex-col">
                     {children}
                 </main>
             </div>
