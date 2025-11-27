@@ -6,7 +6,8 @@ import {
   updateUser,
   deleteUser,
   updateUserRoles,
-  getUserActivities
+  getUserActivities,
+  getUserProposalCount
 } from '../controllers/userController.js';
 import { authenticate } from '../middleware/auth.js';
 import { isAdmin } from '../middleware/authorize.js';
@@ -26,5 +27,6 @@ router.put('/:userId/roles', isAdmin, updateUserRoles);
 router.get('/:userId', getUserById);
 router.put('/:userId', updateUser);
 router.get('/:userId/activities', getUserActivities);
+router.get('/:userId/proposals/count', getUserProposalCount);
 
 export default router;

@@ -346,3 +346,94 @@ export const getUserActivities = asyncHandler(async (req, res) => {
     data: activities
   });
 });
+
+/**
+ * @route   GET /api/users/:userId/proposals/count
+ * @desc    Get proposal counts for a user based on their role
+ * @access  Private (Admin or self)
+ */
+export const getUserProposalCount = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  // Check permission
+  const isAdmin = req.user.roles.includes('SUPER_ADMIN');
+  const isSelf = req.user._id.toString() === userId;
+
+  if (!isAdmin && !isSelf) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to view this data'
+    });
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+
+  const Proposal = (await import('../models/Proposal.js')).default;
+
+  let counts = {
+    total: 0,
+    draft: 0,
+    submitted: 0,
+    underReview: 0,
+    approved: 0,
+    rejected: 0,
+    ongoing: 0,
+    completed: 0
+  };
+
+  // Check user roles and get appropriate counts
+  const hasReviewerRole = user.roles.some(role => 
+    ['EXPERT_REVIEWER', 'CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER'].includes(role)
+  );
+
+  if (hasReviewerRole) {
+    // For reviewers, count proposals assigned to them
+    const assignedProposals = await Proposal.find({
+      'assignedReviewers.reviewer': userId,
+      isDeleted: false
+    });
+
+    counts.total = assignedProposals.length;
+    counts.underReview = assignedProposals.filter(p => 
+      ['CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'TSSRC_REVIEW', 'SSRC_REVIEW'].includes(p.status)
+    ).length;
+    counts.completed = assignedProposals.filter(p => 
+      p.assignedReviewers.some(ar => 
+        ar.reviewer.toString() === userId && ar.status === 'COMPLETED'
+      )
+    ).length;
+  } else {
+    // For regular users, count their own proposals
+    const userProposals = await Proposal.find({
+      createdBy: userId,
+      isDeleted: false
+    });
+
+    counts.total = userProposals.length;
+    counts.draft = userProposals.filter(p => p.status === 'DRAFT').length;
+    counts.submitted = userProposals.filter(p => p.status === 'SUBMITTED').length;
+    counts.underReview = userProposals.filter(p => 
+      ['AI_EVALUATION', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'TSSRC_REVIEW', 'SSRC_REVIEW'].includes(p.status)
+    ).length;
+    counts.approved = userProposals.filter(p => 
+      ['CMPDI_APPROVED', 'TSSRC_APPROVED', 'SSRC_APPROVED', 'ACCEPTED'].includes(p.status)
+    ).length;
+    counts.rejected = userProposals.filter(p => 
+      ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(p.status)
+    ).length;
+    counts.ongoing = userProposals.filter(p => p.status === 'ONGOING').length;
+    counts.completed = userProposals.filter(p => p.status === 'COMPLETED').length;
+  }
+
+  res.json({
+    success: true,
+    data: counts
+  });
+});
