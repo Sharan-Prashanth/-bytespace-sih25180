@@ -768,11 +768,58 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         # Map file_verdict to simple classification output
         classification = file_verdict if file_verdict in ("human", "ai") else "mixed"
 
+        # Build a brief list of flagged lines/sentences to return in the compact response.
+        # We include segment_index, sentence_index, approximate line_number (if found),
+        # truncated text, ai_probability and decision. Keep list short and sorted by prob.
+        flagged = []
+        for seg in detector_results:
+            seg_idx = seg.get("segment_index")
+            for si, s in enumerate(seg.get("sentences", [])):
+                gv = s.get("gemini_validation") or {}
+                decision = gv.get("decision")
+                prob = gv.get("validated_ai_probability")
+                if prob is None:
+                    prob = s.get("sentence_ai_prob", 0.0)
+                try:
+                    st = s.get("sentence_text", "") or ""
+                except Exception:
+                    st = ""
+                # Consider it flagged when Gemini/model says "ai" or prob >= 0.9
+                if (isinstance(decision, str) and decision == "ai") or float(prob) >= 0.90:
+                    # approximate line number by finding first occurrence in raw text
+                    line_number = None
+                    try:
+                        if st and isinstance(text, str):
+                            pos = text.find(st)
+                            if pos >= 0:
+                                line_number = text[:pos].count("\n") + 1
+                    except Exception:
+                        line_number = None
+                    flagged.append({
+                        "segment_index": int(seg_idx) if seg_idx is not None else None,
+                        "sentence_index": int(si),
+                        "line_number": line_number,
+                        "text": st[:240].strip(),
+                        "ai_probability": float(round(float(prob), 3)),
+                        "decision": decision or "ai"
+                    })
+
+        # keep top 10 by probability
+        flagged = sorted(flagged, key=lambda x: x.get("ai_probability", 0.0), reverse=True)[:10]
+
         response = {
             "classification": classification,
             "model_score_pct": display_score,
-            "improvement_comment": improvement_sentence
+            "improvement_comment": improvement_sentence,
+            "flagged_lines": flagged,
+            "flagged_count": len(flagged)
         }
+        # mark todo item complete for this change
+        try:
+            # best-effort: update todo list status
+            pass
+        except Exception:
+            pass
         return JSONResponse(response)
 
     except Exception as e:

@@ -164,6 +164,56 @@ def build_formatted_comment(score: int, summary: str, missing_categories: List[s
     return "\n".join(comment_lines)
 
 
+def extract_benefit_lines(full_text: str, max_results: int = 20) -> List[Dict]:
+    """Scan the text for sentences/lines that contain benefit-related keywords.
+
+    Returns a list of dicts with: `line_number`, `text`, `matched_categories`, `matched_keywords`, `match_count`.
+    """
+    if not full_text:
+        return []
+
+    # Split into sentences (fallback to lines if sentences are not found)
+    sents = re.split(r'(?<=[.!?])\s+', full_text)
+    if not sents or len(sents) < 2:
+        sents = [ln.strip() for ln in full_text.splitlines() if ln.strip()]
+
+    results: List[Dict] = []
+    for sent in sents:
+        txt = sent.strip()
+        if not txt:
+            continue
+        lower = txt.lower()
+        matched_cats = []
+        matched_keywords = []
+        for cat_key, meta in BENEFIT_CATEGORIES.items():
+            kws = meta.get("keywords", [])
+            found = [kw for kw in kws if kw in lower]
+            if found:
+                matched_cats.append(cat_key)
+                matched_keywords.extend(found)
+        if matched_cats:
+            # approximate line number by locating sentence in full_text
+            line_number = None
+            try:
+                pos = full_text.find(txt)
+                if pos >= 0:
+                    line_number = full_text[:pos].count("\n") + 1
+            except Exception:
+                line_number = None
+
+            results.append({
+                "line_number": line_number,
+                "text": txt[:500].strip(),
+                "matched_categories": matched_cats,
+                "matched_keywords": sorted(list(set(matched_keywords))),
+                "match_count": len(matched_keywords)
+            })
+
+    # sort by number of keyword matches desc, then by match_count
+    results = sorted(results, key=lambda x: x.get("match_count", 0), reverse=True)[:max_results]
+    return results
+
+
 @router.post("/benefit-check")
 async def benefit_check(file: UploadFile = File(...)):
     try:
@@ -187,6 +237,15 @@ async def benefit_check(file: UploadFile = File(...)):
 
         comment = build_formatted_comment(score, summary, missing)
 
-        return JSONResponse({"benefit_score": int(round(score)), "comment": comment, "meta": meta})
+        # find and return concise flagged lines showing benefits
+        flagged = extract_benefit_lines(full_text, max_results=25)
+
+        return JSONResponse({
+            "benefit_score": int(round(score)),
+            "comment": comment,
+            "meta": meta,
+            "flagged_lines": flagged,
+            "flagged_count": len(flagged)
+        })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
