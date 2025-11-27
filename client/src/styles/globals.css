@@ -27,7 +27,26 @@
   --border: #e5e7eb;
   --input: #e5e7eb;
   --ring: #3b82f6;
+  --ring: #3b82f6;
   --radius: 1rem; /* More rounded corners */
+  --brand: #3b82f6; /* Brand color for text selection */
+}
+
+/* Force light mode for Plate floating toolbar */
+div[data-plate-floating-toolbar] {
+  background-color: white !important;
+  color: #1f2937 !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+div[data-plate-floating-toolbar] button {
+  color: #4b5563 !important;
+}
+
+div[data-plate-floating-toolbar] button:hover {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
 }
 
 @media (prefers-color-scheme: dark) {

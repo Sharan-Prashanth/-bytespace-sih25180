@@ -69,80 +69,12 @@ function SSRCDashboardContent() {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      // API Endpoint: GET /api/proposals/ssrc
-      const response = await apiClient.get('/api/proposals/ssrc');
-      setProposals(Array.isArray(response.data.proposals) ? response.data.proposals : []);
+      const response = await apiClient.get('/api/proposals');
+      const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+      setProposals(Array.isArray(proposalData) ? proposalData : []);
     } catch (error) {
       console.error("Error fetching proposals:", error);
-      // Mock data for development
-      setProposals([
-        {
-          id: "PROP001",
-          title: "AI-Powered Coal Quality Assessment System",
-          principalInvestigator: "Dr. Rajesh Kumar",
-          organization: "IIT Delhi",
-          receivedDate: "2025-10-01T10:00:00Z",
-          domain: "Artificial Intelligence",
-          status: "incoming_tssrc",
-          tssrcSummary: "Highly recommended by TSSRC. Strong technical and financial viability.",
-          cmpdiSummary: "Recommended by CMPDI. Strong technical foundation with expert consensus."
-        },
-        {
-          id: "PROP002",
-          title: "Sustainable Mining Waste Management",
-          principalInvestigator: "Dr. Priya Sharma",
-          organization: "CSIR-CIMFR",
-          receivedDate: "2025-09-28T14:30:00Z",
-          domain: "Environmental Technology",
-          status: "under_deliberation",
-          tssrcSummary: "TSSRC recommends with minor budget adjustments suggested.",
-          cmpdiSummary: "Positive expert reviews. Innovation in waste management approaches."
-        },
-        {
-          id: "PROP003",
-          title: "Advanced Coal Gasification Process",
-          principalInvestigator: "Dr. Amit Patel",
-          organization: "NEIST",
-          receivedDate: "2025-09-25T09:00:00Z",
-          domain: "Clean Coal Technology",
-          status: "approved",
-          tssrcSummary: "Comprehensive review completed. Implementation roadmap approved.",
-          cmpdiSummary: "Strong scientific merit with feasibility confirmed."
-        },
-        {
-          id: "PROP004",
-          title: "Digital Twin for Mining Operations",
-          principalInvestigator: "Dr. Sunita Mehta",
-          organization: "NIT Rourkela",
-          receivedDate: "2025-09-22T11:45:00Z",
-          domain: "Digital Technology",
-          status: "approved",
-          tssrcSummary: "Highly recommended. Comprehensive implementation plan provided.",
-          cmpdiSummary: "Outstanding technical merit. All expert reviews positive."
-        },
-        {
-          id: "PROP005",
-          title: "Carbon Capture Technology Research",
-          principalInvestigator: "Dr. Vikram Singh",
-          organization: "IIT Kharagpur",
-          receivedDate: "2025-10-02T16:20:00Z",
-          domain: "Carbon Management",
-          status: "incoming_tssrc",
-          tssrcSummary: "TSSRC recommends approval with minor clarifications addressed.",
-          cmpdiSummary: "Strong scientific merit. Expert panel approved with minor suggestions."
-        },
-        {
-          id: "PROP006",
-          title: "Outdated Mining Technique Study",
-          principalInvestigator: "Dr. Mohan Rao",
-          organization: "Regional Institute",
-          receivedDate: "2025-09-20T12:00:00Z",
-          domain: "Traditional Methods",
-          status: "rejected",
-          tssrcSummary: "Rejected due to lack of innovation and unclear ROI.",
-          cmpdiSummary: "Concerns raised about feasibility and scalability."
-        }
-      ]);
+      setProposals([]);
     } finally {
       setLoading(false);
     }
@@ -152,11 +84,11 @@ function SSRCDashboardContent() {
   const getProposalsByTab = () => {
     switch (activeTab) {
       case 'incoming':
-        return proposals.filter(p => p.status === 'incoming_tssrc');
+        return proposals.filter(p => p.status === 'TSSRC_APPROVED');
       case 'deliberation':
-        return proposals.filter(p => p.status === 'under_deliberation');
+        return proposals.filter(p => p.status === 'SSRC_REVIEW');
       case 'decided':
-        return proposals.filter(p => p.status === 'approved' || p.status === 'rejected');
+        return proposals.filter(p => p.status === 'SSRC_APPROVED' || p.status === 'SSRC_REJECTED' || p.status === 'ACCEPTED' || p.status === 'ONGOING');
       default:
         return proposals;
     }
@@ -164,14 +96,14 @@ function SSRCDashboardContent() {
 
   // Apply additional filters
   const filteredProposals = getProposalsByTab().filter(proposal => {
-    const matchesSearch = proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.principalInvestigator.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = proposal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.proposalCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.createdBy?.fullName?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter;
     
     let matchesTime = true;
-    if (timePeriodFilter !== 'all' && proposal.receivedDate) {
-      const daysDiff = Math.floor((new Date() - new Date(proposal.receivedDate)) / (1000 * 60 * 60 * 24));
+    if (timePeriodFilter !== 'all' && proposal.createdAt) {
+      const daysDiff = Math.floor((new Date() - new Date(proposal.createdAt)) / (1000 * 60 * 60 * 24));
       if (timePeriodFilter === '7days') matchesTime = daysDiff <= 7;
       if (timePeriodFilter === '30days') matchesTime = daysDiff <= 30;
       if (timePeriodFilter === '90days') matchesTime = daysDiff <= 90;
@@ -182,17 +114,19 @@ function SSRCDashboardContent() {
 
   // Calculate stats
   const stats = {
-    receivedFromTSSRC: proposals.filter(p => p.status === 'incoming_tssrc').length,
-    underReview: proposals.filter(p => p.status === 'under_deliberation').length,
-    approved: proposals.filter(p => p.status === 'approved').length,
-    rejected: proposals.filter(p => p.status === 'rejected').length
+    receivedFromTSSRC: proposals.filter(p => p.status === 'TSSRC_APPROVED').length,
+    underReview: proposals.filter(p => p.status === 'SSRC_REVIEW').length,
+    approved: proposals.filter(p => p.status === 'SSRC_APPROVED' || p.status === 'ACCEPTED' || p.status === 'ONGOING').length,
+    rejected: proposals.filter(p => p.status === 'SSRC_REJECTED').length
   };
 
   const statusLabels = {
-    incoming_tssrc: "Incoming from TSSRC",
-    under_deliberation: "Under Deliberation",
-    approved: "Approved",
-    rejected: "Rejected"
+    'TSSRC_APPROVED': "Incoming from TSSRC",
+    'SSRC_REVIEW': "Under Review",
+    'SSRC_APPROVED': "Approved",
+    'ACCEPTED': "Accepted",
+    'ONGOING': "Project Ongoing",
+    'SSRC_REJECTED': "Rejected"
   };
 
   if (loading) {

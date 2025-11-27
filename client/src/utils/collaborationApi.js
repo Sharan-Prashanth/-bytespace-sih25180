@@ -10,12 +10,12 @@ import apiClient from './api';
  */
 export const getCollaborators = async (proposalId) => {
   try {
-    console.log(`👥 Fetching collaborators for proposal: ${proposalId}`);
+    console.log(`[CollaborationAPI] Fetching collaborators for proposal: ${proposalId}`);
     const response = await apiClient.get(`/api/collaboration/proposals/${proposalId}/collaborators`);
-    console.log(`✅ Collaborators fetched successfully:`, response.data);
+    console.log(`[CollaborationAPI] Collaborators fetched successfully:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ Get collaborators error:', error);
+    console.error('[CollaborationAPI] Get collaborators error:', error);
     throw error;
   }
 };
@@ -25,12 +25,12 @@ export const getCollaborators = async (proposalId) => {
  */
 export const getActiveCollaborators = async (proposalId) => {
   try {
-    console.log(`🟢 Fetching active collaborators for proposal: ${proposalId}`);
+    console.log(`[CollaborationAPI] Fetching active collaborators for proposal: ${proposalId}`);
     const response = await apiClient.get(`/api/collaboration/proposals/${proposalId}/active`);
-    console.log(`✅ Active collaborators fetched:`, response.data);
+    console.log(`[CollaborationAPI] Active collaborators fetched:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ Get active collaborators error:', error);
+    console.error('[CollaborationAPI] Get active collaborators error:', error);
     throw error;
   }
 };
@@ -40,12 +40,12 @@ export const getActiveCollaborators = async (proposalId) => {
  */
 export const inviteCollaborator = async (proposalId, inviteData) => {
   try {
-    console.log(`📧 Inviting collaborator to proposal: ${proposalId}`, inviteData);
+    console.log(`[CollaborationAPI] Inviting collaborator to proposal: ${proposalId}`, inviteData);
     const response = await apiClient.post(`/api/collaboration/proposals/${proposalId}/invite`, inviteData);
-    console.log(`✅ Collaborator invited successfully:`, response.data);
+    console.log(`[CollaborationAPI] Collaborator invited successfully:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ Invite collaborator error:', error);
+    console.error('[CollaborationAPI] Invite collaborator error:', error);
     throw error;
   }
 };
@@ -55,12 +55,12 @@ export const inviteCollaborator = async (proposalId, inviteData) => {
  */
 export const addCollaborator = async (proposalId, collaboratorData) => {
   try {
-    console.log(`➕ Adding collaborator to proposal: ${proposalId}`, collaboratorData);
+    console.log(`[CollaborationAPI] Adding collaborator to proposal: ${proposalId}`, collaboratorData);
     const response = await apiClient.post(`/api/collaboration/proposals/${proposalId}/collaborators`, collaboratorData);
-    console.log(`✅ Collaborator added successfully:`, response.data);
+    console.log(`[CollaborationAPI] Collaborator added successfully:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ Add collaborator error:', error);
+    console.error('[CollaborationAPI] Add collaborator error:', error);
     throw error;
   }
 };
@@ -70,12 +70,12 @@ export const addCollaborator = async (proposalId, collaboratorData) => {
  */
 export const updateCollaborator = async (proposalId, collaboratorId, updateData) => {
   try {
-    console.log(`🔄 Updating collaborator: ${collaboratorId}`, updateData);
+    console.log(`[CollaborationAPI] Updating collaborator: ${collaboratorId}`, updateData);
     const response = await apiClient.put(`/api/collaboration/proposals/${proposalId}/collaborators/${collaboratorId}`, updateData);
-    console.log(`✅ Collaborator updated successfully:`, response.data);
+    console.log(`[CollaborationAPI] Collaborator updated successfully:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ Update collaborator error:', error);
+    console.error('[CollaborationAPI] Update collaborator error:', error);
     throw error;
   }
 };
@@ -85,12 +85,12 @@ export const updateCollaborator = async (proposalId, collaboratorId, updateData)
  */
 export const removeCollaborator = async (proposalId, collaboratorId) => {
   try {
-    console.log(`❌ Removing collaborator: ${collaboratorId}`);
+    console.log(`[CollaborationAPI] Removing collaborator: ${collaboratorId}`);
     const response = await apiClient.delete(`/api/collaboration/proposals/${proposalId}/collaborators/${collaboratorId}`);
-    console.log(`✅ Collaborator removed successfully:`, response.data);
+    console.log(`[CollaborationAPI] Collaborator removed successfully:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ Remove collaborator error:', error);
+    console.error('[CollaborationAPI] Remove collaborator error:', error);
     throw error;
   }
 };
@@ -103,7 +103,7 @@ export const updateUserStatus = async (isOnline) => {
     const response = await apiClient.put('/api/collaboration/users/status', { isOnline });
     return response.data;
   } catch (error) {
-    console.error('❌ Update user status error:', error);
+    console.error('[CollaborationAPI] Update user status error:', error);
     throw error;
   }
 };
@@ -116,7 +116,7 @@ export const getRoomStatus = async (proposalId) => {
     const response = await apiClient.get(`/api/collaboration/proposals/${proposalId}/status`);
     return response.data;
   } catch (error) {
-    console.error('❌ Get room status error:', error);
+    console.error('[CollaborationAPI] Get room status error:', error);
     throw error;
   }
 };

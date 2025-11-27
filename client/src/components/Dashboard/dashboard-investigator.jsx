@@ -69,71 +69,14 @@ function InvestigatorDashboardContent() {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      // API Endpoint: GET /api/proposals/investigator
-      const response = await apiClient.get('/api/proposals/investigator');
-      console.log('📊 Dashboard proposals response:', response.data);
-      setProposals(Array.isArray(response.data.proposals) ? response.data.proposals : []);
-      console.log('✅ Loaded proposals:', response.data.proposals?.length || 0);
+      const response = await apiClient.get('/api/proposals');
+      console.log('Dashboard proposals response:', response.data);
+      const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+      setProposals(Array.isArray(proposalData) ? proposalData : []);
+      console.log('Loaded proposals:', proposalData.length);
     } catch (error) {
-      console.error("❌ Error fetching proposals:", error);
-      // Mock data for development
-      setProposals([
-        {
-          id: "PROP001",
-          title: "AI-Powered Coal Quality Assessment System",
-          status: PROPOSAL_STATUS.CMPDI_REVIEW,
-          stageOwner: "CMPDI",
-          domain: "Artificial Intelligence",
-          submissionDate: "2025-09-20T10:00:00Z",
-          lastUpdated: "2025-09-25T14:30:00Z",
-          budget: 285000,
-          hasComments: true
-        },
-        {
-          id: "PROP002",
-          title: "Sustainable Mining Waste Management",
-          status: PROPOSAL_STATUS.DRAFT,
-          stageOwner: "Principal Investigator",
-          domain: "Environmental Technology",
-          submissionDate: null,
-          lastUpdated: "2025-09-23T16:20:00Z",
-          budget: 195000,
-          hasComments: false
-        },
-        {
-          id: "PROP003",
-          title: "Advanced Coal Gasification Process",
-          status: PROPOSAL_STATUS.TSSRC_REVIEW,
-          stageOwner: "TSSRC",
-          domain: "Clean Coal Technology",
-          submissionDate: "2025-09-15T09:00:00Z",
-          lastUpdated: "2025-09-22T11:45:00Z",
-          budget: 420000,
-          hasComments: true
-        },
-        {
-          id: "PROP004",
-          title: "Digital Twin for Mining Operations",
-          status: PROPOSAL_STATUS.PROJECT_ONGOING,
-          stageOwner: "Project Team",
-          domain: "Digital Technology",
-          submissionDate: "2025-08-10T08:00:00Z",
-          lastUpdated: "2025-09-20T13:00:00Z",
-          budget: 350000,
-          hasComments: false
-        },
-        {
-          id: "PROP005",
-          title: "Carbon Capture Technology Research",
-          status: PROPOSAL_STATUS.CMPDI_REJECTED,
-          stageOwner: "CMPDI",
-          domain: "Carbon Management",
-          submissionDate: "2025-09-05T10:30:00Z",
-          lastUpdated: "2025-09-18T15:20:00Z",
-          budget: 485000,
-          hasComments: true
-        }
-      ]);
+      console.error("Error fetching proposals:", error);
+      setProposals([]);
     } finally {
       setLoading(false);
     }
@@ -145,13 +88,13 @@ function InvestigatorDashboardContent() {
   // Filter proposals
   const filteredProposals = proposals.filter(proposal => {
     const matchesStatus = filterStatus === 'all' || proposal.status === filterStatus;
-    const matchesSearch = proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDomain = domainFilter === 'all' || proposal.domain === domainFilter;
+    const matchesSearch = proposal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.proposalCode?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDomain = domainFilter === 'all' || proposal.principalAgency === domainFilter;
     
     let matchesDate = true;
-    if (dateRange !== 'all' && proposal.lastUpdated) {
-      const daysDiff = Math.floor((new Date() - new Date(proposal.lastUpdated)) / (1000 * 60 * 60 * 24));
+    if (dateRange !== 'all' && proposal.updatedAt) {
+      const daysDiff = Math.floor((new Date() - new Date(proposal.updatedAt)) / (1000 * 60 * 60 * 24));
       if (dateRange === '7days') matchesDate = daysDiff <= 7;
       if (dateRange === '30days') matchesDate = daysDiff <= 30;
       if (dateRange === '90days') matchesDate = daysDiff <= 90;
@@ -160,8 +103,8 @@ function InvestigatorDashboardContent() {
     return matchesStatus && matchesSearch && matchesDomain && matchesDate;
   });
 
-  // Get unique domains
-  const uniqueDomains = [...new Set(proposals.map(p => p.domain).filter(Boolean))];
+  // Get unique agencies
+  const uniqueAgencies = [...new Set(proposals.map(p => p.principalAgency).filter(Boolean))];
 
   // Calculate stats
   const stats = {
@@ -169,20 +112,20 @@ function InvestigatorDashboardContent() {
     draft: proposals.filter(p => p.status === PROPOSAL_STATUS.DRAFT).length,
     underReview: proposals.filter(p => 
       p.status === PROPOSAL_STATUS.CMPDI_REVIEW || 
-      p.status === PROPOSAL_STATUS.EXPERT_REVIEW ||
+      p.status === PROPOSAL_STATUS.CMPDI_EXPERT_REVIEW ||
       p.status === PROPOSAL_STATUS.TSSRC_REVIEW ||
       p.status === PROPOSAL_STATUS.SSRC_REVIEW
     ).length,
     approved: proposals.filter(p => 
-      p.status === PROPOSAL_STATUS.PROJECT_ONGOING || 
-      p.status === PROPOSAL_STATUS.PROJECT_COMPLETED
+      p.status === PROPOSAL_STATUS.ONGOING || 
+      p.status === PROPOSAL_STATUS.COMPLETED
     ).length,
     rejected: proposals.filter(p => 
       p.status === PROPOSAL_STATUS.CMPDI_REJECTED || 
       p.status === PROPOSAL_STATUS.TSSRC_REJECTED ||
       p.status === PROPOSAL_STATUS.SSRC_REJECTED
     ).length,
-    totalBudget: proposals.reduce((sum, p) => sum + (p.budget || 0), 0)
+    totalBudget: proposals.reduce((sum, p) => sum + (p.outlayLakhs || 0), 0)
   };
 
   if (loading) {
@@ -380,7 +323,7 @@ function InvestigatorDashboardContent() {
             </div>
             <div className="flex flex-wrap gap-3">
               {lastDraft && (
-                <Link href={`/proposal/create?draft=${lastDraft.id}`}>
+                <Link href={`/proposal/create?draft=${lastDraft._id}`}>
                   <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105">
                     <Edit className="w-5 h-5" />
                     Continue Last Draft
@@ -421,20 +364,20 @@ function InvestigatorDashboardContent() {
                 <option value={PROPOSAL_STATUS.CMPDI_REVIEW}>CMPDI Review</option>
                 <option value={PROPOSAL_STATUS.TSSRC_REVIEW}>TSSRC Review</option>
                 <option value={PROPOSAL_STATUS.SSRC_REVIEW}>SSRC Review</option>
-                <option value={PROPOSAL_STATUS.PROJECT_ONGOING}>Ongoing</option>
+                <option value={PROPOSAL_STATUS.ONGOING}>Ongoing</option>
               </select>
             </div>
 
-            {/* Domain Filter */}
+            {/* Agency Filter */}
             <div>
               <select
                 value={domainFilter}
                 onChange={(e) => setDomainFilter(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
-                <option value="all">All Domains</option>
-                {uniqueDomains.map(domain => (
-                  <option key={domain} value={domain}>{domain}</option>
+                <option value="all">All Agencies</option>
+                {uniqueAgencies.map(agency => (
+                  <option key={agency} value={agency}>{agency}</option>
                 ))}
               </select>
             </div>
@@ -476,72 +419,66 @@ function InvestigatorDashboardContent() {
                   <tbody>
                     {filteredProposals.map((proposal, index) => {
                       const statusConfig = STATUS_CONFIG[proposal.status];
+                      const stageOwner = proposal.status === PROPOSAL_STATUS.DRAFT ? 'Principal Investigator' :
+                                       proposal.status.includes('CMPDI') ? 'CMPDI' :
+                                       proposal.status.includes('TSSRC') ? 'TSSRC' :
+                                       proposal.status.includes('SSRC') ? 'SSRC' : 'Project Team';
                       return (
                         <tr 
-                          key={proposal.id} 
+                          key={proposal._id} 
                           className="border-b border-orange-100 hover:bg-orange-50 transition-colors duration-200"
                           style={{ animationDelay: `${index * 0.05}s` }}
                         >
                           <td className="py-4 px-4">
-                            <span className="text-sm font-semibold text-black">{proposal.id}</span>
+                            <span className="text-sm font-semibold text-black">{proposal.proposalCode}</span>
                           </td>
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-black">{proposal.title}</span>
-                              {proposal.hasComments && (
-                                <MessageSquare className="w-4 h-4 text-blue-500" />
-                              )}
                             </div>
-                            <span className="text-xs text-gray-500">{proposal.domain}</span>
+                            <span className="text-xs text-gray-500">{proposal.principalAgency}</span>
                           </td>
                           <td className="py-4 px-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusConfig?.className || 'bg-gray-100 text-gray-600'}`}>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusConfig?.color || 'bg-gray-100 text-black border-gray-300'}`}>
                               {statusConfig?.label || proposal.status}
                             </span>
                           </td>
                           <td className="py-4 px-4">
-                            <span className="text-sm text-black">{proposal.stageOwner}</span>
+                            <span className="text-sm text-black">{stageOwner}</span>
                           </td>
                           <td className="py-4 px-4">
                             <span className="text-sm text-black">
-                              {proposal.submissionDate ? formatDate(proposal.submissionDate) : '-'}
+                              {proposal.status !== PROPOSAL_STATUS.DRAFT ? formatDate(proposal.createdAt) : '-'}
                             </span>
                           </td>
                           <td className="py-4 px-4">
-                            <span className="text-sm text-black">{formatDate(proposal.lastUpdated)}</span>
+                            <span className="text-sm text-black">{formatDate(proposal.updatedAt)}</span>
                           </td>
                           <td className="py-4 px-4">
                             <div className="flex gap-2">
                               {proposal.status === PROPOSAL_STATUS.DRAFT ? (
-                                <Link href={`/proposal/create?draft=${proposal.id}`}>
+                                <Link href={`/proposal/create?draft=${proposal._id}`}>
                                   <button className="p-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors" title="Edit Draft">
                                     <Edit className="w-4 h-4" />
                                   </button>
                                 </Link>
                               ) : (
-                                <Link href={`/proposal/collaborate/${proposal.id}`}>
+                                <Link href={`/proposal/collaborate/${proposal._id}`}>
                                   <button className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors" title="Collaborate">
                                     <Edit className="w-4 h-4" />
                                   </button>
                                 </Link>
                               )}
-                              <Link href={`/proposal/view/${proposal.id}`}>
+                              <Link href={`/proposal/view/${proposal._id}`}>
                                 <button className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors" title="View">
                                   <Eye className="w-4 h-4" />
                                 </button>
                               </Link>
-                              <Link href={`/proposal/track/${proposal.id}`}>
+                              <Link href={`/proposal/track/${proposal._id}`}>
                                 <button className="p-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors" title="Track Progress">
                                   <BarChart3 className="w-4 h-4" />
                                 </button>
                               </Link>
-                              {proposal.hasComments && (
-                                <Link href={`/proposal/collaborate/${proposal.id}#comments`}>
-                                  <button className="p-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors" title="View Comments">
-                                    <MessageSquare className="w-4 h-4" />
-                                  </button>
-                                </Link>
-                              )}
                             </div>
                           </td>
                         </tr>

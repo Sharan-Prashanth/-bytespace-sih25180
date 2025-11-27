@@ -68,64 +68,12 @@ function ExpertDashboardContent() {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      // API Endpoint: GET /api/proposals/expert
-      const response = await apiClient.get('/api/proposals/expert');
-      setProposals(Array.isArray(response.data.proposals) ? response.data.proposals : []);
+      const response = await apiClient.get('/api/proposals');
+      const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+      setProposals(Array.isArray(proposalData) ? proposalData : []);
     } catch (error) {
       console.error("Error fetching proposals:", error);
-      // Mock data for development
-      setProposals([
-        {
-          id: "PROP001",
-          title: "AI-Powered Coal Quality Assessment System",
-          principalInvestigator: "Dr. Rajesh Kumar",
-          organization: "IIT Delhi",
-          assignedDate: "2025-09-20T10:00:00Z",
-          dueDate: "2025-10-20T23:59:59Z",
-          reviewStatus: "pending",
-          domain: "Artificial Intelligence"
-        },
-        {
-          id: "PROP002",
-          title: "Sustainable Mining Waste Management",
-          principalInvestigator: "Dr. Priya Sharma",
-          organization: "CSIR-CIMFR",
-          assignedDate: "2025-09-18T14:30:00Z",
-          dueDate: "2025-10-18T23:59:59Z",
-          reviewStatus: "in_progress",
-          domain: "Environmental Technology"
-        },
-        {
-          id: "PROP003",
-          title: "Advanced Coal Gasification Process",
-          principalInvestigator: "Dr. Amit Patel",
-          organization: "NEIST",
-          assignedDate: "2025-09-15T09:00:00Z",
-          dueDate: "2025-10-15T23:59:59Z",
-          reviewStatus: "submitted",
-          domain: "Clean Coal Technology"
-        },
-        {
-          id: "PROP004",
-          title: "Digital Twin for Mining Operations",
-          principalInvestigator: "Dr. Sunita Mehta",
-          organization: "NIT Rourkela",
-          assignedDate: "2025-09-10T11:45:00Z",
-          dueDate: "2025-10-10T23:59:59Z",
-          reviewStatus: "overdue",
-          domain: "Digital Technology"
-        },
-        {
-          id: "PROP005",
-          title: "Carbon Capture Technology Research",
-          principalInvestigator: "Dr. Vikram Singh",
-          organization: "IIT Kharagpur",
-          assignedDate: "2025-09-22T16:20:00Z",
-          dueDate: "2025-10-22T23:59:59Z",
-          reviewStatus: "pending",
-          domain: "Carbon Management"
-        }
-      ]);
+      setProposals([]);
     } finally {
       setLoading(false);
     }
@@ -133,14 +81,18 @@ function ExpertDashboardContent() {
 
   // Apply filters
   const filteredProposals = proposals.filter(proposal => {
-    const matchesSearch = proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.principalInvestigator.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = reviewStatusFilter === 'all' || proposal.reviewStatus === reviewStatusFilter;
+    const matchesSearch = proposal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.proposalCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.createdBy?.fullName?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Get reviewer assignment for current user
+    const assignment = proposal.assignedReviewers?.find(ar => ar.reviewer === user?._id);
+    const reviewStatus = assignment?.status || 'PENDING';
+    const matchesStatus = reviewStatusFilter === 'all' || reviewStatus === reviewStatusFilter;
     
     let matchesDueDate = true;
-    if (dueDateFilter !== 'all') {
-      const dueDate = new Date(proposal.dueDate);
+    if (dueDateFilter !== 'all' && assignment?.dueDate) {
+      const dueDate = new Date(assignment.dueDate);
       const today = new Date();
       const daysDiff = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
       
@@ -155,30 +107,37 @@ function ExpertDashboardContent() {
   // Calculate stats
   const stats = {
     totalAssigned: proposals.length,
-    pendingReviews: proposals.filter(p => p.reviewStatus === 'pending' || p.reviewStatus === 'in_progress').length,
-    reviewsSubmitted: proposals.filter(p => p.reviewStatus === 'submitted').length,
-    overdue: proposals.filter(p => p.reviewStatus === 'overdue').length
+    pendingReviews: proposals.filter(p => {
+      const assignment = p.assignedReviewers?.find(ar => ar.reviewer === user?._id);
+      return assignment?.status === 'PENDING' || assignment?.status === 'IN_PROGRESS';
+    }).length,
+    reviewsSubmitted: proposals.filter(p => {
+      const assignment = p.assignedReviewers?.find(ar => ar.reviewer === user?._id);
+      return assignment?.status === 'COMPLETED';
+    }).length,
+    overdue: proposals.filter(p => {
+      const assignment = p.assignedReviewers?.find(ar => ar.reviewer === user?._id);
+      if (!assignment?.dueDate) return false;
+      return new Date(assignment.dueDate) < new Date() && assignment.status !== 'COMPLETED';
+    }).length
   };
 
   const reviewStatusLabels = {
-    pending: "Pending",
-    in_progress: "In Progress",
-    submitted: "Submitted",
-    overdue: "Overdue"
+    'PENDING': "Pending",
+    'IN_PROGRESS': "In Progress",
+    'COMPLETED': "Submitted"
   };
 
   const getReviewStatusColor = (status) => {
     switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'in_progress':
-        return 'bg-blue-100 text-blue-700';
-      case 'submitted':
-        return 'bg-green-100 text-green-700';
-      case 'overdue':
-        return 'bg-red-100 text-red-700';
+      case 'PENDING':
+        return 'bg-yellow-100 text-black';
+      case 'IN_PROGRESS':
+        return 'bg-blue-100 text-black';
+      case 'COMPLETED':
+        return 'bg-green-100 text-black';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-gray-100 text-black';
     }
   };
 
