@@ -73,74 +73,12 @@ function CMPDIDashboardContent() {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      // API Endpoint: GET /api/proposals/cmpdi
-      const response = await apiClient.get('/api/proposals/cmpdi');
-      setProposals(Array.isArray(response.data.proposals) ? response.data.proposals : []);
+      const response = await apiClient.get('/api/proposals');
+      const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+      setProposals(Array.isArray(proposalData) ? proposalData : []);
     } catch (error) {
       console.error("Error fetching proposals:", error);
-      // Mock data for development
-      setProposals([
-        {
-          id: "PROP001",
-          title: "AI-Powered Coal Quality Assessment System",
-          principalInvestigator: "Dr. Rajesh Kumar",
-          organization: "IIT Delhi",
-          submittedDate: "2025-09-20T10:00:00Z",
-          domain: "Artificial Intelligence",
-          subStatus: "initial_review",
-          assignedExperts: [],
-          expertReportsReceived: 0,
-          clarificationRequested: false
-        },
-        {
-          id: "PROP002",
-          title: "Sustainable Mining Waste Management",
-          principalInvestigator: "Dr. Priya Sharma",
-          organization: "CSIR-CIMFR",
-          submittedDate: "2025-09-18T14:30:00Z",
-          domain: "Environmental Technology",
-          subStatus: "with_experts",
-          assignedExperts: ["Dr. A. Verma", "Dr. B. Singh"],
-          expertReportsReceived: 1,
-          clarificationRequested: false
-        },
-        {
-          id: "PROP003",
-          title: "Advanced Coal Gasification Process",
-          principalInvestigator: "Dr. Amit Patel",
-          organization: "NEIST",
-          submittedDate: "2025-09-15T09:00:00Z",
-          domain: "Clean Coal Technology",
-          subStatus: "clarification_pending",
-          assignedExperts: ["Dr. C. Reddy", "Dr. D. Gupta"],
-          expertReportsReceived: 2,
-          clarificationRequested: true
-        },
-        {
-          id: "PROP004",
-          title: "Digital Twin for Mining Operations",
-          principalInvestigator: "Dr. Sunita Mehta",
-          organization: "NIT Rourkela",
-          submittedDate: "2025-09-12T11:45:00Z",
-          domain: "Digital Technology",
-          subStatus: "ready_for_tssrc",
-          assignedExperts: ["Dr. E. Kumar", "Dr. F. Joshi"],
-          expertReportsReceived: 2,
-          clarificationRequested: false
-        },
-        {
-          id: "PROP005",
-          title: "Carbon Capture Technology Research",
-          principalInvestigator: "Dr. Vikram Singh",
-          organization: "IIT Kharagpur",
-          submittedDate: "2025-09-22T16:20:00Z",
-          domain: "Carbon Management",
-          subStatus: "initial_review",
-          assignedExperts: [],
-          expertReportsReceived: 0,
-          clarificationRequested: false
-        }
-      ]);
+      setProposals([]);
     } finally {
       setLoading(false);
     }
@@ -150,13 +88,13 @@ function CMPDIDashboardContent() {
   const getProposalsByTab = () => {
     switch (activeTab) {
       case 'incoming':
-        return proposals.filter(p => p.subStatus === 'initial_review');
+        return proposals.filter(p => p.status === 'SUBMITTED' || p.status === 'AI_EVALUATION');
       case 'with_experts':
-        return proposals.filter(p => p.subStatus === 'with_experts');
-      case 'clarification':
-        return proposals.filter(p => p.subStatus === 'clarification_pending');
+        return proposals.filter(p => p.status === 'CMPDI_EXPERT_REVIEW');
+      case 'under_review':
+        return proposals.filter(p => p.status === 'CMPDI_REVIEW');
       case 'completed':
-        return proposals.filter(p => p.subStatus === 'ready_for_tssrc');
+        return proposals.filter(p => p.status === 'CMPDI_APPROVED');
       default:
         return proposals;
     }
@@ -164,34 +102,35 @@ function CMPDIDashboardContent() {
 
   // Apply additional filters
   const filteredProposals = getProposalsByTab().filter(proposal => {
-    const matchesSearch = proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.principalInvestigator.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSubStatus = subStatusFilter === 'all' || proposal.subStatus === subStatusFilter;
-    const matchesDomain = domainFilter === 'all' || proposal.domain === domainFilter;
-    const matchesOrg = organizationFilter === 'all' || proposal.organization === organizationFilter;
+    const matchesSearch = proposal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.proposalCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.createdBy?.fullName?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSubStatus = subStatusFilter === 'all' || proposal.status === subStatusFilter;
+    const matchesDomain = domainFilter === 'all' || proposal.principalAgency === domainFilter;
+    const matchesOrg = organizationFilter === 'all' || proposal.principalAgency === organizationFilter;
     
     return matchesSearch && matchesSubStatus && matchesDomain && matchesOrg;
   });
 
   // Get unique values for filters
-  const uniqueDomains = [...new Set(proposals.map(p => p.domain).filter(Boolean))];
-  const uniqueOrganizations = [...new Set(proposals.map(p => p.organization).filter(Boolean))];
+  const uniqueDomains = [...new Set(proposals.map(p => p.principalAgency).filter(Boolean))];
+  const uniqueOrganizations = [...new Set(proposals.map(p => p.principalAgency).filter(Boolean))];
 
   // Calculate stats
   const stats = {
-    newProposals: proposals.filter(p => p.subStatus === 'initial_review').length,
-    underReview: proposals.filter(p => p.subStatus === 'with_experts').length,
-    withExperts: proposals.reduce((sum, p) => sum + p.assignedExperts.length, 0),
-    clarificationPending: proposals.filter(p => p.subStatus === 'clarification_pending').length,
-    readyForTSSRC: proposals.filter(p => p.subStatus === 'ready_for_tssrc').length
+    newProposals: proposals.filter(p => p.status === 'SUBMITTED' || p.status === 'AI_EVALUATION').length,
+    underReview: proposals.filter(p => p.status === 'CMPDI_REVIEW').length,
+    withExperts: proposals.filter(p => p.status === 'CMPDI_EXPERT_REVIEW').length,
+    totalExperts: proposals.reduce((sum, p) => sum + (p.assignedReviewers?.length || 0), 0),
+    readyForTSSRC: proposals.filter(p => p.status === 'CMPDI_APPROVED').length
   };
 
-  const subStatusLabels = {
-    initial_review: "Initial Review",
-    with_experts: "With Experts",
-    clarification_pending: "Clarification Pending",
-    ready_for_tssrc: "Ready for TSSRC"
+  const statusLabels = {
+    'SUBMITTED': "Submitted",
+    'AI_EVALUATION': "AI Evaluation",
+    'CMPDI_REVIEW': "Under Review",
+    'CMPDI_EXPERT_REVIEW': "With Experts",
+    'CMPDI_APPROVED': "Approved for TSSRC"
   };
 
   if (loading) {

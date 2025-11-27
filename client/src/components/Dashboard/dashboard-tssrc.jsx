@@ -72,80 +72,12 @@ function TSSRCDashboardContent() {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      // API Endpoint: GET /api/proposals/tssrc
-      const response = await apiClient.get('/api/proposals/tssrc');
-      setProposals(Array.isArray(response.data.proposals) ? response.data.proposals : []);
+      const response = await apiClient.get('/api/proposals');
+      const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+      setProposals(Array.isArray(proposalData) ? proposalData : []);
     } catch (error) {
       console.error("Error fetching proposals:", error);
-      // Mock data for development
-      setProposals([
-        {
-          id: "PROP001",
-          title: "AI-Powered Coal Quality Assessment System",
-          principalInvestigator: "Dr. Rajesh Kumar",
-          organization: "IIT Delhi",
-          receivedDate: "2025-09-25T10:00:00Z",
-          domain: "Artificial Intelligence",
-          subStatus: "incoming_cmpdi",
-          cmpdiSummary: "Recommended by CMPDI. Strong technical foundation with expert consensus.",
-          clarificationRequested: false
-        },
-        {
-          id: "PROP002",
-          title: "Sustainable Mining Waste Management",
-          principalInvestigator: "Dr. Priya Sharma",
-          organization: "CSIR-CIMFR",
-          receivedDate: "2025-09-22T14:30:00Z",
-          domain: "Environmental Technology",
-          subStatus: "under_deliberation",
-          cmpdiSummary: "Positive expert reviews. Innovation in waste management approaches.",
-          clarificationRequested: false
-        },
-        {
-          id: "PROP003",
-          title: "Advanced Coal Gasification Process",
-          principalInvestigator: "Dr. Amit Patel",
-          organization: "NEIST",
-          receivedDate: "2025-09-20T09:00:00Z",
-          domain: "Clean Coal Technology",
-          subStatus: "clarification_requested",
-          cmpdiSummary: "Requires clarification on scalability and cost estimates.",
-          clarificationRequested: true
-        },
-        {
-          id: "PROP004",
-          title: "Digital Twin for Mining Operations",
-          principalInvestigator: "Dr. Sunita Mehta",
-          organization: "NIT Rourkela",
-          receivedDate: "2025-09-18T11:45:00Z",
-          domain: "Digital Technology",
-          subStatus: "recommended_ssrc",
-          cmpdiSummary: "Highly recommended. Comprehensive implementation plan provided.",
-          clarificationRequested: false
-        },
-        {
-          id: "PROP005",
-          title: "Carbon Capture Technology Research",
-          principalInvestigator: "Dr. Vikram Singh",
-          organization: "IIT Kharagpur",
-          receivedDate: "2025-09-26T16:20:00Z",
-          domain: "Carbon Management",
-          subStatus: "incoming_cmpdi",
-          cmpdiSummary: "Strong scientific merit. Expert panel approved with minor suggestions.",
-          clarificationRequested: false
-        },
-        {
-          id: "PROP006",
-          title: "Automated Mine Safety System",
-          principalInvestigator: "Dr. Anjali Desai",
-          organization: "IIT Bombay",
-          receivedDate: "2025-09-15T12:00:00Z",
-          domain: "Safety Technology",
-          subStatus: "rejected",
-          cmpdiSummary: "Rejected due to budget constraints and feasibility concerns.",
-          clarificationRequested: false
-        }
-      ]);
+      setProposals([]);
     } finally {
       setLoading(false);
     }
@@ -155,13 +87,13 @@ function TSSRCDashboardContent() {
   const getProposalsByTab = () => {
     switch (activeTab) {
       case 'incoming':
-        return proposals.filter(p => p.subStatus === 'incoming_cmpdi');
+        return proposals.filter(p => p.status === 'CMPDI_APPROVED');
       case 'deliberation':
-        return proposals.filter(p => p.subStatus === 'under_deliberation');
-      case 'clarification':
-        return proposals.filter(p => p.subStatus === 'clarification_requested');
-      case 'completed':
-        return proposals.filter(p => p.subStatus === 'recommended_ssrc' || p.subStatus === 'rejected');
+        return proposals.filter(p => p.status === 'TSSRC_REVIEW');
+      case 'approved':
+        return proposals.filter(p => p.status === 'TSSRC_APPROVED');
+      case 'rejected':
+        return proposals.filter(p => p.status === 'TSSRC_REJECTED');
       default:
         return proposals;
     }
@@ -169,33 +101,31 @@ function TSSRCDashboardContent() {
 
   // Apply additional filters
   const filteredProposals = getProposalsByTab().filter(proposal => {
-    const matchesSearch = proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         proposal.principalInvestigator.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSubStatus = subStatusFilter === 'all' || proposal.subStatus === subStatusFilter;
-    const matchesDomain = domainFilter === 'all' || proposal.domain === domainFilter;
+    const matchesSearch = proposal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.proposalCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         proposal.createdBy?.fullName?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSubStatus = subStatusFilter === 'all' || proposal.status === subStatusFilter;
+    const matchesDomain = domainFilter === 'all' || proposal.principalAgency === domainFilter;
     
     return matchesSearch && matchesSubStatus && matchesDomain;
   });
 
-  // Get unique domains
-  const uniqueDomains = [...new Set(proposals.map(p => p.domain).filter(Boolean))];
+  // Get unique agencies
+  const uniqueAgencies = [...new Set(proposals.map(p => p.principalAgency).filter(Boolean))];
 
   // Calculate stats
   const stats = {
-    receivedFromCMPDI: proposals.filter(p => p.subStatus === 'incoming_cmpdi').length,
-    underReview: proposals.filter(p => p.subStatus === 'under_deliberation').length,
-    clarificationPending: proposals.filter(p => p.subStatus === 'clarification_requested').length,
-    recommendedToSSRC: proposals.filter(p => p.subStatus === 'recommended_ssrc').length,
-    rejected: proposals.filter(p => p.subStatus === 'rejected').length
+    receivedFromCMPDI: proposals.filter(p => p.status === 'CMPDI_APPROVED').length,
+    underReview: proposals.filter(p => p.status === 'TSSRC_REVIEW').length,
+    approved: proposals.filter(p => p.status === 'TSSRC_APPROVED').length,
+    rejected: proposals.filter(p => p.status === 'TSSRC_REJECTED').length
   };
 
-  const subStatusLabels = {
-    incoming_cmpdi: "Incoming from CMPDI",
-    under_deliberation: "Under Deliberation",
-    clarification_requested: "Clarification Requested",
-    recommended_ssrc: "Recommended to SSRC",
-    rejected: "Rejected"
+  const statusLabels = {
+    'CMPDI_APPROVED': "Incoming from CMPDI",
+    'TSSRC_REVIEW': "Under Review",
+    'TSSRC_APPROVED': "Approved for SSRC",
+    'TSSRC_REJECTED': "Rejected"
   };
 
   if (loading) {

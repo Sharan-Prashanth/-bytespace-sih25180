@@ -11,38 +11,37 @@ import VersionHistory from '../../../components/VersionHistory';
 import ChatWindow from '../../../components/ChatWindow';
 import { createPortal } from 'react-dom';
 import apiClient from '../../../utils/api';
-import { 
-  getCollaborators, 
-  getActiveCollaborators, 
-  inviteCollaborator,
-  removeCollaborator,
-  updateCollaborator 
+import {
+    getCollaborators,
+    getActiveCollaborators,
+    inviteCollaborator,
+    removeCollaborator,
+    updateCollaborator
 } from '../../../utils/collaborationApi';
 import {
-  getComments,
-  addComment,
-  replyToComment,
-  resolveComment,
-  unresolveComment,
-  markCommentAsRead,
-  getChatMessages,
-  sendChatMessage,
-  inviteCoInvestigator,
-  getProposalVersions,
-  createVersion
+    getComments,
+    addComment,
+    replyToComment,
+    resolveComment,
+    unresolveComment,
+    markCommentAsRead,
+    getChatMessages,
+    sendChatMessage,
+    inviteCoInvestigator,
+    createVersion
 } from '../../../utils/proposalApi';
 import {
-  initializeSocket,
-  joinProposalRoom,
-  leaveProposalRoom,
-  onNewChatMessage,
-  onNewComment,
-  onUserJoined,
-  onUserLeft,
-  offEvent,
-  emitChatMessage,
-  emitCommentAdded,
-  getSocket
+    initializeSocket,
+    joinProposalRoom,
+    leaveProposalRoom,
+    onNewChatMessage,
+    onNewComment,
+    onUserJoined,
+    onUserLeft,
+    offEvent,
+    emitChatMessage,
+    emitCommentAdded,
+    getSocket
 } from '../../../utils/socket';
 
 // Custom CSS animations for the collaborate page
@@ -187,7 +186,7 @@ function CollaborateContent() {
     const [showVersionHistory, setShowVersionHistory] = useState(false);
     const [showSaarthi, setShowSaarthi] = useState(false);
     const [showChatWindow, setShowChatWindow] = useState(false);
-    
+
     // Proposal Info State - matches database schema
     const [proposalInfo, setProposalInfo] = useState({
         title: '',
@@ -206,7 +205,7 @@ function CollaborateContent() {
     });
     const [isEditingInfo, setIsEditingInfo] = useState(false);
     const [isSavingInfo, setIsSavingInfo] = useState(false);
-    
+
     // Editor state
     const [editorContent, setEditorContent] = useState('');
     const [signatures, setSignatures] = useState({});
@@ -216,32 +215,32 @@ function CollaborateContent() {
 
     // Collaboration state
     const [collaborators, setCollaborators] = useState([]);
+    const [activeCollaborators, setActiveCollaborators] = useState([]);
     const [onlineUsers, setOnlineUsers] = useState(new Set());
     const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
     const [wordCount, setWordCount] = useState(0);
     const [characterCount, setCharacterCount] = useState(0);
-    
+
     // CI Invitation state
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
     const [isInviting, setIsInviting] = useState(false);
 
     // Version state
-    const [versions, setVersions] = useState([]);
     const [showCommitModal, setShowCommitModal] = useState(false);
     const [commitMessage, setCommitMessage] = useState('');
     const [isCommitting, setIsCommitting] = useState(false);
-    
+
     // Comments/Suggestions state
     const [comments, setComments] = useState([]);
     const [showCommentsPanel, setShowCommentsPanel] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
     const [showResolved, setShowResolved] = useState(false);
     const [replyText, setReplyText] = useState({});
-    
+
     // Chat state
     const [chatMessages, setChatMessages] = useState([]);
-    
+
     // Tooltip state
     const [hoveredUser, setHoveredUser] = useState(null);
     const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -270,57 +269,68 @@ function CollaborateContent() {
         { type: 'p', children: [{ text: 'Current coal processing facilities in India operate with outdated equipment that struggles to meet environmental compliance standards set by the Ministry of Coal. The lack of advanced gasification infrastructure limits the country\'s ability to maximize coal utilization for power generation and industrial applications.' }] },
         { type: 'h2', children: [{ text: '2. Research Objectives' }] },
         { type: 'p', children: [{ text: 'Primary Objectives:', bold: true }] },
-        { type: 'ul', children: [
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Develop an integrated coal gasification system achieving 60%+ energy efficiency' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Design carbon capture mechanisms reducing CO2 emissions by 45%' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Create automated monitoring systems for real-time process optimization' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Establish economic viability models for large-scale implementation' }] }] },
-        ]},
+        {
+            type: 'ul', children: [
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Develop an integrated coal gasification system achieving 60%+ energy efficiency' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Design carbon capture mechanisms reducing CO2 emissions by 45%' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Create automated monitoring systems for real-time process optimization' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Establish economic viability models for large-scale implementation' }] }] },
+            ]
+        },
         { type: 'h2', children: [{ text: '3. Methodology & Approach' }] },
         { type: 'p', children: [{ text: 'Phase 1: Laboratory Testing (Months 1-8)', bold: true }] },
-        { type: 'ul', children: [
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Coal characterization using X-ray fluorescence and thermogravimetric analysis' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Gasification reactor design using computational fluid dynamics modeling' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Catalyst development for enhanced reaction efficiency' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Small-scale prototype testing under controlled conditions' }] }] },
-        ]},
+        {
+            type: 'ul', children: [
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Coal characterization using X-ray fluorescence and thermogravimetric analysis' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Gasification reactor design using computational fluid dynamics modeling' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Catalyst development for enhanced reaction efficiency' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Small-scale prototype testing under controlled conditions' }] }] },
+            ]
+        },
         { type: 'p', children: [{ text: 'Phase 2: Pilot Plant Development (Months 9-18)', bold: true }] },
-        { type: 'ul', children: [
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Construction of pilot-scale gasification facility' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Integration of carbon capture systems' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Performance testing with various coal grades' }] }] },
-            { type: 'li', children: [{ type: 'lic', children: [{ text: 'Environmental impact assessment and monitoring' }] }] },
-        ]},
+        {
+            type: 'ul', children: [
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Construction of pilot-scale gasification facility' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Integration of carbon capture systems' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Performance testing with various coal grades' }] }] },
+                { type: 'li', children: [{ type: 'lic', children: [{ text: 'Environmental impact assessment and monitoring' }] }] },
+            ]
+        },
     ];
 
     // Load collaborators from API
     const loadCollaborators = async () => {
         if (!id) return;
-        
+
         try {
             const response = await getCollaborators(id);
             const data = response.data || response;
-            setCollaborators(data.collaborators || []);
-            
+            // Backend returns data as array directly, not nested in collaborators property
+            const collabs = Array.isArray(data) ? data : (data.collaborators || []);
+            setCollaborators(collabs);
+
+            // Set active collaborators (filter by online status)
+            setActiveCollaborators(collabs.filter(c => onlineUsers.has(c._id) || c.isOnline));
+
             // Update proposal info with collaborator count
             setProposalInfo(prev => ({
                 ...prev,
-                ciCount: data.collaborators?.filter(c => c.role === 'CI').length || 0
+                ciCount: collabs.filter(c => c.role === 'CI').length || 0
             }));
         } catch (error) {
-            console.error('Failed to load collaborators:', error);
+            console.error('[CollaborationService] Failed to load collaborators:', error);
         }
     };
 
     // Load comments from API
     const loadComments = async () => {
         if (!id) return;
-        
+
         try {
             const response = await getComments(id);
             const commentsList = response.data?.comments || [];
             setComments(commentsList);
-            
+
             // Calculate unread count
             const unreadComments = commentsList.filter(c => !c.isRead && c.author?._id !== user?._id);
             setUnreadCount(unreadComments.length);
@@ -329,26 +339,15 @@ function CollaborateContent() {
         }
     };
 
-    // Load versions from API
-    const loadVersions = async () => {
-        if (!id) return;
-        
-        try {
-            const response = await getProposalVersions(id);
-            setVersions(response.data?.versions || []);
-        } catch (error) {
-            console.error('Failed to load versions:', error);
-        }
-    };
 
     // Load chat messages from API
     const loadChatMessages = async () => {
         if (!id) return;
-        
+
         try {
             const response = await getChatMessages(id);
             const messages = response.data?.messages || [];
-            
+
             const transformedMessages = messages.map(msg => ({
                 id: msg._id,
                 sender: msg.sender.fullName,
@@ -357,7 +356,7 @@ function CollaborateContent() {
                 time: new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
                 isCurrentUser: msg.sender._id === user?._id
             }));
-            
+
             setChatMessages(transformedMessages);
         } catch (error) {
             console.error('Failed to load chat messages:', error);
@@ -367,18 +366,17 @@ function CollaborateContent() {
     // Auto-save function (creates x.1 version)
     const handleAutoSave = async () => {
         if (!proposal || !editorContent) return;
-        
+
         try {
             setIsSaving(true);
-            
+
             await createVersion(id, {
                 content: editorContent,
                 versionMessage: 'Auto-saved',
                 isAutoSave: true
             });
-            
+
             setLastSaved(new Date());
-            await loadVersions();
         } catch (error) {
             console.error('Auto-save failed:', error);
         } finally {
@@ -392,19 +390,18 @@ function CollaborateContent() {
             alert('Please enter a commit message');
             return;
         }
-        
+
         try {
             setIsCommitting(true);
-            
+
             await createVersion(id, {
                 content: editorContent,
                 versionMessage: commitMessage,
                 isAutoSave: false
             });
-            
+
             setCommitMessage('');
             setShowCommitModal(false);
-            await loadVersions();
             alert('Version committed successfully! AI evaluation in progress.');
         } catch (error) {
             console.error('Failed to commit version:', error);
@@ -420,18 +417,18 @@ function CollaborateContent() {
             alert('Please enter an email address');
             return;
         }
-        
+
         const ciCount = collaborators.filter(c => c.role === 'CI').length;
         if (ciCount >= 5) {
             alert('Maximum 5 co-investigators allowed');
             return;
         }
-        
+
         try {
             setIsInviting(true);
-            
+
             await inviteCoInvestigator(id, inviteEmail);
-            
+
             setInviteEmail('');
             setShowInviteModal(false);
             await loadCollaborators();
@@ -447,7 +444,7 @@ function CollaborateContent() {
     // Add comment or suggestion
     const handleAddComment = async (content, type = 'COMMENT', formName = null) => {
         if (!content.trim()) return;
-        
+
         try {
             const response = await addComment(id, {
                 content,
@@ -455,7 +452,7 @@ function CollaborateContent() {
                 formName,
                 isInline: false
             });
-            
+
             await loadComments();
         } catch (error) {
             console.error('Failed to add comment:', error);
@@ -465,7 +462,7 @@ function CollaborateContent() {
     // Reply to comment
     const handleReplyToComment = async (commentId, replyContent) => {
         if (!replyContent.trim()) return;
-        
+
         try {
             await replyToComment(id, commentId, { content: replyContent });
             setReplyText(prev => ({ ...prev, [commentId]: '' }));
@@ -515,9 +512,9 @@ function CollaborateContent() {
     };
 
     const isCommitteeMember = () => {
-        return user?.roles?.includes('CMPDI_MEMBER') || 
-               user?.roles?.includes('TSSRC_MEMBER') || 
-               user?.roles?.includes('SSRC_MEMBER');
+        return user?.roles?.includes('CMPDI_MEMBER') ||
+            user?.roles?.includes('TSSRC_MEMBER') ||
+            user?.roles?.includes('SSRC_MEMBER');
     };
 
     const canEdit = () => {
@@ -531,21 +528,21 @@ function CollaborateContent() {
     const canInviteCI = () => {
         return isPI();
     };
-    
+
     const canEditProposalInfo = () => {
         return isPI(); // Only PI can edit proposal info
     };
-    
+
     // Save proposal info (only PI can do this)
     const handleSaveProposalInfo = async () => {
         if (!canEditProposalInfo()) {
             alert('Only Principal Investigator can edit proposal information');
             return;
         }
-        
+
         try {
             setIsSavingInfo(true);
-            
+
             await apiClient.patch(`/api/proposals/${id}/info`, {
                 title: proposalInfo.title,
                 fundingMethod: proposalInfo.fundingMethod,
@@ -556,7 +553,7 @@ function CollaborateContent() {
                 durationMonths: proposalInfo.durationMonths,
                 outlayLakhs: proposalInfo.outlayLakhs
             });
-            
+
             setIsEditingInfo(false);
             alert('Proposal information updated successfully!');
         } catch (error) {
@@ -574,12 +571,12 @@ function CollaborateContent() {
                 if (id) {
                     console.log('Loading proposal for collaboration:', id);
                     setLoading(true);
-                    
+
                     try {
                         const response = await apiClient.get(`/api/proposals/${id}`);
                         const proposalData = response.data.data || response.data;
-                        console.log('✅ Proposal loaded from API:', proposalData.proposalCode, 'Forms:', proposalData.forms ? Object.keys(proposalData.forms) : 'none');
-                        console.log('📄 Proposal data structure:', {
+                        console.log('[CollaborationService] Proposal loaded from API:', proposalData.proposalCode, 'Forms:', proposalData.forms ? Object.keys(proposalData.forms) : 'none');
+                        console.log('[CollaborationService] Proposal data structure:', {
                             id: proposalData._id,
                             code: proposalData.proposalCode,
                             title: proposalData.title,
@@ -587,9 +584,9 @@ function CollaborateContent() {
                             createdBy: proposalData.createdBy,
                             coInvestigators: proposalData.coInvestigators?.length
                         });
-                        
+
                         setProposal(proposalData);
-                        
+
                         // Set proposal info from database fields
                         setProposalInfo({
                             title: proposalData.title || '',
@@ -606,23 +603,21 @@ function CollaborateContent() {
                             createdAt: proposalData.createdAt,
                             ciCount: proposalData.coInvestigators?.length || 0
                         });
-                        
-                        console.log('✅ Forms ready for AdvancedProposalEditor:', proposalData.forms ? 'Forms object available' : 'No forms!');
-                        
+
+                        console.log('[CollaborationService] Forms ready for AdvancedProposalEditor:', proposalData.forms ? 'Forms object available' : 'No forms!');
+
                         // Load collaborators
                         await loadCollaborators();
-                        
+
                         // Load chat messages
                         await loadChatMessages();
-                        
+
                         // Load comments
                         await loadComments();
-                        
-                        // Load versions
-                        await loadVersions();
+
                     } catch (error) {
-                        console.error('❌ Failed to load proposal:', error);
-                        console.error('Error details:', error.response?.data || error.message);
+                        console.error('[CollaborationService] Failed to load proposal:', error);
+                        console.error('[CollaborationService] Error details:', error.response?.data || error.message);
                         // Fallback to sample data for demo
                         setProposal(sampleProposal);
                         setEditorContent(initialContent);
@@ -644,7 +639,7 @@ function CollaborateContent() {
         if (id) {
             initializeSocket();
             joinProposalRoom(id);
-            
+
             // Listen for new chat messages
             const handleNewChatMessage = (data) => {
                 setChatMessages(prev => [...prev, {
@@ -656,43 +651,60 @@ function CollaborateContent() {
                     isCurrentUser: data.sender?._id === user?._id
                 }]);
             };
-            
+
             // Listen for new comments
             const handleNewComment = (data) => {
                 console.log('New comment received:', data);
                 loadComments();
             };
-            
+
             // Listen for users joining/leaving
             const handleUserJoined = (data) => {
-                console.log('User joined:', data);
-                setOnlineUsers(prev => new Set([...prev, data.userId]));
+                console.log('[CollaborationService] User joined:', data);
+                setOnlineUsers(prev => {
+                    const newSet = new Set([...prev, data.userId]);
+                    return newSet;
+                });
+                // Update activeCollaborators based on current collaborators and online users
+                setActiveCollaborators(prev => {
+                    return collaborators.filter(c => {
+                        const collabId = c._id || c.user?._id;
+                        return c.isOnline || onlineUsers.has(collabId) || collabId === data.userId;
+                    });
+                });
             };
-            
+
             const handleUserLeft = (data) => {
-                console.log('User left:', data);
+                console.log('[CollaborationService] User left:', data);
                 setOnlineUsers(prev => {
                     const newSet = new Set(prev);
                     newSet.delete(data.userId);
                     return newSet;
                 });
+                // Update activeCollaborators to remove the user who left
+                setActiveCollaborators(prev => {
+                    return collaborators.filter(c => {
+                        const collabId = c._id || c.user?._id;
+                        return (c.isOnline || onlineUsers.has(collabId)) && collabId !== data.userId;
+                    });
+                });
             };
-            
+
             // Listen for version updates
             const handleVersionCreated = (data) => {
                 console.log('New version created:', data);
-                loadVersions();
+                // Version history will be updated by the VersionHistory component
             };
-            
+
             onNewChatMessage(handleNewChatMessage);
             onNewComment(handleNewComment);
             onUserJoined(handleUserJoined);
             onUserLeft(handleUserLeft);
-            
+
             // Listen to version-created event using socket directly
             const socketInstance = getSocket();
             socketInstance.on('version-created', handleVersionCreated);
-            
+
             return () => {
                 leaveProposalRoom(id);
                 offEvent('new-chat-message', handleNewChatMessage);
@@ -707,17 +719,17 @@ function CollaborateContent() {
     // Auto-save timer (saves every 30 seconds if editing is allowed)
     useEffect(() => {
         if (!canEdit() || !editorContent) return;
-        
+
         // Clear existing timer
         if (autoSaveTimerRef.current) {
             clearInterval(autoSaveTimerRef.current);
         }
-        
+
         // Set new auto-save timer (30 seconds as per PROMPT.txt)
         autoSaveTimerRef.current = setInterval(() => {
             handleAutoSave();
         }, 30000); // 30 seconds
-        
+
         return () => {
             if (autoSaveTimerRef.current) {
                 clearInterval(autoSaveTimerRef.current);
@@ -743,19 +755,19 @@ function CollaborateContent() {
         try {
             // Send message to backend
             const response = await sendChatMessage(id, messageText);
-            
+
             // Emit socket event for real-time update
             emitChatMessage({
                 proposalId: id,
                 message: response.data?.message
             });
-            
+
             // Reload chat messages
             await loadChatMessages();
         } catch (error) {
             console.error('Failed to send chat message:', error);
         }
-        
+
         // Fallback for UI
         const newMessage = {
             type: 'user',
@@ -876,18 +888,18 @@ function CollaborateContent() {
             });
 
             if (result.success) {
-                alert(`✅ Collaboration invitation sent to ${collaboratorEmail}!`);
+                alert(`Collaboration invitation sent to ${collaboratorEmail}!`);
                 setCollaboratorEmail('');
                 setCollaboratorRole('');
                 setCollaboratorDescription('');
                 setShowCollaborateModal(false);
-                
+
                 // Reload collaborators
                 await loadCollaborators();
             }
         } catch (error) {
-            console.error('Error sending invitation:', error);
-            alert(`❌ Failed to send invitation: ${error.message}`);
+            console.error('[CollaborationService] Error sending invitation:', error);
+            alert(`Failed to send invitation: ${error.message}`);
         } finally {
             setIsInviting(false);
         }
@@ -973,7 +985,7 @@ function CollaborateContent() {
         );
         // Close the comment popup after resolving
         setSelectedComment(null);
-        
+
         // Call backend API
         handleResolveComment(commentId);
     };
@@ -991,6 +1003,9 @@ function CollaborateContent() {
     }
 
     const onlineCollaborators = proposal.collaborators?.filter(c => c.status === 'online').length || 0;
+
+    // Extract author (PI) from collaborators
+    const author = collaborators.find(c => c.role === 'PI') || null;
 
     return (
         <>
@@ -1115,7 +1130,7 @@ function CollaborateContent() {
                                     <div className="text-xs text-gray-600">{collaborators.length} members</div>
                                 </div>
                             </button>
-                            
+
                             {/* Add CI Button - Only for PI */}
                             {canInviteCI() && proposalInfo.ciCount < 5 && (
                                 <button
@@ -1189,13 +1204,13 @@ function CollaborateContent() {
                                     <div className="text-black font-semibold">{proposalInfo.title}</div>
                                 )}
                             </div>
-                            
+
                             {/* Proposal Code (Read-only) */}
                             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                                 <div className="text-blue-600 text-sm font-semibold mb-1">Proposal Code</div>
                                 <div className="text-black font-semibold font-mono">{proposalInfo.code}</div>
                             </div>
-                            
+
                             {/* Funding Method */}
                             <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
                                 <div className="text-purple-600 text-sm font-semibold mb-1">Funding Method *</div>
@@ -1212,7 +1227,7 @@ function CollaborateContent() {
                                     <div className="text-black font-semibold">{proposalInfo.fundingMethod}</div>
                                 )}
                             </div>
-                            
+
                             {/* Principal Agency */}
                             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                                 <div className="text-green-600 text-sm font-semibold mb-1">Principal Agency *</div>
@@ -1227,7 +1242,7 @@ function CollaborateContent() {
                                     <div className="text-black font-semibold">{proposalInfo.principalAgency}</div>
                                 )}
                             </div>
-                            
+
                             {/* Duration */}
                             <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
                                 <div className="text-yellow-600 text-sm font-semibold mb-1">Duration (Months) *</div>
@@ -1243,7 +1258,7 @@ function CollaborateContent() {
                                     <div className="text-black font-semibold">{proposalInfo.durationMonths} months</div>
                                 )}
                             </div>
-                            
+
                             {/* Outlay */}
                             <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
                                 <div className="text-indigo-600 text-sm font-semibold mb-1">Outlay (Lakhs) *</div>
@@ -1260,7 +1275,7 @@ function CollaborateContent() {
                                     <div className="text-black font-semibold">₹{proposalInfo.outlayLakhs} Lakhs</div>
                                 )}
                             </div>
-                            
+
                             {/* Status (Read-only) */}
                             <div className="bg-pink-50 rounded-lg p-4 border border-pink-200">
                                 <div className="text-pink-600 text-sm font-semibold mb-1">Status</div>
@@ -1268,7 +1283,7 @@ function CollaborateContent() {
                                     {proposalInfo.status?.replace('_', ' ')}
                                 </div>
                             </div>
-                            
+
                             {/* Project Leader */}
                             <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
                                 <div className="text-teal-600 text-sm font-semibold mb-1">Project Leader *</div>
@@ -1283,7 +1298,7 @@ function CollaborateContent() {
                                     <div className="text-black font-semibold">{proposalInfo.projectLeader}</div>
                                 )}
                             </div>
-                            
+
                             {/* Project Coordinator */}
                             <div className="bg-rose-50 rounded-lg p-4 border border-rose-200">
                                 <div className="text-rose-600 text-sm font-semibold mb-1">Project Coordinator *</div>
@@ -1338,18 +1353,16 @@ function CollaborateContent() {
                                 {comments
                                     .filter(c => showResolved || !c.isResolved)
                                     .map((comment) => (
-                                        <div key={comment._id} className={`p-4 rounded-lg border-l-4 ${
-                                            comment.type === 'SUGGESTION' 
-                                                ? 'bg-blue-50 border-blue-500' 
-                                                : 'bg-purple-50 border-purple-500'
-                                        } ${comment.isResolved ? 'opacity-60' : ''}`}>
+                                        <div key={comment._id} className={`p-4 rounded-lg border-l-4 ${comment.type === 'SUGGESTION'
+                                            ? 'bg-blue-50 border-blue-500'
+                                            : 'bg-purple-50 border-purple-500'
+                                            } ${comment.isResolved ? 'opacity-60' : ''}`}>
                                             <div className="flex items-start justify-between mb-2">
                                                 <div className="flex items-center gap-2">
-                                                    <div className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                        comment.type === 'SUGGESTION'
-                                                            ? 'bg-blue-100 text-blue-800'
-                                                            : 'bg-purple-100 text-purple-800'
-                                                    }`}>
+                                                    <div className={`px-2 py-0.5 rounded-full text-xs font-semibold ${comment.type === 'SUGGESTION'
+                                                        ? 'bg-blue-100 text-blue-800'
+                                                        : 'bg-purple-100 text-purple-800'
+                                                        }`}>
                                                         {comment.type}
                                                     </div>
                                                     {!comment.isRead && comment.author?._id !== user?._id && (
@@ -1395,7 +1408,7 @@ function CollaborateContent() {
                                                     </button>
                                                 </div>
                                             </div>
-                                            
+
                                             {/* Reply section */}
                                             {replyText[comment._id] !== undefined && (
                                                 <div className="mt-3 pt-3 border-t border-gray-200">
@@ -1488,98 +1501,6 @@ function CollaborateContent() {
                         )}
                     </div>
 
-                    {/* Version Control Panel */}
-                    <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-green-200">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-bold text-black flex items-center">
-                                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                </div>
-                                Version Control
-                            </h3>
-                            <div className="flex items-center gap-3">
-                                {/* Auto-save indicator */}
-                                {canEdit() && (
-                                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                                        {isSaving ? (
-                                            <>
-                                                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                                                <span className="text-sm text-gray-600">Saving...</span>
-                                            </>
-                                        ) : lastSaved ? (
-                                            <>
-                                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                                <span className="text-sm text-gray-600">
-                                                    Saved {Math.floor((new Date() - lastSaved) / 60000)}m ago
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                                                <span className="text-sm text-gray-600">Not saved</span>
-                                            </>
-                                        )}
-                                    </div>
-                                )}
-                                {canEdit() && (
-                                    <button
-                                        onClick={() => setShowCommitModal(true)}
-                                        className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all shadow-lg"
-                                    >
-                                        Commit Version
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Version list */}
-                        <div className="space-y-3 max-h-64 overflow-y-auto">
-                            {versions.slice(0, 5).map((version) => (
-                                <div key={version._id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                                                version.isAutoSave 
-                                                    ? 'bg-blue-100 text-blue-800' 
-                                                    : 'bg-green-100 text-green-800'
-                                            }`}>
-                                                v{version.versionNumber}
-                                            </div>
-                                            {version.isAutoSave && (
-                                                <span className="text-xs text-gray-500 italic">Auto-save</span>
-                                            )}
-                                            {version.aiReport && (
-                                                <div className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
-                                                    AI Evaluated
-                                                </div>
-                                            )}
-                                        </div>
-                                        <span className="text-xs text-gray-500">
-                                            {new Date(version.createdAt).toLocaleString()}
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-black mb-1">{version.versionMessage}</p>
-                                    <div className="text-xs text-gray-600">
-                                        By {version.createdBy?.fullName}
-                                    </div>
-                                </div>
-                            ))}
-                            {versions.length === 0 && (
-                                <div className="text-center py-6 text-gray-500">
-                                    No versions yet. Changes are auto-saved every 30 seconds.
-                                </div>
-                            )}
-                            {versions.length > 5 && (
-                                <div className="text-center pt-2">
-                                    <button className="text-sm text-blue-600 hover:text-blue-800 font-semibold">
-                                        View All {versions.length} Versions
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
 
                     {/* Editor Info Banner */}
                     <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1588,13 +1509,13 @@ function CollaborateContent() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <div>
-                                <h4 className="font-semibold text-blue-900 mb-1">
+                                <h4 className="font-semibold text-black mb-1">
                                     {canEdit() ? 'Collaborative Editing Active' : 'View-Only Mode'}
                                 </h4>
-                                <p className="text-sm text-blue-700">
+                                <p className="text-sm text-black">
                                     {canEdit() && 'Changes are auto-saved every 30 seconds. Use "Commit Version" to create a major version with AI evaluation. '}
                                     {canSuggest() && 'You can add suggestions and comments above. '}
-                                    Use the comment button in the editor toolbar for inline comments.
+                                    Use the comment button in the editor toolbar for inline comments. Access version history through the version history panel.
                                 </p>
                             </div>
                         </div>
@@ -1611,6 +1532,7 @@ function CollaborateContent() {
                             onCharacterCountChange={handleCharacterCountChange}
                             proposalTitle={proposal?.title || 'Research Proposal'}
                             showStats={true}
+                            theme="light"
                         />
                     </div>
 
@@ -1632,8 +1554,8 @@ function CollaborateContent() {
                             <button
                                 onClick={() => setShowChatWindow(!showChatWindow)}
                                 className={`w-16 h-16 rounded-2xl shadow-2xl transition-all duration-300 flex items-center justify-center transform hover:scale-110 hover:rotate-3 cursor-pointer ${showChatWindow
-                                        ? 'bg-blue-700 text-white scale-110 rotate-3'
-                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    ? 'bg-blue-700 text-white scale-110 rotate-3'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
                                     }`}
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1652,8 +1574,36 @@ function CollaborateContent() {
                         </div>
                     )}
 
-                    {/* Version History Button - Middle position */}
+                    {/* Version History Toggle Button - Middle position */}
+                    {!showSaarthi && (
+                        <div className="fixed bottom-32 right-8 z-30 group">
+                            <button
+                                onClick={() => setShowVersionHistory(!showVersionHistory)}
+                                className={`w-16 h-16 rounded-2xl shadow-2xl transition-all duration-300 flex items-center justify-center transform hover:scale-110 hover:rotate-3 cursor-pointer ${showVersionHistory
+                                    ? 'bg-green-700 text-white scale-110 rotate-3'
+                                    : 'bg-green-600 text-white hover:bg-green-700'
+                                    }`}
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full right-0 mb-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:translate-y-0 translate-y-2 pointer-events-none z-[60]">
+                                <div className="bg-black/90 text-white px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap shadow-2xl backdrop-blur-sm border border-white/10">
+                                    <div className="flex items-center gap-2">
+                                        <span>Version History</span>
+                                    </div>
+                                    <div className="absolute top-full right-4 w-0 h-0 border-t-4 border-t-black/90 border-l-4 border-l-transparent border-r-4 border-r-transparent"></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Version History Panel */}
                     <VersionHistory
+                        proposalId={id}
+                        currentVersion={proposal?.currentVersion}
                         showVersionHistory={showVersionHistory}
                         setShowVersionHistory={setShowVersionHistory}
                         showSaarthi={showSaarthi}
@@ -1798,7 +1748,7 @@ function CollaborateContent() {
 
                                     <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                                         <p className="text-sm text-yellow-800">
-                                            <strong>Note:</strong> This will create a major version (x+1) and trigger AI evaluation. 
+                                            <strong>Note:</strong> This will create a major version (x+1) and trigger AI evaluation.
                                             All collaborators will be notified.
                                         </p>
                                     </div>
@@ -2071,14 +2021,14 @@ function CollaborateContent() {
                                             <div className="flex items-center gap-4">
                                                 <div className="relative">
                                                     <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
-                                                        {(author.user?.name || 'A').substring(0, 2).toUpperCase()}
+                                                        {(author.user?.fullName || 'A').substring(0, 2).toUpperCase()}
                                                     </div>
                                                     {author.isActiveNow && (
                                                         <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <div className="font-semibold text-gray-900">{author.user?.name}</div>
+                                                    <div className="font-semibold text-gray-900">{author.user?.fullName}</div>
                                                     <div className="text-sm text-gray-600">{author.user?.email}</div>
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
@@ -2100,7 +2050,7 @@ function CollaborateContent() {
                                 {/* Collaborators */}
                                 {collaborators.map((collab) => {
                                     const getRoleColor = (role) => {
-                                        switch(role) {
+                                        switch (role) {
                                             case 'admin': return 'bg-purple-100 text-purple-800';
                                             case 'reviewer': return 'bg-orange-100 text-orange-800';
                                             case 'collaborator': return 'bg-green-100 text-green-800';
@@ -2108,9 +2058,9 @@ function CollaborateContent() {
                                             default: return 'bg-indigo-100 text-indigo-800';
                                         }
                                     };
-                                    
+
                                     const getRoleBgColor = (role) => {
-                                        switch(role) {
+                                        switch (role) {
                                             case 'admin': return 'bg-purple-600';
                                             case 'reviewer': return 'bg-orange-600';
                                             case 'collaborator': return 'bg-green-600';
@@ -2125,14 +2075,14 @@ function CollaborateContent() {
                                                 <div className="flex items-center gap-4">
                                                     <div className="relative">
                                                         <div className={`w-12 h-12 rounded-full ${getRoleBgColor(collab.role)} flex items-center justify-center text-white font-bold text-lg`}>
-                                                            {(collab.user?.name || 'C').substring(0, 2).toUpperCase()}
+                                                            {(collab.user?.fullName || 'C').substring(0, 2).toUpperCase()}
                                                         </div>
                                                         {collab.isActiveNow && (
                                                             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <div className="font-semibold text-gray-900">{collab.user?.name}</div>
+                                                        <div className="font-semibold text-gray-900">{collab.user?.fullName}</div>
                                                         <div className="text-sm text-gray-600">{collab.user?.email}</div>
                                                         <div className="flex items-center gap-2 mt-1">
                                                             <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getRoleColor(collab.role)}`}>
@@ -2171,7 +2121,7 @@ function CollaborateContent() {
                         </div>
                     </div>
                 )}
-            </div>
+            </div >
         </>
     );
 }

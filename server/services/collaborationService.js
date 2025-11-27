@@ -39,7 +39,7 @@ class CollaborationService {
       syncDebounce: 5000 // 5 seconds debounce for DB sync
     };
 
-    console.log('🔧 Collaboration Service initialized');
+    console.log('[CollaborationService] Initialized');
   }
 
   /**
@@ -52,7 +52,7 @@ class CollaborationService {
       return room;
     }
 
-    console.log(`📦 Creating new room for proposal: ${proposalId}`);
+    console.log(`[CollaborationService] Creating new room for proposal: ${proposalId}`);
     
     // Load proposal from database
     const proposal = await this._loadProposalFromDB(proposalId);
@@ -139,7 +139,7 @@ class CollaborationService {
 
     room.lastActivity = Date.now();
 
-    console.log(`👤 User ${user.fullName} joined room ${proposalId} (${room.activeUsers.size} active users)`);
+    console.log(`[CollaborationService] User ${user.fullName} joined room ${proposalId} (${room.activeUsers.size} active users)`);
 
     return {
       room,
@@ -157,12 +157,22 @@ class CollaborationService {
 
     const userSession = room.activeUsers.get(socketId);
     if (userSession) {
-      console.log(`👋 User ${userSession.user.fullName} left room ${proposalId}`);
+      console.log('User left room:', userSession.user.fullName, proposalId);
       room.activeUsers.delete(socketId);
       this.sessions.delete(socketId);
     }
 
     room.lastActivity = Date.now();
+
+    // If last user is leaving and there are changes, save them
+    if (room.activeUsers.size === 0 && room.isDirty) {
+      try {
+        await this.saveRoomToDatabase(proposalId, { isAutoSave: true });
+        console.log('Saved changes before room cleanup:', proposalId);
+      } catch (error) {
+        console.error('Error saving on room close:', error);
+      }
+    }
 
     // If room is empty and has no pending changes, schedule cleanup
     if (room.activeUsers.size === 0 && !room.isDirty) {
@@ -227,7 +237,7 @@ class CollaborationService {
         lastModifiedAt: Date.now()
       };
 
-      console.log(`✏️ Form ${updates.formId} (${dbFormKey}) in proposal ${proposalId} updated by user ${userId}`);
+      console.log(`[CollaborationService] Form ${updates.formId} (${dbFormKey}) in proposal ${proposalId} updated by user ${userId}`);
     } 
     // Handle bulk form updates
     else if (updates.forms) {
@@ -292,11 +302,11 @@ class CollaborationService {
     }
 
     if (!room.isDirty && !options.force) {
-      console.log(`⏭️ Skipping save for ${proposalId} - no changes`);
+      console.log(`[CollaborationService] Skipping save for ${proposalId} - no changes`);
       return { success: true, message: 'No changes to save' };
     }
 
-    console.log(`💾 Saving room ${proposalId} to database...`);
+    console.log(`[CollaborationService] Saving room ${proposalId} to database...`);
 
     try {
       // Find proposal in database
@@ -325,10 +335,11 @@ class CollaborationService {
 
       // Update version if this is an auto-save
       if (options.isAutoSave) {
-        // Increment minor version (x.1, x.2, etc.)
+        // Increment minor version (x.1, x.2, etc.) using integer math to avoid floating point issues
         const baseVersion = Math.floor(room.currentVersion);
-        const minorVersion = Math.round((room.currentVersion - baseVersion) * 10) / 10;
-        room.currentVersion = baseVersion + minorVersion + 0.1;
+        const minorVersionInt = Math.round((room.currentVersion - baseVersion) * 10);
+        const newMinorVersionInt = minorVersionInt + 1;
+        room.currentVersion = baseVersion + (newMinorVersionInt / 10);
         proposal.currentVersion = room.currentVersion;
       }
 
@@ -347,7 +358,7 @@ class CollaborationService {
       // Update room's proposal data
       room.proposalData = this._sanitizeProposalData(proposal);
 
-      console.log(`✅ Room ${proposalId} saved to database (version ${room.currentVersion})`);
+      console.log(`[CollaborationService] Room ${proposalId} saved to database (version ${room.currentVersion})`);
 
       return {
         success: true,
@@ -356,7 +367,7 @@ class CollaborationService {
       };
 
     } catch (error) {
-      console.error(`❌ Error saving room ${proposalId}:`, error);
+      console.error(`[CollaborationService] Error saving room ${proposalId}:`, error);
       throw error;
     }
   }
@@ -599,7 +610,7 @@ class CollaborationService {
       if (room.isDirty && room.activeUsers.size > 0) {
         try {
           await this.saveRoomToDatabase(proposalId, { isAutoSave: true });
-          console.log(`💾 Auto-saved proposal ${proposalId}`);
+          console.log(`[CollaborationService] Auto-saved proposal ${proposalId}`);
         } catch (error) {
           console.error(`Error auto-saving proposal ${proposalId}:`, error);
         }
@@ -611,24 +622,16 @@ class CollaborationService {
 
   /**
    * Schedule database sync (debounced)
+   * This is just for marking the room as dirty, actual save happens via auto-save
    */
   _scheduleDatabaseSync(proposalId) {
-    // Clear existing timeout
-    if (this.syncQueue.has(proposalId)) {
-      clearTimeout(this.syncQueue.get(proposalId));
+    // Just mark as dirty, don't actually save
+    // Auto-save will handle the actual database sync every 2 minutes
+    const room = this.rooms.get(proposalId);
+    if (room) {
+      room.isDirty = true;
+      room.lastActivity = Date.now();
     }
-
-    // Schedule new sync
-    const timeout = setTimeout(async () => {
-      try {
-        await this.saveRoomToDatabase(proposalId);
-      } catch (error) {
-        console.error(`Error syncing proposal ${proposalId}:`, error);
-      }
-      this.syncQueue.delete(proposalId);
-    }, this.config.syncDebounce);
-
-    this.syncQueue.set(proposalId, timeout);
   }
 
   /**
