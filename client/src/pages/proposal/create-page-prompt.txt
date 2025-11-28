@@ -1,0 +1,43 @@
+i want you to make the following changes in the create.jsx page.
+
+the entire workflow is mentioned in the PROMPT.txt. but, we are changing it a little.
+
+first, there should be the header section stating the name of the page, back to dashboard button at top right.
+
+below, there should be the guidelines section to download guidelines pdf and template docx file
+
+
+below, there should be the same proposal information section with the following changes. just above the first field, project title, i want the things i have attached in the image to be present. it contains a please read before filling thing with a two line text and a table asking for different supporting documents they are asked to provide.
+below this, we can continue with the project title till the project outlay.
+
+below this, i don't want the proposal forms section. remove them completely.
+
+below the proposal information section, there should be a documents upload section which asks for the documents presented in the second image. no need to follow the same ui. modify it based on the styling of our project. ask the user to upload only the first and third document as asked in the second image.
+the second document will be asked later and not with these two. (mention to upload as pdf)
+
+below this, 
+i directly want the advancedproposal editor to be there. only the first form (form I) is necessary which also happens to be that second document from that second image i have uploaded.
+
+inside the editor component, i don't want the step 1 - step 6 thing, remove them completely.
+also remove the form i, form ia, ... form xii thing.
+
+the editor is only going to be for the form i. so, we don't need to mention about the different forms and all.
+in that place, i want you to display an option to upload the form. mention clearly that the user can upload the document in pdf format if he wants and the content will be extracted and be presented in the editor provided. also, mention that the user should upload any images in his document separately and directly into the editor. also, mention that if the user uploads the form, as the content will be loaded into the table, he may make any minor corrections needed directly on the editor afterwards. 
+so, if the user uploads the form, we show a loader stating the content is being extracted, parsed and is loaded into the editor (just mock the process). mock endpoint for storing that document in s3 storage. the user can choose to remove and reupload the document. (document will be removed from s3 and the newly uploaded document will be uploaded).
+if a document is uploaded or reuploaded, a mock end point will be called (that endpoint will take the document, extract the contents, convert into plate.js slate format and send it back to us and we remove the editor contents completely and replace it with the extracted content provided, both on upload or reupload). 
+remember, there is going to be only one form in the editor, so remove all the forms, back and next button at the bottom.
+export as pdf, save button should be there, auto-save enabled every 30s once.just name the button as save and not manual-save.
+
+the user may insert images into the editor and it will also get stored in s3 bucket.
+
+no need to display the form status 1 out of 6 and all below.
+
+below the proposal editor, i want you to provide options to upload the forms (ia, ix, x, xi, xii). provide that in a list table like form. the user may download the template in pdf or doc format. and should upload pdf. forms ia, form xi, xii are mandatory while forms ix and x are optional.
+
+below this, i want you to provide a table list just like the above one to upload the documents mentioned in the first image. follow a single column style. here, we don't provide templates in pdf or doc format. we just ask the user to upload in pdf format. only the h) document in that table is optional, others and all are mandatory.
+
+for now, mock all the endpoints. all the documents uploaded would be uploaded and stored in supabase s3 buckets (mock it for now).
+
+there should be a submit button at the end. when the user clicks on it (if he has skipped any mandatory filled, do not allow him to submit rather show him the missed out fields), show him all the information provided by him and the documents submitted by him one after another in a nice way asking for confirmation that the details provided by him are correct. and upon submission, keep the loader thing stating that the document is getting stored safely in block chain and other such things. (call mock end point). after this, display a modal stating him the following. the proposal has been submitted successfully, ai evaluation and validation in progress, check for status in dashboard page (ai validation report will be available within 5 mins) and when he clicks ok or some accept button, route him to dashboard page. (mock this now).
+
+also, in this page, there will be a chatbot component named Saarthi. it is present in bottom right as a toggle button to open the right side panel for ai chat window.

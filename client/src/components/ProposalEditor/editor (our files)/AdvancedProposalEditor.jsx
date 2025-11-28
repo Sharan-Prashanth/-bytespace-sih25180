@@ -45,8 +45,6 @@ const AdvancedProposalEditor = forwardRef(({
 }, ref) => {
   const { user } = useAuth(); // Get current logged-in user
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const [currentStep, setCurrentStep] = useState(0);
-  const [activeTab, setActiveTab] = useState(TAB_CONFIGS[0].id);
   const [formDataStore, setFormDataStore] = useState({});
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
@@ -54,21 +52,14 @@ const AdvancedProposalEditor = forwardRef(({
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isManualSaving, setIsManualSaving] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Use signatures from props (parent manages state)
   const headSignature = signatures?.headSignature || null;
   const institutionSeal = signatures?.institutionSeal || null;
-  const projectLeaderSignature = signatures?.projectLeaderSignature || null;
-  const projectCoordinatorSignature = signatures?.projectCoordinatorSignature || null;
-  const financeOfficerSignature = signatures?.financeOfficerSignature || null;
 
   // Upload states for UI feedback
   const [isUploadingSignature, setIsUploadingSignature] = useState(false);
   const [isUploadingSeal, setIsUploadingSeal] = useState(false);
-  const [isUploadingProjectLeaderSignature, setIsUploadingProjectLeaderSignature] = useState(false);
-  const [isUploadingProjectCoordinatorSignature, setIsUploadingProjectCoordinatorSignature] = useState(false);
-  const [isUploadingFinanceOfficerSignature, setIsUploadingFinanceOfficerSignature] = useState(false);
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -86,14 +77,14 @@ const AdvancedProposalEditor = forwardRef(({
     }).join('');
   }, []);
 
-  // Get initial value from formDataStore or use default
+  // Get initial value from formDataStore or use default (only Form I)
   const getInitialValue = useCallback(() => {
-    const storedData = formDataStore[activeTab];
+    const storedData = formDataStore['formi'];
     if (storedData && storedData.content && storedData.content.length > 0) {
       return storedData.content;
     }
-    return TAB_DEFAULT_CONTENT[activeTab] || [{ type: 'p', children: [{ text: '' }] }];
-  }, [activeTab, formDataStore]);
+    return TAB_DEFAULT_CONTENT['formi'] || [{ type: 'p', children: [{ text: '' }] }];
+  }, [formDataStore]);
 
   // Determine editor behavior based on mode
   const isViewMode = mode === 'view' || readOnly;
@@ -106,7 +97,7 @@ const AdvancedProposalEditor = forwardRef(({
     saveProposal: saveCollaborationProposal
   } = useSocketCollaboration({
     proposalId: enableCollaboration ? proposalId : null,
-    formId: enableCollaboration ? activeTab : null,
+    formId: enableCollaboration ? 'formi' : null,
     user: enableCollaboration ? user : null,
     enabled: enableCollaboration,
     onContentUpdate: (data) => {
@@ -131,38 +122,33 @@ const AdvancedProposalEditor = forwardRef(({
     }
   });
 
-  // Create Plate.js editor with current tab content
+  // Create Plate.js editor with Form I content
   const editor = usePlateEditor({
     plugins: EditorKit,
     value: getInitialValue(),
-  }, [activeTab, formDataStore]); // Recreate when tab or data changes
+  }, [formDataStore]); // Recreate when data changes
 
-  // Save current form content to store when switching
+  // Save current form content to store
   const saveCurrentFormToStore = useCallback(() => {
     if (editor && editor.children) {
-      const currentFormId = TAB_CONFIGS[currentStep]?.id;
-      if (currentFormId) {
-        setFormDataStore(prev => {
-          // Use current word/char count from state, not editor.children directly
-          const words = wordCount;
-          const chars = characterCount;
+      setFormDataStore(prev => {
+        const words = wordCount;
+        const chars = characterCount;
 
-          return {
-            ...prev,
-            [currentFormId]: {
-              content: editor.children,
-              wordCount: words,
-              characterCount: chars,
-              signature: currentFormId === 'formia' ? headSignature : undefined,
-              seal: currentFormId === 'formia' ? institutionSeal : undefined,
-            }
-          };
-        });
-        console.log(`Saved ${currentFormId} to store`);
-      }
+        return {
+          ...prev,
+          'formi': {
+            content: editor.children,
+            wordCount: words,
+            characterCount: chars,
+            signature: headSignature,
+            seal: institutionSeal,
+          }
+        };
+      });
+      console.log('Saved Form I to store');
     }
-    // Dependency list needs to include states that contribute to the saved data
-  }, [editor, currentStep, wordCount, characterCount, headSignature, institutionSeal]);
+  }, [editor, wordCount, characterCount, headSignature, institutionSeal]);
 
   // Load saved draft forms when component mounts or initialContent changes
   useEffect(() => {
@@ -308,25 +294,6 @@ const AdvancedProposalEditor = forwardRef(({
     loadDraftForms();
   }, [proposalId, initialContent]);
 
-  // Load form content from store when step changes
-  useEffect(() => {
-    const currentFormId = TAB_CONFIGS[currentStep]?.id;
-    setActiveTab(currentFormId);
-
-    // Load data from store if it exists
-    const storedData = formDataStore[currentFormId];
-    if (storedData) {
-      setWordCount(storedData.wordCount || 0);
-      setCharacterCount(storedData.characterCount || 0);
-      console.log(`Loaded ${currentFormId} from store`);
-    } else {
-      // Reset stats for new form
-      setWordCount(0);
-      setCharacterCount(0);
-    }
-    setLastSavedTime(null);
-  }, [currentStep, formDataStore]);
-
   // Real-time word/character count update + collaboration sync
   useEffect(() => {
     if (!editor || !editor.children) return;
@@ -384,24 +351,23 @@ const AdvancedProposalEditor = forwardRef(({
         onCharacterCountChange(chars);
         onContentChange(currentValue);
 
-        // Save current form content and use the functional form of setFormDataStore
+        // Save current form content
         let updatedStore = {};
         setFormDataStore(prev => {
-          const currentFormKey = TAB_CONFIGS[currentStep].id;
           updatedStore = {
             ...prev,
-            [currentFormKey]: {
+            'formi': {
               content: currentValue,
               wordCount: words,
               characterCount: chars,
-              signature: currentFormKey === 'formia' ? headSignature : prev[currentFormKey]?.signature,
-              seal: currentFormKey === 'formia' ? institutionSeal : prev[currentFormKey]?.seal,
+              signature: headSignature,
+              seal: institutionSeal,
             }
           };
           return updatedStore;
         });
 
-        console.log('🔄 Auto-saving draft with', Object.keys(updatedStore).length, 'forms...');
+        console.log('🔄 Auto-saving draft...');
 
         // Call parent's auto-save handler with updated form data
         await onAutoSave(updatedStore);
@@ -427,14 +393,14 @@ const AdvancedProposalEditor = forwardRef(({
       clearInterval(interval);
       clearTimeout(initialTimeout);
     };
-  }, [editor, extractPlainText, onWordCountChange, onCharacterCountChange, onContentChange, onAutoSave, currentStep, headSignature, institutionSeal]);
+  }, [editor, extractPlainText, onWordCountChange, onCharacterCountChange, onContentChange, onAutoSave, headSignature, institutionSeal]);
 
   // Handle signature save (base64, will upload on submission)
   const handleSignatureSave = (signatureData) => {
     if (!signatureData) {
       onSignatureChange('headSignature', null);
       // Remove signature from editor
-      if (editor && activeTab === 'formia') {
+      if (editor) {
         removeSignatureFromEditor();
       }
       return;
@@ -444,8 +410,8 @@ const AdvancedProposalEditor = forwardRef(({
     console.log('Signature data received (base64)');
     onSignatureChange('headSignature', signatureData);
 
-    // Insert only signature into editor (don't re-insert seal)
-    if (editor && activeTab === 'formia') {
+    // Insert signature into editor
+    if (editor) {
       insertSignatureIntoEditor(signatureData);
     }
 
@@ -457,7 +423,7 @@ const AdvancedProposalEditor = forwardRef(({
     if (!sealData) {
       onSealChange(null);
       // Remove seal from editor
-      if (editor && activeTab === 'formia') {
+      if (editor) {
         removeSealFromEditor();
       }
       return;
@@ -467,8 +433,8 @@ const AdvancedProposalEditor = forwardRef(({
     console.log('Seal data received (base64)');
     onSealChange(sealData);
 
-    // Insert only seal into editor (don't re-insert signature)
-    if (editor && activeTab === 'formia') {
+    // Insert seal into editor
+    if (editor) {
       insertSealIntoEditor(sealData);
     }
 
@@ -487,7 +453,7 @@ const AdvancedProposalEditor = forwardRef(({
 
   // Remove signature from editor
   const removeSignatureFromEditor = useCallback(() => {
-    if (!editor || activeTab !== 'formia') return;
+    if (!editor) return;
 
     try {
       const nodes = editor.children;
@@ -519,11 +485,11 @@ const AdvancedProposalEditor = forwardRef(({
     } catch (error) {
       console.error('Error removing signature from editor:', error);
     }
-  }, [editor, activeTab, headSignature]);
+  }, [editor, headSignature]);
 
   // Remove seal from editor
   const removeSealFromEditor = useCallback(() => {
-    if (!editor || activeTab !== 'formia') return;
+    if (!editor) return;
 
     try {
       const nodes = editor.children;
@@ -554,7 +520,7 @@ const AdvancedProposalEditor = forwardRef(({
     } catch (error) {
       console.error('Error removing seal from editor:', error);
     }
-  }, [editor, activeTab, institutionSeal]);
+  }, [editor, institutionSeal]);
 
   // Remove both signature and seal from editor
   const removeSignatureAndSealFromEditor = useCallback(() => {
@@ -564,7 +530,7 @@ const AdvancedProposalEditor = forwardRef(({
 
   // Insert signature into editor
   const insertSignatureIntoEditor = useCallback((signatureUrl) => {
-    if (!editor || activeTab !== 'formia' || !signatureUrl) return;
+    if (!editor || !signatureUrl) return;
 
     try {
       // Remove existing signature if any
@@ -611,152 +577,11 @@ const AdvancedProposalEditor = forwardRef(({
     } catch (error) {
       console.error('Error inserting signature into editor:', error);
     }
-  }, [editor, activeTab, removeSignatureFromEditor]);
-
-  // Insert additional signatures into editor (Forms IX, X, XI, XII)
-  const insertAdditionalSignaturesIntoEditor = useCallback(() => {
-    if (!editor || !editor.children) return;
-
-    // Remove ALL existing signature-related nodes first (images and captions)
-    const nodes = editor.children;
-    const signatureIndices = [];
-
-    nodes.forEach((node, index) => {
-      // Check for image nodes with signature data
-      if (node.type === 'img' && node.url &&
-        (node.url.startsWith('data:image') || node.url.includes('signature'))) {
-        signatureIndices.push(index);
-      }
-      // Check for caption paragraphs
-      else if (node.type === 'p' && node.children && node.children.length > 0) {
-        const text = node.children.map(c => c.text || '').join('');
-        if (text.includes('(Project Leader)') ||
-          text.includes('(Project Coordinator)') ||
-          text.includes('(Finance Officer)')) {
-          signatureIndices.push(index);
-        }
-      }
-    });
-
-    // Remove in reverse order to maintain indices
-    signatureIndices.reverse().forEach(index => {
-      editor.tf.removeNodes({ at: [index] });
-    });
-
-    // Prepare signature nodes to insert
-    const signatureNodes = [];
-
-    if (projectLeaderSignature) {
-      signatureNodes.push(
-        { type: 'p', children: [{ text: '' }] },
-        {
-          type: 'img',
-          url: projectLeaderSignature,
-          width: 200,
-          height: 100,
-          align: 'right',
-          alt: 'Project Leader Signature',
-          children: [{ text: '' }]
-        },
-        {
-          type: 'p',
-          align: 'right',
-          children: [{ text: '(Project Leader)', bold: true }]
-        }
-      );
-    }
-
-    if (projectCoordinatorSignature) {
-      signatureNodes.push(
-        { type: 'p', children: [{ text: '' }] },
-        {
-          type: 'img',
-          url: projectCoordinatorSignature,
-          width: 200,
-          height: 100,
-          align: 'right',
-          alt: 'Project Coordinator Signature',
-          children: [{ text: '' }]
-        },
-        {
-          type: 'p',
-          align: 'right',
-          children: [{ text: '(Project Coordinator)', bold: true }]
-        }
-      );
-    }
-
-    if (financeOfficerSignature && (activeTab === 'formxi' || activeTab === 'formxii')) {
-      signatureNodes.push(
-        { type: 'p', children: [{ text: '' }] },
-        {
-          type: 'img',
-          url: financeOfficerSignature,
-          width: 200,
-          height: 100,
-          align: 'right',
-          alt: 'Finance Officer Signature',
-          children: [{ text: '' }]
-        },
-        {
-          type: 'p',
-          align: 'right',
-          children: [{ text: '(Finance Officer)', bold: true }]
-        }
-      );
-    }
-
-    // Insert all signatures at the end
-    if (signatureNodes.length > 0) {
-      // Find the last actual content node index to insert signatures after it.
-      // Simply appending to the end might be appropriate for these forms.
-      const endPath = [editor.children.length];
-      editor.tf.insertNodes(signatureNodes, { at: endPath });
-    }
-  }, [editor, activeTab, projectLeaderSignature, projectCoordinatorSignature, financeOfficerSignature]);
-
-  // Remove additional signatures from editor
-  const removeAdditionalSignaturesFromEditor = useCallback(() => {
-    if (!editor || !editor.children) return;
-
-    const nodes = editor.children;
-    const signatureIndices = [];
-
-    nodes.forEach((node, index) => {
-      // Check for image nodes with signature URLs
-      if (node.type === 'img' && node.url &&
-        (node.url.startsWith('data:image') || node.url.includes('signature'))) {
-        signatureIndices.push(index);
-      }
-      // Check for paragraph nodes with signature captions
-      else if (node.type === 'p' && node.children && node.children.length > 0) {
-        const text = node.children.map(c => c.text || '').join('');
-        if (text.includes('(Project Leader)') ||
-          text.includes('(Project Coordinator)') ||
-          text.includes('(Finance Officer)')) {
-          signatureIndices.push(index);
-        }
-      }
-    });
-
-    // Remove in reverse order to maintain indices
-    signatureIndices.reverse().forEach(index => {
-      editor.tf.removeNodes({ at: [index] });
-    });
-  }, [editor]);
-
-  // Auto-insert additional signatures when they change
-  useEffect(() => {
-    if (activeTab === 'formix' || activeTab === 'formx' || activeTab === 'formxi' || activeTab === 'formxii') {
-      // Remove existing first to prevent duplicates, then insert
-      removeAdditionalSignaturesFromEditor();
-      insertAdditionalSignaturesIntoEditor();
-    }
-  }, [activeTab, projectLeaderSignature, projectCoordinatorSignature, financeOfficerSignature, insertAdditionalSignaturesIntoEditor, removeAdditionalSignaturesFromEditor]);
+  }, [editor, removeSignatureFromEditor]);
 
   // Insert seal into editor
   const insertSealIntoEditor = useCallback((sealUrl) => {
-    if (!editor || activeTab !== 'formia' || !sealUrl) return;
+    if (!editor || !sealUrl) return;
 
     try {
       // Remove existing seal if any
@@ -812,7 +637,7 @@ const AdvancedProposalEditor = forwardRef(({
     } catch (error) {
       console.error('Error inserting seal into editor:', error);
     }
-  }, [editor, activeTab, removeSealFromEditor]);
+  }, [editor, removeSealFromEditor]);
 
   // Manual save function
   const handleManualSave = useCallback(async () => {
@@ -823,18 +648,17 @@ const AdvancedProposalEditor = forwardRef(({
       // Ensure current form is saved to store before calling parent save
       saveCurrentFormToStore();
 
-      // IMPORTANT: Get the updated state from a functional update to ensure it's fresh
+      // Get the updated state
       let latestFormDataStore = {};
       setFormDataStore(prev => {
-        const currentFormKey = TAB_CONFIGS[currentStep].id;
         latestFormDataStore = {
           ...prev,
-          [currentFormKey]: {
+          'formi': {
             content: editor.children,
             wordCount: wordCount,
             characterCount: characterCount,
-            signature: currentFormKey === 'formia' ? headSignature : prev[currentFormKey]?.signature,
-            seal: currentFormKey === 'formia' ? institutionSeal : prev[currentFormKey]?.seal,
+            signature: headSignature,
+            seal: institutionSeal,
           }
         };
         return latestFormDataStore;
@@ -854,8 +678,7 @@ const AdvancedProposalEditor = forwardRef(({
     } finally {
       setIsManualSaving(false);
     }
-    // Added editor, wordCount, characterCount to dependency array to ensure the correct values are saved
-  }, [isManualSaving, saveCurrentFormToStore, onManualSave, success, currentStep, editor?.children, wordCount, characterCount, headSignature, institutionSeal]);
+  }, [isManualSaving, saveCurrentFormToStore, onManualSave, success, editor?.children, wordCount, characterCount, headSignature, institutionSeal]);
 
 
   // Check if current form has content
@@ -865,13 +688,13 @@ const AdvancedProposalEditor = forwardRef(({
     const text = extractPlainText(editor.children);
     const hasContent = text.trim().length > 50; // At least 50 characters
 
-    // Notify parent about form status using activeTab (not currentStep)
-    if (activeTab && onFormStatusChange) {
-      onFormStatusChange(activeTab, hasContent);
+    // Notify parent about form status
+    if (onFormStatusChange) {
+      onFormStatusChange('formi', hasContent);
     }
 
     return hasContent;
-  }, [editor, activeTab, extractPlainText, onFormStatusChange]);
+  }, [editor, extractPlainText, onFormStatusChange]);
 
   // Auto-check form completion on content change
   useEffect(() => {
@@ -885,89 +708,7 @@ const AdvancedProposalEditor = forwardRef(({
     return () => clearTimeout(timeoutId);
   }, [editor?.children, checkFormCompletion, editor]);
 
-
-  // Navigation handler logic helper
-  const saveDraftOnNavigation = useCallback(async () => {
-    if (!editor || !onAutoSave) return;
-
-    console.log('💾 Saving draft before navigating...');
-    const currentValue = editor.children;
-    const text = extractPlainText(currentValue);
-    const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
-    const chars = text.length;
-
-    let updatedStore = {};
-    setFormDataStore(prev => {
-      const currentFormKey = TAB_CONFIGS[currentStep].id;
-      updatedStore = {
-        ...prev,
-        [currentFormKey]: {
-          content: currentValue,
-          wordCount: words,
-          characterCount: chars,
-          signature: currentFormKey === 'formia' ? headSignature : prev[currentFormKey]?.signature,
-          seal: currentFormKey === 'formia' ? institutionSeal : prev[currentFormKey]?.seal,
-        }
-      };
-      return updatedStore;
-    });
-
-    // Await save with the synchronously calculated updatedStore
-    await onAutoSave(updatedStore);
-  }, [editor, onAutoSave, currentStep, extractPlainText, headSignature, institutionSeal]);
-
-
-  // Navigate to next step
-  const handleNext = useCallback(async () => {
-    if (isTransitioning || currentStep === TAB_CONFIGS.length - 1) return;
-
-    try {
-      setIsTransitioning(true);
-      // Check and update form completion status
-      checkFormCompletion();
-
-      // Save draft to database before navigating
-      await saveDraftOnNavigation();
-
-
-      setCurrentStep(prev => prev + 1);
-      success('Moving to next form...');
-
-    } catch (error) {
-      console.error('❌ Error saving draft on navigation:', error);
-    } finally {
-      // Add small delay to ensure smooth transition
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 500);
-    }
-  }, [currentStep, success, isTransitioning, checkFormCompletion, saveDraftOnNavigation]);
-
-  // Navigate to previous step
-  const handleBack = useCallback(async () => {
-    if (isTransitioning || currentStep === 0) return;
-
-    try {
-      setIsTransitioning(true);
-      // Check and update form completion status
-      checkFormCompletion();
-
-      // Save draft to database before navigating
-      await saveDraftOnNavigation();
-
-      setCurrentStep(prev => prev - 1);
-
-    } catch (error) {
-      console.error('❌ Error saving draft on navigation:', error);
-    } finally {
-      // Add small delay to ensure smooth transition
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 300);
-    }
-  }, [currentStep, isTransitioning, checkFormCompletion, saveDraftOnNavigation]);
-
-  // Export to PDF function - exports all forms from store
+  // Export to PDF function - exports Form I only
   const handleExportPDF = useCallback(async () => {
     if (isExporting) return;
 
@@ -978,14 +719,54 @@ const AdvancedProposalEditor = forwardRef(({
     setExportProgress(0);
 
     try {
-      info('Preparing all forms for PDF export...', 3000);
+      info('Preparing Form I for PDF export...', 3000);
 
       // Import required libraries
       const { default: html2canvas } = await import('html2canvas-pro');
-      // const PDFLib = await import('pdf-lib'); // PDFLib is not used
       const jsPDF = await import('jspdf');
 
-      setExportProgress(10);
+      setExportProgress(20);
+
+      // Get the editor container
+      const editorContainer = document.querySelector('.slate-Editor');
+      if (!editorContainer) {
+        throw new Error('Editor content not found');
+      }
+
+      setExportProgress(30);
+      info('Capturing Form I content...', 2000);
+
+      // Create canvas from editor content
+      const canvas = await html2canvas(editorContainer, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        imageTimeout: 0,
+        onclone: (document) => {
+          const editorElement = document.querySelector('.slate-Editor');
+          if (editorElement) {
+            // Ensure all images are loaded
+            const images = editorElement.querySelectorAll('img');
+            images.forEach(img => {
+              if (img.src.startsWith('data:')) {
+                img.style.maxWidth = '100%';
+              }
+            });
+
+            // Apply better styling
+            Array.from(editorElement.querySelectorAll('*')).forEach((element) => {
+              const existingStyle = element.getAttribute('style') || '';
+              element.setAttribute(
+                'style',
+                `${existingStyle}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important`
+              );
+            });
+          }
+        },
+      });
+
+      setExportProgress(60);
 
       // Create PDF document
       const pdf = new jsPDF.default({
@@ -994,174 +775,66 @@ const AdvancedProposalEditor = forwardRef(({
         format: 'a4',
       });
 
-      let isFirstPage = true;
-      const originalTab = activeTab; // Store current tab to restore later
+      // Add Form I title
+      pdf.setFontSize(16);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text('Form I', 15, 15);
 
-      // Function to render a tab's content to PDF
-      const renderTabToPDF = async (tabId, tabLabel) => {
-        try {
-          // Switch to the tab we want to export
-          if (tabId !== activeTab) {
-            setActiveTab(tabId);
-            // Wait for tab to load
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
+      // Add horizontal line
+      pdf.setLineWidth(0.5);
+      pdf.line(15, 18, 195, 18);
 
-          // Get the editor container - works for both edit and view modes
-          let editorContainer = document.querySelector('.slate-Editor');
-          if (!editorContainer) {
-            console.warn(`No editor content found for ${tabLabel}`);
-            return false;
-          }
-          console.log(`Found editor container for ${tabLabel}:`, editorContainer);
+      // Calculate dimensions to fit A4 page
+      const imgWidth = 180; // A4 width minus margins
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageHeight = 277; // A4 height minus margins
+      let yPosition = 25; // Start below title
 
-          // Create canvas from editor content
-          const canvas = await html2canvas(editorContainer, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            imageTimeout: 0,
-            onclone: (document) => {
-              let editorElement = document.querySelector('.slate-Editor');
-              if (editorElement) {
-                // Ensure all images are loaded
-                const images = editorElement.querySelectorAll('img');
-                images.forEach(img => {
-                  if (img.src.startsWith('data:')) {
-                    // Base64 images should work directly
-                    img.style.maxWidth = '100%';
-                  }
-                });
+      setExportProgress(75);
 
-                // Apply better styling
-                Array.from(editorElement.querySelectorAll('*')).forEach((element) => {
-                  const existingStyle = element.getAttribute('style') || '';
-                  element.setAttribute(
-                    'style',
-                    `${existingStyle}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important`
-                  );
-                });
-              }
-            },
-          });
+      // If content is larger than one page, split it
+      if (imgHeight > pageHeight - 25) {
+        const pagesNeeded = Math.ceil(imgHeight / (pageHeight - 25));
+        const contentHeightPerCanvas = imgHeight / pagesNeeded;
+        const canvasHeightPerSlice = canvas.height / pagesNeeded;
 
-          // Add new page if not first
-          if (!isFirstPage) {
+        for (let i = 0; i < pagesNeeded; i++) {
+          if (i > 0) {
             pdf.addPage();
-          }
-          isFirstPage = false;
-
-          // Add tab title
-          pdf.setFontSize(16);
-          pdf.setTextColor(0, 0, 0);
-          pdf.text(tabLabel, 15, 15);
-
-          // Add horizontal line
-          pdf.setLineWidth(0.5);
-          pdf.line(15, 18, 195, 18);
-
-          // Calculate dimensions to fit A4 page
-          const imgWidth = 180; // A4 width minus margins
-          const imgHeight = (canvas.height * imgWidth) / canvas.width;
-          const pageHeight = 277; // A4 height minus margins
-
-          let yPosition = 25; // Start below title
-
-          // If content is larger than one page, split it
-          if (imgHeight > pageHeight - 25) {
-            const pagesNeeded = Math.ceil(imgHeight / (pageHeight - 25));
-            const contentHeightPerCanvas = imgHeight / pagesNeeded; // Height in mm for one page
-            const canvasHeightPerSlice = canvas.height / pagesNeeded; // Height in pixels for one slice
-
-            for (let i = 0; i < pagesNeeded; i++) {
-              if (i > 0) {
-                pdf.addPage();
-                yPosition = 15;
-              }
-
-              const sourceY = canvasHeightPerSlice * i;
-              const sourceHeight = canvasHeightPerSlice;
-
-              // Create a temporary canvas for this section
-              const tempCanvas = document.createElement('canvas');
-              tempCanvas.width = canvas.width;
-              tempCanvas.height = sourceHeight;
-              const tempCtx = tempCanvas.getContext('2d');
-              tempCtx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
-
-              // Calculate image height for this page slice in mm
-              const pageImgHeight = contentHeightPerCanvas;
-
-              pdf.addImage(tempCanvas.toDataURL('image/png'), 'PNG', 15, yPosition, imgWidth, pageImgHeight);
-            }
-          } else {
-            // Fits on one page
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 15, yPosition, imgWidth, imgHeight);
+            yPosition = 15;
           }
 
-          return true;
-        } catch (error) {
-          console.error(`Error rendering ${tabLabel}:`, error);
-          return false;
+          const sourceY = canvasHeightPerSlice * i;
+          const sourceHeight = canvasHeightPerSlice;
+
+          // Create a temporary canvas for this section
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = sourceHeight;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+
+          // Calculate image height for this page slice in mm
+          const pageImgHeight = contentHeightPerCanvas;
+
+          pdf.addImage(tempCanvas.toDataURL('image/png'), 'PNG', 15, yPosition, imgWidth, pageImgHeight);
         }
-      };
-
-      // Export all forms from store or initialContent (for view mode)
-      for (let i = 0; i < TAB_CONFIGS.length; i++) {
-        const tab = TAB_CONFIGS[i];
-
-        // Check formDataStore first, then initialContent (for view mode)
-        let formData = formDataStore[tab.id];
-
-        // If not in store and we have initialContent, use that
-        if ((!formData || !formData.content) && initialContent && initialContent[tab.id]) {
-          const rawContent = initialContent[tab.id].editorContent || initialContent[tab.id].content || initialContent[tab.id];
-          let parsedContent = [];
-          if (Array.isArray(rawContent)) {
-            parsedContent = rawContent;
-          } else if (typeof rawContent === 'string') {
-            try {
-              parsedContent = JSON.parse(rawContent);
-            } catch (e) {
-              parsedContent = [];
-            }
-          }
-
-          if (parsedContent.length > 0) {
-            formData = { content: parsedContent };
-          }
-        }
-
-        // Skip if form has no content
-        if (!formData || !formData.content || formData.content.length === 0) {
-          console.log(`Skipping ${tab.label} - no content`);
-          continue;
-        }
-
-        setExportProgress(10 + (i / TAB_CONFIGS.length) * 80);
-        info(`Exporting ${tab.label}...`, 2000);
-
-        await renderTabToPDF(tab.id, tab.label);
-
-        // Small delay between forms
-        await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        // Fits on one page
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 15, yPosition, imgWidth, imgHeight);
       }
 
-      setExportProgress(95);
-
-      // Restore original tab
-      setActiveTab(originalTab);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      setExportProgress(90);
 
       // Save the PDF
-      pdf.save(`${proposalTitle.replace(/\s+/g, '_')}_Complete_Proposal.pdf`);
+      const filename = `${proposalTitle.replace(/\s+/g, '_')}_Form_I.pdf`;
+      pdf.save(filename);
 
       setExportProgress(100);
 
       // Show success message
       setTimeout(() => {
-        success('Complete proposal exported as PDF!', 3000);
+        success('Form I exported as PDF!', 3000);
         setIsExporting(false);
         setExportProgress(0);
       }, 500);
@@ -1171,7 +844,7 @@ const AdvancedProposalEditor = forwardRef(({
       setExportProgress(0);
       alert('Error exporting PDF. Please try again.');
     }
-  }, [saveCurrentFormToStore, activeTab, proposalTitle, isExporting, success, info, formDataStore, initialContent]);
+  }, [saveCurrentFormToStore, proposalTitle, isExporting, success, info]);
 
 
   return (
@@ -1224,57 +897,10 @@ const AdvancedProposalEditor = forwardRef(({
             )}
           </div>
 
-          {/* Step Progress Indicator */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-bold text-black">
-                Step {currentStep + 1} of {TAB_CONFIGS.length}: {TAB_CONFIGS[currentStep]?.label}
-              </h3>
-              <span className="text-sm text-gray-600">
-                {Math.round(((currentStep + 1) / TAB_CONFIGS.length) * 100)}% Complete
-              </span>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-              <div
-                className="bg-gradient-to-r from-orange-500 to-red-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${((currentStep + 1) / TAB_CONFIGS.length) * 100}%` }}
-              />
-            </div>
-
-            {/* Step Indicators */}
-            <div className="flex justify-between">
-              {TAB_CONFIGS.map((tab, index) => (
-                <div
-                  key={tab.id}
-                  className="flex flex-col items-center"
-                  style={{ width: `${100 / TAB_CONFIGS.length}%` }}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${index < currentStep
-                      ? 'bg-green-500 text-white'
-                      : index === currentStep
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-gray-300 text-gray-600'
-                      }`}
-                  >
-                    {index < currentStep ? '✓' : index + 1}
-                  </div>
-                  <span className="text-xs mt-1 text-center font-medium text-black">
-                    {tab.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-
-
           {/* Plate.js Editor */}
           <div className="border border-gray-200 rounded-xl min-h-[600px] bg-white shadow-inner">
             <Plate
-              key={activeTab}
+              key="formi"
               editor={editor}
               readOnly={isViewMode}
             >
@@ -1295,384 +921,16 @@ const AdvancedProposalEditor = forwardRef(({
             </Plate>
           </div>
 
-          {/* Form IA - Signature and Seal Section - Hidden in view mode */}
-          {activeTab === 'formia' && !isViewMode && (
-            <div className="mt-6 p-6 bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border-2 border-orange-200 shadow-lg">
-              <div className="mb-4">
-                <h3 className="text-xl font-bold text-black flex items-center gap-2">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Official Endorsement Required
-                </h3>
-                <p className="text-sm text-black mt-1">
-                  Please provide the signature of the Head of Institution and the official institution seal as required for Form IA.
-                </p>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Signature Section */}
-                <div className="relative">
-                  <SignaturePad
-                    label="Head of Institution Signature"
-                    onSave={handleSignatureSave}
-                    value={headSignature}
-                    required={true}
-                    width={400}
-                    height={200}
-                  />
-                  {isUploadingSignature && (
-                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading signature...
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Seal Section */}
-                <div className="relative">
-                  <SealUpload
-                    label="Institution Seal/Stamp"
-                    onUpload={handleSealUpload}
-                    value={institutionSeal}
-                    required={true}
-                    recommendedDimensions={{ width: 200, height: 200 }}
-                  />
-                  {isUploadingSeal && (
-                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading seal...
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Information Box */}
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-sm text-black">
-                    <p className="font-semibold mb-1">Instructions:</p>
-                    <ul className="list-disc list-inside space-y-1 text-xs">
-                      <li>For signature: You can either draw directly or upload a scanned image of your signature on white paper</li>
-                      <li>For seal: Upload a clear image of your institution official seal (preferably with transparent background)</li>
-                      <li>Once uploaded, signature and seal will automatically appear in the document editor at the correct position</li>
-                      <li>Both documents will be securely stored in cloud storage and included in PDF exports</li>
-                      <li>You can re-upload or remove signature/seal at any time</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Form IX & X - Project Leader and Coordinator Signatures - Hidden in view mode */}
-          {(activeTab === 'formix' || activeTab === 'formx') && !isViewMode && (
-            <div className="mt-6 p-6 bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border-2 border-orange-200 shadow-lg">
-              <div className="mb-4">
-                <h3 className="text-xl font-bold text-black flex items-center gap-2">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Required Signatures
-                </h3>
-                <p className="text-sm text-black mt-1">
-                  This form must be signed by the Project Leader and Project Coordinator.
-                </p>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Project Leader Signature */}
-                <div className="relative">
-                  <SignaturePad
-                    label="Project Leader Signature"
-                    onSave={(data) => {
-                      setIsUploadingProjectLeaderSignature(true);
-                      onSignatureChange('projectLeaderSignature', data);
-                      setTimeout(() => setIsUploadingProjectLeaderSignature(false), 1000);
-                    }}
-                    onRemove={() => {
-                      onSignatureChange('projectLeaderSignature', null);
-                    }}
-                    value={projectLeaderSignature}
-                    required={true}
-                    width={400}
-                    height={200}
-                  />
-                  {isUploadingProjectLeaderSignature && (
-                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading signature...
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Project Coordinator Signature */}
-                <div className="relative">
-                  <SignaturePad
-                    label="Project Coordinator Signature"
-                    onSave={(data) => {
-                      setIsUploadingProjectCoordinatorSignature(true);
-                      onSignatureChange('projectCoordinatorSignature', data);
-                      setTimeout(() => setIsUploadingProjectCoordinatorSignature(false), 1000);
-                    }}
-                    onRemove={() => {
-                      onSignatureChange('projectCoordinatorSignature', null);
-                    }}
-                    value={projectCoordinatorSignature}
-                    required={true}
-                    width={400}
-                    height={200}
-                  />
-                  {isUploadingProjectCoordinatorSignature && (
-                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading signature...
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Information Box */}
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-sm text-black">
-                    <p className="font-semibold mb-1">Instructions:</p>
-                    <ul className="list-disc list-inside space-y-1 text-xs">
-                      <li>You can either draw directly or upload scanned images of signatures</li>
-                      <li>Signatures will be securely stored and included in PDF exports</li>
-                      <li>Both signatures must be provided before final submission</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Form XI & XII - Project Leader, Coordinator & Finance Officer Signatures - Hidden in view mode */}
-          {(activeTab === 'formxi' || activeTab === 'formxii') && !isViewMode && (
-            <div className="mt-6 p-6 bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border-2 border-orange-200 shadow-lg">
-              <div className="mb-4">
-                <h3 className="text-xl font-bold text-black flex items-center gap-2">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Required Signatures
-                </h3>
-                <p className="text-sm text-black mt-1">
-                  This form must be signed by the Project Leader, Project Coordinator, and Finance Officer.
-                </p>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-6">
-                {/* Project Leader Signature */}
-                <div className="relative">
-                  <SignaturePad
-                    label="Project Leader Signature"
-                    onSave={(data) => {
-                      setIsUploadingProjectLeaderSignature(true);
-                      onSignatureChange('projectLeaderSignature', data);
-                      setTimeout(() => setIsUploadingProjectLeaderSignature(false), 1000);
-                    }}
-                    onRemove={() => {
-                      onSignatureChange('projectLeaderSignature', null);
-                    }}
-                    value={projectLeaderSignature}
-                    required={true}
-                    width={350}
-                    height={180}
-                  />
-                  {isUploadingProjectLeaderSignature && (
-                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading...
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Project Coordinator Signature */}
-                <div className="relative">
-                  <SignaturePad
-                    label="Project Coordinator Signature"
-                    onSave={(data) => {
-                      setIsUploadingProjectCoordinatorSignature(true);
-                      onSignatureChange('projectCoordinatorSignature', data);
-                      setTimeout(() => setIsUploadingProjectCoordinatorSignature(false), 1000);
-                    }}
-                    onRemove={() => {
-                      onSignatureChange('projectCoordinatorSignature', null);
-                    }}
-                    value={projectCoordinatorSignature}
-                    required={true}
-                    width={350}
-                    height={180}
-                  />
-                  {isUploadingProjectCoordinatorSignature && (
-                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading...
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Finance Officer Signature */}
-                <div className="relative">
-                  <SignaturePad
-                    label="Finance Officer Signature"
-                    onSave={(data) => {
-                      setIsUploadingFinanceOfficerSignature(true);
-                      onSignatureChange('financeOfficerSignature', data);
-                      setTimeout(() => setIsUploadingFinanceOfficerSignature(false), 1000);
-                    }}
-                    onRemove={() => {
-                      onSignatureChange('financeOfficerSignature', null);
-                    }}
-                    value={financeOfficerSignature}
-                    required={true}
-                    width={350}
-                    height={180}
-                  />
-                  {isUploadingFinanceOfficerSignature && (
-                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading...
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Information Box */}
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-sm text-black">
-                    <p className="font-semibold mb-1">Instructions:</p>
-                    <ul className="list-disc list-inside space-y-1 text-xs">
-                      <li>You can either draw directly or upload scanned images of signatures</li>
-                      <li>All three signatures will be securely stored and included in PDF exports</li>
-                      <li>All signatures must be provided before final submission</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div className="mt-6 flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border-2 border-orange-200">
-            <button
-              type="button"
-              onClick={handleBack}
-              disabled={currentStep === 0 || isTransitioning}
-              className={`px-6 py-3 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${currentStep === 0 || isTransitioning
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-white text-black border-2 border-orange-500 hover:bg-orange-50 shadow hover:shadow-lg'
-                }`}
-            >
-              {isTransitioning && currentStep > 0 ? (
-                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              )}
-              Back
-            </button>
-
-            <div className="flex items-center gap-3">
-              {(isSavingDraft || isTransitioning) && (
-                <div className="flex items-center gap-2 text-sm text-blue-600">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
-                  <span className="font-medium">
-                    {isTransitioning ? 'Loading form...' : 'Saving draft...'}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={currentStep === TAB_CONFIGS.length - 1 || isTransitioning}
-              className={`px-6 py-3 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${currentStep === TAB_CONFIGS.length - 1 || isTransitioning
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-600 hover:to-red-700 shadow-lg hover:shadow-xl'
-                }`}
-            >
-              {isTransitioning ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Loading...
-                </>
-              ) : (
-                <>
-                  Next
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Status Bar with Auto-save Indicator, Manual Save, and Export - Hidden in view mode */}
+          {/* Action Bar with Save and Export - Hidden in view mode */}
           {!isViewMode && (
             <div className="mt-4 flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
               <div className="flex items-center gap-4">
-                {/* Manual Save Button */}
+                {/* Save Button */}
                 <button
                   type="button"
                   onClick={handleManualSave}
-                  disabled={isManualSaving || isTransitioning}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${isManualSaving || isTransitioning
+                  disabled={isManualSaving}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${isManualSaving
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-white text-blue-600 border border-blue-300 hover:bg-blue-50'
                     }`}
@@ -1687,15 +945,15 @@ const AdvancedProposalEditor = forwardRef(({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-4 3v4m-4-2h8m-4 6h.01" />
                     </svg>
                   )}
-                  {isManualSaving ? 'Saving...' : 'Manual Save'}
+                  {isManualSaving ? 'Saving...' : 'Save'}
                 </button>
 
                 {/* PDF Export Button */}
                 <button
                   type="button"
                   onClick={handleExportPDF}
-                  disabled={isExporting || isTransitioning}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${isExporting || isTransitioning
+                  disabled={isExporting}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${isExporting
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-red-500 text-white hover:bg-red-600'
                     }`}
@@ -1713,95 +971,32 @@ const AdvancedProposalEditor = forwardRef(({
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      Export PDF
+                      Export as PDF
                     </>
                   )}
                 </button>
 
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-700">
-                <span className="font-medium">
-                  Words: **{wordCount}** | Chars: **{characterCount}**
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-sm font-medium text-gray-700">
+                  Words: {wordCount} | Chars: {characterCount}
                 </span>
-                <span className="text-xs text-gray-500">
-                  Last Saved: **{lastSavedTime ? lastSavedTime.toLocaleTimeString() : 'N/A'}**
-                </span>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Auto-save enabled
+                  </span>
+                  <span>•</span>
+                  <span>Last saved: {lastSavedTime ? lastSavedTime.toLocaleTimeString() : 'Not saved yet'}</span>
+                </div>
               </div>
             </div>
           )}
 
           {/* Statistics - Simplified visibility, kept original style for context if needed elsewhere */}
-          {showStats && (
-            <div className="mt-8 space-y-6">
 
-              <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-                <h4 className="font-semibold text-black mb-2 flex items-center text-sm">
-                  <svg className="w-4 h-4 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Essential Sections for Coal R&D Proposals
-                </h4>
-                <div className="grid md:grid-cols-2 gap-2 text-xs text-black">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Title & Abstract
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Funding Method & Scheme
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Principal Implementing Agency
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Sub-Implementing Agency
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Project Leader & Coordinator
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Problem Statement & Research Gap
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Research Objectives & Expected Outcomes
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Research Methodology & Work Plan
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Project Duration & Milestones
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Project Outlay (Rs. in Lakhs) & Budget Breakdown
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Team, Facilities & Collaborations
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Technical Specifications & Data Management
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Risk Assessment & Mitigation
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                    Dissemination & Impact Plan
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
         </div>
       </div>
@@ -1811,7 +1006,7 @@ const AdvancedProposalEditor = forwardRef(({
       {proposalId && showVersionHistory && (
         <VersionHistory
           proposalId={proposalId}
-          formId={activeTab}
+          formId="formi"
           showVersionHistory={internalShowVersionHistory}
           setShowVersionHistory={setInternalShowVersionHistory}
           showSaarthi={false}
