@@ -51,7 +51,6 @@ function InvestigatorDashboardContent() {
     }
   };
 
-  // Calculate stats
   const stats = {
     total: proposals.length,
     draft: proposals.filter(p => p.status === PROPOSAL_STATUS.DRAFT).length,

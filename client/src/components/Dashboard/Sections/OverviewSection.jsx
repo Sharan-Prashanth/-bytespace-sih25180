@@ -67,6 +67,11 @@ export default function OverviewSection({
                 setLoading(true);
                 try {
                     const details = await getMetricDetails(activeMetric.key);
+        const fetchDetails = async () => {
+            if (activeMetric) {
+                setLoading(true);
+                try {
+                    const details = await getMetricDetails(activeMetric.key);
                     setMetricDetails(details);
                     // Set default chart type from metric details if available, otherwise default to area
                     if (details?.chart?.type) {
@@ -79,6 +84,8 @@ export default function OverviewSection({
                 }
             }
         };
+        fetchDetails();
+    }, [activeMetric]);
         fetchDetails();
     }, [activeMetric]);
 
