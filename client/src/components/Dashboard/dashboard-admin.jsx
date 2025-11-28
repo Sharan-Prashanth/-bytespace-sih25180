@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LoadingScreen from "../../components/LoadingScreen";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import { useAuth } from "../../context/AuthContext";
@@ -35,14 +35,19 @@ function AdminDashboardContent() {
   const [activeMetric, setActiveMetric] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Sidebar Control State
+  const [controlMetricKey, setControlMetricKey] = useState(null);
+  const [overrideValues, setOverrideValues] = useState(null);
+  const [overrideMonths, setOverrideMonths] = useState(null);
+
   // Fetch Metrics
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
         const { metrics: data } = await import("../../utils/mockDashboardData").then(m => m.getMetrics());
         setMetrics(data);
-        // Default selection: first 5
-        const initialSelection = data.slice(0, 5).map(m => m.key);
+        // Default selection: first 4
+        const initialSelection = data.slice(0, 4).map(m => m.key);
         setSelectedMetrics(initialSelection);
         if (data.length > 0) {
           setActiveMetric(data[0]);
@@ -61,19 +66,12 @@ function AdminDashboardContent() {
       // Deselect
       if (selectedMetrics.length > 1) {
         setSelectedMetrics(prev => prev.filter(k => k !== metricKey));
-        // If we removed the active metric, switch to the last one in the list (most recently added)
-        if (activeMetric?.key === metricKey) {
-          const remaining = selectedMetrics.filter(k => k !== metricKey);
-          const nextMetricKey = remaining[remaining.length - 1]; // Switch to most recent
-          const nextMetric = metrics.find(m => m.key === nextMetricKey);
-          setActiveMetric(nextMetric);
-        }
       }
     } else {
       // Select with FIFO logic (Queue)
       let newSelection = [...selectedMetrics];
 
-      if (newSelection.length >= 5) {
+      if (newSelection.length >= 4) {
         // Remove the first one (FIFO)
         newSelection.shift();
       }
@@ -81,26 +79,44 @@ function AdminDashboardContent() {
       // Add new one to the end
       newSelection.push(metricKey);
       setSelectedMetrics(newSelection);
-
-      // AUTO-SELECT the newly added metric
-      const newMetric = metrics.find(m => m.key === metricKey);
-      if (newMetric) {
-        setActiveMetric(newMetric);
-      }
     }
   };
 
   const resetMetrics = () => {
     if (metrics.length > 0) {
-      const initialSelection = metrics.slice(0, 5).map(m => m.key);
+      const initialSelection = metrics.slice(0, 4).map(m => m.key);
       setSelectedMetrics(initialSelection);
-      setActiveMetric(metrics[0]);
     }
   };
 
   const handleMetricClick = (metric) => {
     setActiveMetric(metric);
   };
+
+  const handleControlMetricSelect = (metric) => {
+    console.log('Control Metric Selected:', metric?.key);
+    setControlMetricKey(metric?.key);
+  };
+
+  const handleValueChange = (val) => {
+    console.log('Value Range Changed:', val);
+    setOverrideValues(val);
+  };
+
+  const handleMonthChange = (val) => {
+    console.log('Month Range Changed:', val);
+    setOverrideMonths(val);
+  };
+
+  // Memoize sidebar props to prevent infinite loop
+  // MUST be before any conditional return
+  const sidebarControlProps = useMemo(() => ({
+    metrics: metrics.filter(m => selectedMetrics.includes(m.key)),
+    selectedMetrics: selectedMetrics,
+    onMetricSelect: handleControlMetricSelect,
+    onValueChange: handleValueChange,
+    onMonthChange: handleMonthChange
+  }), [metrics, selectedMetrics]);
 
   if (loading) {
     return <LoadingScreen />;
@@ -118,6 +134,9 @@ function AdminDashboardContent() {
           activeMetric={activeMetric}
           onMetricClick={handleMetricClick}
           theme={theme}
+          controlMetricKey={controlMetricKey || selectedMetrics[0]}
+          overrideValues={overrideValues}
+          overrideMonths={overrideMonths}
         />;
       case 'users':
         return <UsersSection theme={theme} />;
@@ -142,6 +161,7 @@ function AdminDashboardContent() {
       logout={logout}
       theme={theme}
       toggleTheme={toggleTheme}
+      sidebarControlProps={sidebarControlProps}
     >
       {renderSection()}
     </DashboardLayout>
@@ -155,4 +175,3 @@ export default function AdminDashboard() {
     </ProtectedRoute>
   );
 }
-

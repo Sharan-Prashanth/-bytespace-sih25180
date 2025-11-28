@@ -25,6 +25,11 @@ export default function RightSidebar({
         amber: 'bg-amber-50 border-amber-200',
         teal: 'bg-teal-50 border-teal-200',
         pink: 'bg-pink-50 border-pink-200',
+        violet: 'bg-violet-50 border-violet-200',
+        fuchsia: 'bg-fuchsia-50 border-fuchsia-200',
+        rose: 'bg-rose-50 border-rose-200',
+        lime: 'bg-lime-50 border-lime-200',
+        sky: 'bg-sky-50 border-sky-200',
     };
 
     const darkContainerStyles = {
@@ -39,6 +44,11 @@ export default function RightSidebar({
         amber: 'bg-amber-900/30 border-amber-800',
         teal: 'bg-teal-900/30 border-teal-800',
         pink: 'bg-pink-900/30 border-pink-800',
+        violet: 'bg-violet-900/30 border-violet-800',
+        fuchsia: 'bg-fuchsia-900/30 border-fuchsia-800',
+        rose: 'bg-rose-900/30 border-rose-800',
+        lime: 'bg-lime-900/30 border-lime-800',
+        sky: 'bg-sky-900/30 border-sky-800',
     };
 
     const darkestContainerStyles = {
@@ -53,6 +63,11 @@ export default function RightSidebar({
         amber: 'bg-neutral-900 border-neutral-800',
         teal: 'bg-neutral-900 border-neutral-800',
         pink: 'bg-neutral-900 border-neutral-800',
+        violet: 'bg-neutral-900 border-neutral-800',
+        fuchsia: 'bg-neutral-900 border-neutral-800',
+        rose: 'bg-neutral-900 border-neutral-800',
+        lime: 'bg-neutral-900 border-neutral-800',
+        sky: 'bg-neutral-900 border-neutral-800',
     };
 
     // Color mapping for checkbox backgrounds and borders
@@ -68,6 +83,11 @@ export default function RightSidebar({
         amber: 'bg-amber-600 border-amber-600',
         teal: 'bg-teal-600 border-teal-600',
         pink: 'bg-pink-600 border-pink-600',
+        violet: 'bg-violet-600 border-violet-600',
+        fuchsia: 'bg-fuchsia-600 border-fuchsia-600',
+        rose: 'bg-rose-600 border-rose-600',
+        lime: 'bg-lime-600 border-lime-600',
+        sky: 'bg-sky-600 border-sky-600',
     };
 
     // Text color mapping
@@ -83,6 +103,11 @@ export default function RightSidebar({
         amber: 'text-amber-900',
         teal: 'text-teal-900',
         pink: 'text-pink-900',
+        violet: 'text-violet-900',
+        fuchsia: 'text-fuchsia-900',
+        rose: 'text-rose-900',
+        lime: 'text-lime-900',
+        sky: 'text-sky-900',
     };
 
     const darkTextStyles = {
@@ -97,6 +122,11 @@ export default function RightSidebar({
         amber: 'text-amber-300',
         teal: 'text-teal-300',
         pink: 'text-pink-300',
+        violet: 'text-violet-300',
+        fuchsia: 'text-fuchsia-300',
+        rose: 'text-rose-300',
+        lime: 'text-lime-300',
+        sky: 'text-sky-300',
     };
 
     const getContainerClass = () => {
@@ -106,13 +136,13 @@ export default function RightSidebar({
     };
 
     return (
-        <div className={`w-72 border-l flex flex-col hidden xl:flex shrink-0 rounded-l-3xl transition-colors duration-300 ${getContainerClass()}`}>
+        <div className={`w-72 border-l flex flex-col hidden xl:flex shrink-0 rounded-l-3xl transition-colors duration-300 h-full ${getContainerClass()}`}>
 
             {/* Header */}
             <div className={`p-5 border-b flex items-center justify-between ${isDarkest ? 'border-neutral-900' : isDark ? 'border-slate-800' : 'border-slate-50'}`}>
                 <div>
                     <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Dashboard Metrics</h3>
-                    <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Select up to 5 metrics to display</p>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Select up to 4 metrics to display</p>
                 </div>
 
                 {/* Reset Button */}
@@ -130,7 +160,7 @@ export default function RightSidebar({
             </div>
 
             {/* Scrollable Content */}
-            <div className="p-4 flex-1 overflow-y-auto max-h-[calc(65vh-160px)]">
+            <div className="p-4 flex-1 overflow-y-auto">
                 <div className="space-y-2">
                     {allMetrics.map((metric) => {
                         const isSelected = selectedMetrics.includes(metric.key);

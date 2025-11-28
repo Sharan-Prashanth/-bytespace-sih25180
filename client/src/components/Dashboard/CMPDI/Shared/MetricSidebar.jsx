@@ -106,13 +106,13 @@ export default function MetricSidebar({
     };
 
     return (
-        <div className={`w-72 border-l flex flex-col hidden xl:flex shrink-0 rounded-l-3xl transition-colors duration-300 ${getContainerClass()}`}>
+        <div className={`w-72 border-l flex flex-col hidden xl:flex shrink-0 rounded-l-3xl transition-colors duration-300 h-full ${getContainerClass()}`}>
 
             {/* Header */}
             <div className={`p-5 border-b flex items-center justify-between ${isDarkest ? 'border-neutral-900' : isDark ? 'border-slate-800' : 'border-slate-50'}`}>
                 <div>
                     <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Dashboard Metrics</h3>
-                    <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Select up to 5 metrics to display</p>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Select up to 4 metrics to display</p>
                 </div>
 
                 {/* Reset Button */}
@@ -130,7 +130,7 @@ export default function MetricSidebar({
             </div>
 
             {/* Scrollable Content */}
-            <div className="p-4 flex-1 overflow-y-auto max-h-[calc(65vh-160px)]">
+            <div className="p-4 flex-1 overflow-y-auto">
                 <div className="space-y-2">
                     {allMetrics.map((metric) => {
                         const isSelected = selectedMetrics.includes(metric.key);
