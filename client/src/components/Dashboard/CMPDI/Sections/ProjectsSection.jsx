@@ -1,247 +1,373 @@
 'use client';
 
-import {
-    Calendar,
-    Folder,
-    LayoutGrid,
-    List,
-    MapPin,
-    MoreHorizontal,
-    Search,
-    Users
-} from "lucide-react";
-import { useRouter } from "next/router";
-import { useState } from "react";
-import { PROJECTS_DATA } from "../../../../utils/cmpdiMock/projects";
+import React, { useState } from 'react';
+import { 
+    Search, Filter, LayoutGrid, List, Calendar, DollarSign, 
+    FileText, CheckCircle, AlertCircle, Clock, ChevronRight, 
+    MoreVertical, Download, Upload, MessageSquare, UserPlus,
+    Users, Gavel, Activity, ArrowLeft, Send, Eye, X,
+    TrendingUp, PieChart, BarChart2
+} from 'lucide-react';
 
-export default function ProjectsSection({ theme }) {
-    const [searchTerm, setSearchTerm] = useState("");
-    const [viewMode, setViewMode] = useState("table"); // 'table' | 'card'
-    const router = useRouter();
+// --- Mock Data for Projects ---
+const MOCK_PROJECTS = [
+    {
+        id: 'PROJ-2024-015',
+        title: 'Autonomous Drone Surveillance for Open Cast Mines',
+        pi: 'Dr. S. Verma',
+        institution: 'IIT Kanpur',
+        startDate: '2024-01-15',
+        endDate: '2026-01-14',
+        totalBudget: 8500000,
+        spentBudget: 4200000,
+        status: 'On Track',
+        progress: 65,
+        nextMilestone: 'Field Trials Phase 1',
+        nextMilestoneDate: '2025-12-15',
+        description: 'Deployment of autonomous drones for real-time surveillance and volumetric analysis of stockpiles.',
+        milestones: [
+            { id: 1, title: 'Literature Survey & Design', date: '2024-03-15', status: 'Completed' },
+            { id: 2, title: 'Prototype Development', date: '2024-09-15', status: 'Completed' },
+            { id: 3, title: 'Lab Testing', date: '2025-03-15', status: 'Completed' },
+            { id: 4, title: 'Field Trials Phase 1', date: '2025-12-15', status: 'Pending' },
+            { id: 5, title: 'Final Report', date: '2026-01-14', status: 'Pending' }
+        ],
+        expenditure: [
+            { category: 'Equipment', allocated: 4000000, spent: 3500000 },
+            { category: 'Manpower', allocated: 2500000, spent: 500000 },
+            { category: 'Consumables', allocated: 1000000, spent: 100000 },
+            { category: 'Travel', allocated: 500000, spent: 50000 },
+            { category: 'Contingency', allocated: 500000, spent: 50000 }
+        ]
+    },
+    {
+        id: 'PROJ-2023-089',
+        title: 'Coal Quality Analysis using Spectral Imaging',
+        pi: 'Dr. M. Nair',
+        institution: 'NIT Trichy',
+        startDate: '2023-08-01',
+        endDate: '2025-07-31',
+        totalBudget: 6000000,
+        spentBudget: 5800000,
+        status: 'Delayed',
+        progress: 85,
+        nextMilestone: 'Final Validation',
+        nextMilestoneDate: '2025-06-30',
+        description: 'Non-contact coal quality estimation using hyperspectral imaging techniques.',
+        milestones: [
+            { id: 1, title: 'System Design', date: '2023-11-01', status: 'Completed' },
+            { id: 2, title: 'Data Collection', date: '2024-05-01', status: 'Completed' },
+            { id: 3, title: 'Algorithm Development', date: '2024-11-01', status: 'Completed' },
+            { id: 4, title: 'Final Validation', date: '2025-06-30', status: 'Delayed' }
+        ],
+        expenditure: [
+            { category: 'Equipment', allocated: 3000000, spent: 3000000 },
+            { category: 'Manpower', allocated: 2000000, spent: 1800000 },
+            { category: 'Consumables', allocated: 500000, spent: 500000 },
+            { category: 'Travel', allocated: 250000, spent: 250000 },
+            { category: 'Contingency', allocated: 250000, spent: 250000 }
+        ]
+    },
+    {
+        id: 'PROJ-2024-003',
+        title: 'Underground Communication Network',
+        pi: 'Dr. P. Kumar',
+        institution: 'ISM Dhanbad',
+        startDate: '2024-02-01',
+        endDate: '2025-08-01',
+        totalBudget: 5000000,
+        spentBudget: 1500000,
+        status: 'On Track',
+        progress: 40,
+        nextMilestone: 'Hardware Integration',
+        nextMilestoneDate: '2025-01-15',
+        description: 'Robust mesh network for underground mine communication.',
+        milestones: [
+            { id: 1, title: 'Requirement Analysis', date: '2024-04-01', status: 'Completed' },
+            { id: 2, title: 'Simulation', date: '2024-08-01', status: 'Completed' },
+            { id: 3, title: 'Hardware Integration', date: '2025-01-15', status: 'Pending' },
+            { id: 4, title: 'Field Testing', date: '2025-06-01', status: 'Pending' }
+        ],
+        expenditure: [
+            { category: 'Equipment', allocated: 2500000, spent: 500000 },
+            { category: 'Manpower', allocated: 1500000, spent: 800000 },
+            { category: 'Consumables', allocated: 500000, spent: 100000 },
+            { category: 'Travel', allocated: 250000, spent: 50000 },
+            { category: 'Contingency', allocated: 250000, spent: 50000 }
+        ]
+    }
+];
 
-    const handleProjectClick = (project) => {
-        // Shallow routing for detail view
-        const currentPath = router.pathname;
-        router.push({
-            pathname: currentPath,
-            query: { ...router.query, projectId: project.id }
-        }, undefined, { shallow: true });
-    };
+// --- Components ---
 
-    const filteredProjects = PROJECTS_DATA.filter(p =>
-        p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.site.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.lead.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
+const ProjectCard = ({ project, onClick, theme }) => {
     const isDark = theme === 'dark' || theme === 'darkest';
-    const isDarkest = theme === 'darkest';
-
-    const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100';
-    const textColor = isDark ? 'text-white' : 'text-slate-900';
-    const subTextColor = isDark ? 'text-slate-400' : 'text-slate-500';
-    const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-100';
-    const hoverBg = isDarkest ? 'hover:bg-neutral-800' : isDark ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50/50';
-
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'Active': return isDark ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100';
-            case 'Completed': return isDark ? 'bg-blue-900/30 text-blue-400 border-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'On Hold': return isDark ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50 text-amber-600 border-amber-100';
-            default: return isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200';
-        }
-    };
-
+    
     return (
-        <div className="space-y-6">
-            {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div 
+            onClick={() => onClick(project)}
+            className={`${isDark ? 'bg-slate-900/50 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-500'} border rounded-xl p-6 transition-all cursor-pointer group shadow-sm`}
+        >
+            <div className="flex justify-between items-start mb-4">
                 <div>
-                    <h2 className={`text-2xl font-bold ${textColor}`}>Active Projects</h2>
-                    <p className={`${subTextColor} text-sm mt-1`}>Monitor progress and status of ongoing implementations.</p>
+                    <span className={`text-xs font-mono px-2 py-1 rounded mb-2 inline-block ${isDark ? 'text-blue-400 bg-blue-400/10' : 'text-blue-600 bg-blue-50'}`}>{project.id}</span>
+                    <h3 className={`${isDark ? 'text-white group-hover:text-blue-400' : 'text-slate-900 group-hover:text-blue-600'} font-semibold text-lg line-clamp-1 transition-colors`}>{project.title}</h3>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                    project.status === 'On Track' ? (isDark ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200') :
+                    project.status === 'Delayed' ? (isDark ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-200') :
+                    (isDark ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-yellow-50 text-yellow-600 border-yellow-200')
+                }`}>
+                    {project.status}
+                </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <p className={`text-xs mb-1 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Principal Investigator</p>
+                    <p className={`text-sm flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                        <Users size={14} /> {project.pi}
+                    </p>
+                </div>
+                <div>
+                    <p className={`text-xs mb-1 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Institution</p>
+                    <p className={`text-sm flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                        <FileText size={14} /> {project.institution}
+                    </p>
                 </div>
             </div>
 
-            {/* Filters & View Toggle */}
-            <div className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col sm:flex-row items-center gap-4`}>
-                {/* Search Bar */}
-                <div className="relative flex-1 group w-full">
-                    <Search
-                        size={18}
-                        className={`absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300
-                            ${isDark ? 'text-slate-500 group-focus-within:text-slate-300' : 'text-slate-400 group-focus-within:text-slate-600'}
-                        `}
-                    />
-                    <input
-                        type="text"
-                        placeholder="Search projects..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className={`w-full pl-12 pr-4 py-3 rounded-xl transition-all duration-300 text-sm font-medium border outline-none shadow-sm hover:shadow-md
-                            ${isDarkest
-                                ? 'bg-neutral-950 border-neutral-800 text-white placeholder-slate-600 focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20'
-                                : isDark
-                                    ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20'
-                                    : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20'}
-                        `}
-                    />
-                </div>
-
-                {/* View Toggle */}
-                <div className={`flex items-center p-1 rounded-xl border ${isDarkest ? 'bg-neutral-950 border-neutral-800' : isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                    <button
-                        onClick={() => setViewMode('table')}
-                        className={`p-2 rounded-lg transition-all ${viewMode === 'table'
-                            ? (isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm')
-                            : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
-                        title="Table View"
-                    >
-                        <List size={18} />
-                    </button>
-                    <button
-                        onClick={() => setViewMode('card')}
-                        className={`p-2 rounded-lg transition-all ${viewMode === 'card'
-                            ? (isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm')
-                            : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
-                        title="Card View"
-                    >
-                        <LayoutGrid size={18} />
-                    </button>
-                </div>
-            </div>
-
-            {/* Content Area */}
-            {viewMode === 'table' ? (
-                // Table View
-                <div className={`${cardBg} rounded-3xl shadow-sm border overflow-hidden`}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className={`border-b ${borderColor}`}>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Project Name</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Site / Location</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Lead</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Status</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Progress</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor} text-right`}>Start Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className={`divide-y ${isDarkest ? 'divide-neutral-800' : isDark ? 'divide-slate-700' : 'divide-slate-50'}`}>
-                                {filteredProjects.map((project) => (
-                                    <tr
-                                        key={project.id}
-                                        onClick={() => handleProjectClick(project)}
-                                        className={`group transition-colors cursor-pointer ${hoverBg}`}
-                                    >
-                                        <td className="p-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
-                                                    <Folder size={20} />
-                                                </div>
-                                                <div>
-                                                    <div className={`font-bold ${textColor} line-clamp-1`}>{project.title}</div>
-                                                    <div className={`text-xs ${subTextColor}`}>{project.id}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="p-6">
-                                            <div className="flex items-center gap-2">
-                                                <MapPin size={14} className={subTextColor} />
-                                                <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{project.site}</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-6">
-                                            <div className="flex items-center gap-2">
-                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                                                    {project.lead.charAt(0)}
-                                                </div>
-                                                <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{project.lead}</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-6">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(project.status)}`}>
-                                                {project.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-6">
-                                            <div className="w-full max-w-[100px]">
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className={subTextColor}>{project.progress}%</span>
-                                                </div>
-                                                <div className={`w-full h-1.5 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
-                                                    <div
-                                                        className={`h-full rounded-full ${project.progress === 100 ? 'bg-blue-500' : 'bg-blue-600'}`}
-                                                        style={{ width: `${project.progress}%` }}
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="p-6 text-right">
-                                            <span className={`text-sm font-medium ${subTextColor}`}>{project.startDate}</span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            <div className="space-y-4">
+                <div>
+                    <div className="flex justify-between text-xs mb-1">
+                        <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Progress</span>
+                        <span className={`${isDark ? 'text-white' : 'text-slate-900'} font-medium`}>{project.progress}%</span>
+                    </div>
+                    <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                        <div 
+                            className={`h-full rounded-full ${
+                                project.status === 'Delayed' ? 'bg-red-500' : 'bg-blue-500'
+                            }`} 
+                            style={{ width: `${project.progress}%` }}
+                        ></div>
                     </div>
                 </div>
-            ) : (
-                // Card View
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredProjects.map((project) => (
-                        <div
-                            key={project.id}
-                            onClick={() => handleProjectClick(project)}
-                            className={`${cardBg} p-6 rounded-3xl shadow-sm border flex flex-col transition-all cursor-pointer hover:shadow-md ${hoverBg}`}
-                        >
-                            <div className="flex justify-between items-start mb-4">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
-                                    <Folder size={24} />
-                                </div>
-                                <button className={`p-1 rounded-lg hover:bg-slate-100 ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'text-slate-400'}`}>
-                                    <MoreHorizontal size={20} />
-                                </button>
-                            </div>
+                
+                <div className={`flex justify-between items-center pt-4 border-t ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                    <div>
+                        <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Next Milestone</p>
+                        <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{project.nextMilestone}</p>
+                        <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{project.nextMilestoneDate}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Budget Utilized</p>
+                        <p className={`text-sm font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                            {((project.spentBudget / project.totalBudget) * 100).toFixed(1)}%
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
-                            <h3 className={`font-bold text-lg mb-2 line-clamp-2 h-14 ${textColor}`}>{project.title}</h3>
+const ProjectDetailView = ({ project, onBack, theme }) => {
+    const [activeTab, setActiveTab] = useState('overview');
+    const isDark = theme === 'dark' || theme === 'darkest';
 
-                            <div className="flex items-center gap-4 mb-6 text-sm">
-                                <div className="flex items-center gap-1.5">
-                                    <MapPin size={14} className={subTextColor} />
-                                    <span className={subTextColor}>{project.site}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <Users size={14} className={subTextColor} />
-                                    <span className={subTextColor}>{project.teamSize} Members</span>
-                                </div>
-                            </div>
+    const bgClass = isDark ? 'bg-slate-950' : 'bg-slate-50';
+    const cardBgClass = isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
+    const textClass = isDark ? 'text-white' : 'text-slate-900';
+    const subTextClass = isDark ? 'text-slate-400' : 'text-slate-500';
+    const borderClass = isDark ? 'border-slate-800' : 'border-slate-200';
 
-                            <div className="mb-6">
-                                <div className="flex justify-between text-xs mb-2">
-                                    <span className={`font-medium ${textColor}`}>Progress</span>
-                                    <span className={`font-bold ${textColor}`}>{project.progress}%</span>
-                                </div>
-                                <div className={`w-full h-2 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
-                                    <div
-                                        className={`h-full rounded-full ${project.progress === 100 ? 'bg-blue-500' : 'bg-blue-600'}`}
-                                        style={{ width: `${project.progress}%` }}
-                                    ></div>
-                                </div>
-                            </div>
+    return (
+        <div className={`h-full flex flex-col ${bgClass}`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${borderClass} flex items-center gap-4`}>
+                <button onClick={onBack} className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'}`}>
+                    <ArrowLeft size={20} />
+                </button>
+                <div>
+                    <div className="flex items-center gap-3 mb-1">
+                        <h1 className={`text-xl font-bold ${textClass}`}>{project.title}</h1>
+                        <span className={`text-xs font-mono px-2 py-1 rounded ${isDark ? 'text-blue-400 bg-blue-400/10' : 'text-blue-600 bg-blue-50'}`}>{project.id}</span>
+                    </div>
+                    <div className={`flex items-center gap-4 text-sm ${subTextClass}`}>
+                        <span>{project.pi}</span>
+                        <span>•</span>
+                        <span>{project.institution}</span>
+                        <span>•</span>
+                        <span className={isDark ? 'text-emerald-400' : 'text-emerald-600'}>Total Budget: ₹{project.totalBudget.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div className="ml-auto flex gap-3">
+                    <button className={`px-4 py-2 rounded-lg text-sm font-medium ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700'}`}>
+                        Download Report
+                    </button>
+                    <button className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium">
+                        Update Progress
+                    </button>
+                </div>
+            </div>
 
-                            <div className={`flex items-center justify-between pt-4 border-t mt-auto ${borderColor}`}>
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(project.status)}`}>
-                                    {project.status}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                    <Calendar size={16} className={subTextColor} />
-                                    <span className={`text-xs font-medium ${subTextColor}`}>{project.startDate}</span>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+                <div className="grid grid-cols-3 gap-6">
+                    {/* Left Column */}
+                    <div className="col-span-2 space-y-6">
+                        {/* Milestones */}
+                        <div className={`${cardBgClass} border rounded-xl p-6`}>
+                            <h3 className={`text-lg font-semibold ${textClass} mb-6`}>Project Milestones</h3>
+                            <div className="relative">
+                                <div className={`absolute left-2 top-0 bottom-0 w-0.5 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
+                                <div className="space-y-8">
+                                    {project.milestones.map((milestone) => (
+                                        <div key={milestone.id} className="relative pl-8">
+                                            <div className={`absolute left-0 top-1.5 w-4.5 h-4.5 -ml-[7px] rounded-full border-2 ${
+                                                milestone.status === 'Completed' ? 'bg-emerald-500 border-emerald-500' :
+                                                milestone.status === 'Delayed' ? 'bg-red-500 border-red-500' :
+                                                (isDark ? 'bg-slate-900 border-slate-600' : 'bg-white border-slate-300')
+                                            }`}></div>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h4 className={`font-medium ${
+                                                        milestone.status === 'Completed' ? (isDark ? 'text-emerald-400' : 'text-emerald-600') :
+                                                        milestone.status === 'Delayed' ? (isDark ? 'text-red-400' : 'text-red-600') :
+                                                        textClass
+                                                    }`}>{milestone.title}</h4>
+                                                    <p className={`text-sm ${subTextClass}`}>{milestone.date}</p>
+                                                </div>
+                                                <span className={`text-xs px-2 py-1 rounded border ${
+                                                    milestone.status === 'Completed' ? (isDark ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200') :
+                                                    milestone.status === 'Delayed' ? (isDark ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-200') :
+                                                    (isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-200')
+                                                }`}>{milestone.status}</span>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
-                    ))}
+
+                        {/* Financials */}
+                        <div className={`${cardBgClass} border rounded-xl p-6`}>
+                            <h3 className={`text-lg font-semibold ${textClass} mb-6`}>Financial Utilization</h3>
+                            <div className="space-y-4">
+                                {project.expenditure.map((item, idx) => (
+                                    <div key={idx}>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{item.category}</span>
+                                            <span className={subTextClass}>
+                                                ₹{item.spent.toLocaleString()} / <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>₹{item.allocated.toLocaleString()}</span>
+                                            </span>
+                                        </div>
+                                        <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                            <div 
+                                                className="h-full bg-blue-500 rounded-full"
+                                                style={{ width: `${(item.spent / item.allocated) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-6">
+                        <div className={`${cardBgClass} border rounded-xl p-6`}>
+                            <h3 className={`text-sm font-semibold ${subTextClass} uppercase tracking-wider mb-4`}>Project Health</h3>
+                            <div className="space-y-4">
+                                <div className={`p-4 rounded-lg border ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <Activity className="text-blue-400" size={20} />
+                                        <span className={`${isDark ? 'text-slate-200' : 'text-slate-700'} font-medium`}>Overall Progress</span>
+                                    </div>
+                                    <p className={`text-2xl font-bold ${textClass}`}>{project.progress}%</p>
+                                </div>
+                                <div className={`p-4 rounded-lg border ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <DollarSign className="text-emerald-400" size={20} />
+                                        <span className={`${isDark ? 'text-slate-200' : 'text-slate-700'} font-medium`}>Funds Utilized</span>
+                                    </div>
+                                    <p className={`text-2xl font-bold ${textClass}`}>
+                                        {((project.spentBudget / project.totalBudget) * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div className={`p-4 rounded-lg border ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <Clock className="text-purple-400" size={20} />
+                                        <span className={`${isDark ? 'text-slate-200' : 'text-slate-700'} font-medium`}>Time Elapsed</span>
+                                    </div>
+                                    <p className={`text-2xl font-bold ${textClass}`}>45%</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`${cardBgClass} border rounded-xl p-6`}>
+                            <h3 className={`text-sm font-semibold ${subTextClass} uppercase tracking-wider mb-4`}>Quick Actions</h3>
+                            <div className="space-y-2">
+                                <button className={`w-full flex items-center gap-3 p-3 border rounded-lg transition-colors ${isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                    <MessageSquare size={18} />
+                                    <span>Contact PI</span>
+                                </button>
+                                <button className={`w-full flex items-center gap-3 p-3 border rounded-lg transition-colors ${isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                    <FileText size={18} />
+                                    <span>View Documents</span>
+                                </button>
+                                <button className={`w-full flex items-center gap-3 p-3 border rounded-lg transition-colors ${isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                    <TrendingUp size={18} />
+                                    <span>Generate Report</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            )}
+            </div>
+        </div>
+    );
+};
+
+export default function ProjectsSection({ theme }) {
+    const [selectedProject, setSelectedProject] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const isDark = theme === 'dark' || theme === 'darkest';
+
+    const inputBgClass = isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900';
+    const subTextClass = isDark ? 'text-slate-400' : 'text-slate-500';
+
+    if (selectedProject) {
+        return <ProjectDetailView project={selectedProject} onBack={() => setSelectedProject(null)} theme={theme} />;
+    }
+
+    return (
+        <div className="h-full flex flex-col space-y-6">
+            {/* Controls */}
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${subTextClass}`} />
+                        <input 
+                            type="text" 
+                            placeholder="Search projects..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className={`${inputBgClass} rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-blue-500 w-64 border`}
+                        />
+                    </div>
+                    <button className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border ${isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'}`}>
+                        <Filter size={16} /> Filter
+                    </button>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-6">
+                {MOCK_PROJECTS.map(project => (
+                    <ProjectCard key={project.id} project={project} onClick={setSelectedProject} theme={theme} />
+                ))}
+            </div>
         </div>
     );
 }

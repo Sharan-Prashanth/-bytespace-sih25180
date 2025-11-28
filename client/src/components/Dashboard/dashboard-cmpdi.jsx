@@ -7,6 +7,7 @@ import CMPDIDashboardLayout from './CMPDI/Layout/CMPDIDashboardLayout';
 import CMPDIHome from './CMPDI/Sections/CMPDIHome';
 import ProjectsSection from './CMPDI/Sections/ProjectsSection';
 import ProposalsSection from './CMPDI/Sections/ProposalsSection';
+import GISSection from './CMPDI/Sections/GISSection';
 
 // Placeholder components for sections not yet implemented
 const PlaceholderSection = ({ title }) => (
@@ -146,7 +147,7 @@ export default function CMPDIDashboard() {
             case 'safety':
                 return <PlaceholderSection title="Safety Module" />;
             case 'gis':
-                return <PlaceholderSection title="GIS Map" />;
+                return <GISSection theme={theme} />;
             default:
                 return <CMPDIHome />;
         }
