@@ -21,6 +21,7 @@ const generateToken = (id) => {
 export const register = asyncHandler(async (req, res) => {
   const {
     fullName,
+    qualification,
     email,
     password,
     phoneNumber,
@@ -44,6 +45,7 @@ export const register = asyncHandler(async (req, res) => {
   // Create user with USER role
   const user = await User.create({
     fullName,
+    qualification,
     email: email.toLowerCase(),
     passwordHash: password,
     phoneNumber,

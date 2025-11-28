@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { useRouter } from 'next/router';
 import LoadingScreen from "../../components/LoadingScreen";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import { useAuth } from "../../context/AuthContext";
@@ -15,6 +16,7 @@ import UserProposalsSection from "./User/Sections/UserProposalsSection";
 import UserSettingsSection from "./User/Sections/UserSettingsSection";
 
 function InvestigatorDashboardContent() {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,12 @@ function InvestigatorDashboardContent() {
   // UI State
   const [activeSection, setActiveSection] = useState('overview');
   const [theme, setTheme] = useState('light'); // 'light' | 'dark' | 'darkest'
+
+  useEffect(() => {
+    if (router.isReady && router.query.section) {
+      setActiveSection(router.query.section);
+    }
+  }, [router.isReady, router.query.section]);
 
   useEffect(() => {
     fetchProposals();

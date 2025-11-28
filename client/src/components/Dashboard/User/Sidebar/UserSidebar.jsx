@@ -23,6 +23,8 @@ export default function UserSidebar({ activeSection, setActiveSection, onLogout,
     const handleNavigation = (item) => {
         if (setActiveSection) {
             setActiveSection(item.section);
+        } else {
+            router.push(`/dashboard?section=${item.section}`);
         }
     };
 
