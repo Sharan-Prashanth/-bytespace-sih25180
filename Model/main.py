@@ -8,8 +8,15 @@ from RAG import plag
 from RAG import rag_chat_guidlines
 from RAG import rag_chat_specialist
 from RAG import timeline
+try:
+    # Prefer relative import when running as a package (helps editors/linters)
+    from . import non_ocr
+except Exception:
+    # Fallback to absolute import when running as a script
+    import non_ocr
 # from RAG import similarity_checker
 # from live_checker import online_checker
+
 from Json_extraction import extractor
 import uvicorn
 from data_files import file_storage
@@ -30,6 +37,7 @@ app.add_middleware(
 app.include_router(timeline.router)
 app.include_router(benefit.router)
 app.include_router(deliverables.router)
+app.include_router(non_ocr.router)
 # app.include_router(similarity_checker.router)
 app.include_router(rag_chat_guidlines.router)
 app.include_router(rag_chat_specialist.router)
