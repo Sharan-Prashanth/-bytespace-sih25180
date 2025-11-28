@@ -24,7 +24,7 @@ export default function Login() {
     setError("");
 
     try {
-      await login(form.email, form.password);
+      await login(form.email.trim(), form.password);
       router.push("/dashboard");
     } catch (err) {
       setError(err.message);

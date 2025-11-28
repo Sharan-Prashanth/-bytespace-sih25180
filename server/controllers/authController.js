@@ -131,8 +131,7 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   // Update last login
-  user.lastLogin = new Date();
-  await user.save();
+  await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
 
   // Generate token
   const token = generateToken(user._id);
