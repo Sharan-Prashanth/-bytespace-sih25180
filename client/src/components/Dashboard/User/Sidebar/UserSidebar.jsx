@@ -2,33 +2,28 @@
 
 import {
     Briefcase,
-    DollarSign,
     HelpCircle,
     Home,
     LogOut,
-    Shield,
-    Users
+    Settings,
+    User
 } from 'lucide-react';
 import { useRouter } from 'next/router';
 
 const MENU_ITEMS = [
-    { id: 'overview', label: 'Home', icon: Home, path: '/admin', section: 'overview' },
-    { id: 'users', label: 'Users', icon: Users, path: '/admin/users', section: 'users' },
-    { id: 'staff', label: 'Staff', icon: Users, path: '/admin/staff', section: 'staff' },
-    { id: 'proposals', label: 'Proposals', icon: Briefcase, path: '/admin/proposals', section: 'proposals' },
-    { id: 'finance', label: 'Finance', icon: DollarSign, path: '/admin/finance', section: 'finance' },
-    { id: 'roles', label: 'Roles', icon: Shield, path: '/admin/roles', section: 'roles' },
+    { id: 'overview', label: 'Home', icon: Home, section: 'overview' },
+    { id: 'proposals', label: 'Proposals', icon: Briefcase, section: 'proposals' },
+    { id: 'profile', label: 'Profile', icon: User, section: 'profile' },
+    { id: 'settings', label: 'Settings', icon: Settings, section: 'settings' },
 ];
 
-export default function Sidebar({ activeSection, setActiveSection, onLogout, theme }) {
+export default function UserSidebar({ activeSection, setActiveSection, onLogout, theme }) {
     const router = useRouter();
 
     const handleNavigation = (item) => {
         if (setActiveSection) {
             setActiveSection(item.section);
         }
-        // In a real app, you might want to push to router if paths differ
-        // router.push(item.path);
     };
 
     const isDark = theme === 'dark' || theme === 'darkest';
@@ -83,15 +78,6 @@ export default function Sidebar({ activeSection, setActiveSection, onLogout, the
                                 />
                                 <span>{item.label}</span>
                             </div>
-                            {item.badge && (
-                                <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold
-                                    ${isDarkest ? 'bg-neutral-800 text-neutral-300 group-hover:bg-neutral-700' :
-                                        isDark ? 'bg-slate-800 text-slate-300 group-hover:bg-slate-700' :
-                                            'bg-slate-100 text-slate-600 group-hover:bg-slate-200'}
-                                `}>
-                                    {item.badge}
-                                </span>
-                            )}
                         </button>
                     );
                 })}

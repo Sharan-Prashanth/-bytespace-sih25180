@@ -1,3 +1,5 @@
+'use client';
+
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { Activity, BarChart2, ChevronDown, Download, LineChart as LineChartIcon } from 'lucide-react';
@@ -14,9 +16,9 @@ import {
     Tooltip,
     XAxis, YAxis
 } from 'recharts';
-import { getMetricDetails } from '../../../utils/mockDashboardData';
-import MetricCard from '../Overview/MetricCard';
-import RightSidebar from '../Sidebar/RightSidebar';
+import { getCMPDIMetricDetails } from '../../../../utils/cmpdiMock/metrics';
+import MetricCard from '../Shared/MetricCard';
+import MetricSidebar from '../Shared/MetricSidebar';
 
 const CustomBarTooltip = ({ active, payload, label, theme }) => {
     if (active && payload && payload.length) {
@@ -42,7 +44,7 @@ const CustomBarTooltip = ({ active, payload, label, theme }) => {
     return null;
 };
 
-export default function OverviewSection({
+export default function CMPDIHome({
     metrics,
     activeMetric,
     onMetricClick,
@@ -66,9 +68,8 @@ export default function OverviewSection({
             if (activeMetric) {
                 setLoading(true);
                 try {
-                    const details = await getMetricDetails(activeMetric.key);
+                    const details = await getCMPDIMetricDetails(activeMetric.key);
                     setMetricDetails(details);
-                    // Set default chart type from metric details if available, otherwise default to area
                     if (details?.chart?.type) {
                         setSelectedChartType(details.chart.type);
                     }
@@ -106,7 +107,7 @@ export default function OverviewSection({
             pdf.setFontSize(16);
             pdf.text(`Dashboard Report: ${activeMetric?.title || 'Overview'}`, 10, 20);
             pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-            pdf.save(`dashboard-report-${new Date().toISOString().split('T')[0]}.pdf`);
+            pdf.save(`cmpdi-report-${new Date().toISOString().split('T')[0]}.pdf`);
         } catch (error) {
             console.error('Export failed:', error);
         } finally {
@@ -123,7 +124,6 @@ export default function OverviewSection({
             margin: { top: 10, right: 10, left: 0, bottom: 0 }
         };
 
-        // Hex color mapping for charts
         const chartColors = {
             blue: '#3b82f6',
             emerald: '#10b981',
@@ -138,7 +138,7 @@ export default function OverviewSection({
             pink: '#ec4899',
         };
 
-        const color = chartColors[activeMetric?.color] || "#3b82f6"; // Default to blue
+        const color = chartColors[activeMetric?.color] || "#3b82f6";
         const gridColor = isDarkest ? '#171717' : isDark ? '#334155' : '#f1f5f9';
         const axisColor = isDark ? '#94a3b8' : '#64748b';
 
@@ -291,7 +291,7 @@ export default function OverviewSection({
                             <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                                 {activeMetric ? activeMetric.title : 'Select a Metric'}
                             </h2>
-                            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Performance Analytics</p>
+                            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>CMPDI Performance Analytics</p>
                         </div>
 
                         {/* Chart Controls */}
@@ -376,7 +376,7 @@ export default function OverviewSection({
 
                 {/* Right Sidebar - Metrics Selection */}
                 <div className="w-80 shrink-0 h-full">
-                    <RightSidebar
+                    <MetricSidebar
                         allMetrics={allMetrics}
                         selectedMetrics={selectedMetrics}
                         toggleMetric={toggleMetric}

@@ -10,68 +10,18 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import ProposalDetail from "../Proposals/ProposalDetail";
+// import ProposalDetail from "../Proposals/ProposalDetail"; // We will implement this later or use a placeholder
 
-// Mock Data
-const PROPOSALS_DATA = [
-    {
-        id: "PROP001",
-        title: "AI-Powered Coal Quality Assessment System",
-        submitterName: "Dr. Rajesh Kumar",
-        category: "Technology",
-        department: "IIT Delhi",
-        status: "Approved",
-        budget: "₹25,00,000",
-        dateSubmitted: "Sep 01, 2025",
-        summary: "This proposal aims to develop an AI-driven system for real-time coal quality assessment using computer vision and machine learning techniques. The system will reduce manual inspection time and improve accuracy."
-    },
-    {
-        id: "PROP002",
-        title: "Sustainable Mining Waste Management",
-        submitterName: "Dr. Priya Sharma",
-        category: "Environment",
-        department: "CSIR-CIMFR",
-        status: "Pending",
-        budget: "₹40,00,000",
-        dateSubmitted: "Sep 05, 2025",
-        summary: "A comprehensive study on managing mining waste effectively to minimize environmental impact. The project focuses on converting waste into usable construction materials."
-    },
-    {
-        id: "PROP003",
-        title: "Advanced Coal Gasification Process",
-        submitterName: "Dr. Amit Patel",
-        category: "Energy",
-        department: "NEIST",
-        status: "Rejected",
-        budget: "₹15,00,000",
-        dateSubmitted: "Aug 20, 2025",
-        summary: "Investigation into novel catalysts for improving the efficiency of coal gasification. The proposal outlines a 2-year research plan with pilot plant testing."
-    },
-    {
-        id: "PROP004",
-        title: "Digital Twin for Mining Operations",
-        submitterName: "Dr. Sunita Mehta",
-        category: "Technology",
-        department: "NIT Rourkela",
-        status: "Pending",
-        budget: "₹35,00,000",
-        dateSubmitted: "Sep 10, 2025",
-        summary: "Creation of a digital twin for underground mining operations to simulate scenarios, optimize workflows, and enhance safety protocols."
-    },
-    {
-        id: "PROP005",
-        title: "Carbon Capture Technology Research",
-        submitterName: "Dr. Vikram Singh",
-        category: "Environment",
-        department: "IIT Kharagpur",
-        status: "Approved",
-        budget: "₹50,00,000",
-        dateSubmitted: "Sep 15, 2025",
-        summary: "Research into cost-effective carbon capture technologies specifically designed for coal-fired power plants. Includes feasibility study and prototype development."
-    }
-];
+// Placeholder for ProposalDetail to avoid import errors for now
+const ProposalDetail = ({ proposal, onBack, theme }) => (
+    <div className={`p-6 ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
+        <button onClick={onBack} className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Back</button>
+        <h2 className="text-2xl font-bold">{proposal.title}</h2>
+        <p>Details coming soon...</p>
+    </div>
+);
 
-export default function ProposalsSection({ theme }) {
+export default function ProposalsSection({ proposals = [], theme }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState("table"); // 'table' | 'card'
     const [selectedProposal, setSelectedProposal] = useState(null);
@@ -80,12 +30,12 @@ export default function ProposalsSection({ theme }) {
     // Handle URL query param for proposal ID
     useEffect(() => {
         if (router.query.proposalId) {
-            const proposal = PROPOSALS_DATA.find(p => p.id === router.query.proposalId);
+            const proposal = proposals.find(p => p.id === router.query.proposalId);
             if (proposal) setSelectedProposal(proposal);
         } else {
             setSelectedProposal(null);
         }
-    }, [router.query.proposalId]);
+    }, [router.query.proposalId, proposals]);
 
     const handleProposalClick = (proposal) => {
         setSelectedProposal(proposal);
@@ -106,11 +56,11 @@ export default function ProposalsSection({ theme }) {
         }, undefined, { shallow: true });
     };
 
-    const filteredProposals = PROPOSALS_DATA.filter(p =>
-        p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.submitterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.department.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredProposals = proposals.filter(p =>
+        (p.title?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (p.principalInvestigator?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (p.domain?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (p.organization?.toLowerCase() || "").includes(searchTerm.toLowerCase())
     );
 
     const isDark = theme === 'dark' || theme === 'darkest';
@@ -123,19 +73,31 @@ export default function ProposalsSection({ theme }) {
     const hoverBg = isDarkest ? 'hover:bg-neutral-800' : isDark ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50/50';
 
     const getStatusColor = (status) => {
-        switch (status) {
-            case 'Approved': return isDark ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100';
-            case 'Rejected': return isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-600 border-red-100';
-            default: return isDark ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50 text-amber-600 border-amber-100';
-        }
+        // Map CMPDI statuses to colors
+        if (status === 'CMPDI_APPROVED' || status === 'ONGOING' || status === 'COMPLETED') return isDark ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100';
+        if (status === 'CMPDI_REJECTED' || status === 'REJECTED') return isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-600 border-red-100';
+        return isDark ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50 text-amber-600 border-amber-100';
     };
 
     const getStatusDot = (status) => {
-        switch (status) {
-            case 'Approved': return 'bg-emerald-500';
-            case 'Rejected': return 'bg-red-500';
-            default: return 'bg-amber-500';
-        }
+        if (status === 'CMPDI_APPROVED' || status === 'ONGOING' || status === 'COMPLETED') return 'bg-emerald-500';
+        if (status === 'CMPDI_REJECTED' || status === 'REJECTED') return 'bg-red-500';
+        return 'bg-amber-500';
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return "N/A";
+        return new Date(dateString).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
+    };
+
+    // Helper to format currency
+    const formatCurrency = (amount) => {
+        if (!amount) return "₹0";
+        return `₹${amount.toLocaleString()}`;
     };
 
     if (selectedProposal) {
@@ -147,13 +109,10 @@ export default function ProposalsSection({ theme }) {
             {/* Header & Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h2 className={`text-2xl font-bold ${textColor}`}>Projects & Proposals</h2>
-                    <p className={`${subTextColor} text-sm mt-1`}>Track and manage all research proposals and ongoing projects.</p>
+                    <h2 className={`text-2xl font-bold ${textColor}`}>Proposals Queue</h2>
+                    <p className={`${subTextColor} text-sm mt-1`}>Review and manage incoming research proposals.</p>
                 </div>
-                <button className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-slate-900/20 font-bold text-sm">
-                    <FileText size={18} />
-                    <span>New Proposal</span>
-                </button>
+                {/* Removed "New Proposal" button as this is a dashboard for reviewing, usually */}
             </div>
 
             {/* Filters & View Toggle */}
@@ -168,7 +127,7 @@ export default function ProposalsSection({ theme }) {
                     />
                     <input
                         type="text"
-                        placeholder="Search proposals..."
+                        placeholder="Search by Title, PI, or Domain..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className={`w-full pl-12 pr-4 py-3 rounded-xl transition-all duration-300 text-sm font-medium border outline-none shadow-sm hover:shadow-md
@@ -213,52 +172,64 @@ export default function ProposalsSection({ theme }) {
                             <thead>
                                 <tr className={`border-b ${borderColor}`}>
                                     <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Proposal Title</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Submitter</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Category</th>
+                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>PI / Org</th>
+                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Domain</th>
                                     <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Status</th>
                                     <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Budget</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor} text-right`}>Date</th>
+                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor} text-right`}>Submitted</th>
                                 </tr>
                             </thead>
                             <tbody className={`divide-y ${isDarkest ? 'divide-neutral-800' : isDark ? 'divide-slate-700' : 'divide-slate-50'}`}>
-                                {filteredProposals.map((proposal) => (
-                                    <tr
-                                        key={proposal.id}
-                                        onClick={() => handleProposalClick(proposal)}
-                                        className={`group transition-colors cursor-pointer ${hoverBg}`}
-                                    >
-                                        <td className="p-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                                                    <FileText size={20} />
+                                {filteredProposals.length > 0 ? (
+                                    filteredProposals.map((proposal) => (
+                                        <tr
+                                            key={proposal.id}
+                                            onClick={() => handleProposalClick(proposal)}
+                                            className={`group transition-colors cursor-pointer ${hoverBg}`}
+                                        >
+                                            <td className="p-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                                        <FileText size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <div className={`font-bold ${textColor} line-clamp-1`}>{proposal.title}</div>
+                                                        <div className={`text-xs ${subTextColor}`}>{proposal.proposalCode || proposal.id}</div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div className={`font-bold ${textColor} line-clamp-1`}>{proposal.title}</div>
-                                                    <div className={`text-xs ${subTextColor}`}>{proposal.id}</div>
-                                                </div>
+                                            </td>
+                                            <td className="p-6">
+                                                <div className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.principalInvestigator}</div>
+                                                <div className={`text-xs ${subTextColor}`}>{proposal.organization}</div>
+                                            </td>
+                                            <td className="p-6">
+                                                <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.domain}</span>
+                                            </td>
+                                            <td className="p-6">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(proposal.status)}`}>
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(proposal.status)}`}></div>
+                                                    {proposal.status?.replace(/_/g, ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="p-6">
+                                                <span className={`text-sm font-bold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{formatCurrency(proposal.budget || proposal.totalBudget)}</span>
+                                            </td>
+                                            <td className="p-6 text-right">
+                                                <span className={`text-sm font-medium ${subTextColor}`}>{formatDate(proposal.submittedDate || proposal.createdAt)}</span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="6" className="p-12 text-center">
+                                            <div className={`flex flex-col items-center justify-center ${subTextColor}`}>
+                                                <FileText size={48} className="mb-4 opacity-20" />
+                                                <p className="text-lg font-medium">No proposals found</p>
+                                                <p className="text-sm">Try adjusting your search filters</p>
                                             </div>
                                         </td>
-                                        <td className="p-6">
-                                            <div className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.submitterName}</div>
-                                            <div className={`text-xs ${subTextColor}`}>{proposal.department}</div>
-                                        </td>
-                                        <td className="p-6">
-                                            <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.category}</span>
-                                        </td>
-                                        <td className="p-6">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(proposal.status)}`}>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(proposal.status)}`}></div>
-                                                {proposal.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-6">
-                                            <span className={`text-sm font-bold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.budget}</span>
-                                        </td>
-                                        <td className="p-6 text-right">
-                                            <span className={`text-sm font-medium ${subTextColor}`}>{proposal.dateSubmitted}</span>
-                                        </td>
                                     </tr>
-                                ))}
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -278,7 +249,7 @@ export default function ProposalsSection({ theme }) {
                                 </div>
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(proposal.status)}`}>
                                     <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(proposal.status)}`}></div>
-                                    {proposal.status}
+                                    {proposal.status?.replace(/_/g, ' ')}
                                 </span>
                             </div>
 
@@ -286,19 +257,19 @@ export default function ProposalsSection({ theme }) {
 
                             <div className="flex items-center gap-2 mb-6">
                                 <span className={`text-xs font-medium px-2 py-1 rounded-md ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
-                                    {proposal.category}
+                                    {proposal.domain}
                                 </span>
-                                <span className={`text-xs font-medium ${subTextColor}`}>• {proposal.department}</span>
+                                <span className={`text-xs font-medium ${subTextColor}`}>• {proposal.organization}</span>
                             </div>
 
                             <div className={`flex items-center justify-between pt-4 border-t mt-auto ${borderColor}`}>
                                 <div className="flex items-center gap-2">
                                     <DollarSign size={16} className={isDark ? 'text-emerald-400' : 'text-emerald-600'} />
-                                    <span className={`text-sm font-bold ${textColor}`}>{proposal.budget}</span>
+                                    <span className={`text-sm font-bold ${textColor}`}>{formatCurrency(proposal.budget || proposal.totalBudget)}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Calendar size={16} className={subTextColor} />
-                                    <span className={`text-xs font-medium ${subTextColor}`}>{proposal.dateSubmitted}</span>
+                                    <span className={`text-xs font-medium ${subTextColor}`}>{formatDate(proposal.submittedDate || proposal.createdAt)}</span>
                                 </div>
                             </div>
                         </div>
