@@ -2,10 +2,10 @@
 
 import { Calendar, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import Sidebar from '../Sidebar/Sidebar';
-import CalendarWidget from '../Widgets/CalendarWidget';
+import CalendarWidget from '../../Widgets/CalendarWidget';
+import UserSidebar from '../Sidebar/UserSidebar';
 
-export default function DashboardLayout({
+export default function UserDashboardLayout({
     children,
     activeSection,
     setActiveSection,
@@ -42,7 +42,7 @@ export default function DashboardLayout({
             ${theme === 'darkest' ? 'bg-black text-slate-100' : theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900'}
         `}>
             {/* Left Sidebar */}
-            <Sidebar
+            <UserSidebar
                 activeSection={activeSection}
                 setActiveSection={setActiveSection}
                 onLogout={logout}
@@ -56,8 +56,10 @@ export default function DashboardLayout({
                     <div>
                         {activeSection === 'overview' && (
                             <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-                                <h1 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Welcome, Admin</h1>
-                                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Track proposals and manage your team</p>
+                                <h1 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                    Welcome, {user?.fullName || 'Investigator'}
+                                </h1>
+                                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Manage your research proposals and profile</p>
                             </div>
                         )}
                     </div>

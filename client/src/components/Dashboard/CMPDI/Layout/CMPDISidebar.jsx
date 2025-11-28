@@ -1,34 +1,37 @@
 'use client';
 
 import {
+    AlertTriangle,
     Briefcase,
     DollarSign,
+    Folder,
     HelpCircle,
     Home,
     LogOut,
+    Map,
     Shield,
     Users
 } from 'lucide-react';
 import { useRouter } from 'next/router';
 
 const MENU_ITEMS = [
-    { id: 'overview', label: 'Home', icon: Home, path: '/admin', section: 'overview' },
-    { id: 'users', label: 'Users', icon: Users, path: '/admin/users', section: 'users' },
-    { id: 'staff', label: 'Staff', icon: Users, path: '/admin/staff', section: 'staff' },
-    { id: 'proposals', label: 'Proposals', icon: Briefcase, path: '/admin/proposals', section: 'proposals' },
-    { id: 'finance', label: 'Finance', icon: DollarSign, path: '/admin/finance', section: 'finance' },
-    { id: 'roles', label: 'Roles', icon: Shield, path: '/admin/roles', section: 'roles' },
+    { id: 'overview', label: 'Home', icon: Home, section: 'overview' },
+    { id: 'projects', label: 'Projects', icon: Folder, section: 'projects' },
+    { id: 'proposals', label: 'Proposals', icon: Briefcase, section: 'proposals' },
+    { id: 'finance', label: 'Finance', icon: DollarSign, section: 'finance' },
+    { id: 'staff', label: 'Staff', icon: Users, section: 'staff' },
+    { id: 'roles', label: 'Roles', icon: Shield, section: 'roles' },
+    { id: 'safety', label: 'Safety', icon: AlertTriangle, section: 'safety' },
+    { id: 'gis', label: 'GIS Map', icon: Map, section: 'gis' },
 ];
 
-export default function Sidebar({ activeSection, setActiveSection, onLogout, theme }) {
+export default function CMPDISidebar({ activeSection, setActiveSection, onLogout, theme }) {
     const router = useRouter();
 
     const handleNavigation = (item) => {
         if (setActiveSection) {
             setActiveSection(item.section);
         }
-        // In a real app, you might want to push to router if paths differ
-        // router.push(item.path);
     };
 
     const isDark = theme === 'dark' || theme === 'darkest';
@@ -47,7 +50,7 @@ export default function Sidebar({ activeSection, setActiveSection, onLogout, the
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isDark ? 'bg-blue-600' : 'bg-slate-900'}`}>
                     <div className="w-4 h-4 border-2 border-white rounded-full"></div>
                 </div>
-                <span className={`font-bold text-xl tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>PRISM</span>
+                <span className={`font-bold text-xl tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>CMPDI</span>
             </div>
 
             {/* Menu Items */}
@@ -83,15 +86,6 @@ export default function Sidebar({ activeSection, setActiveSection, onLogout, the
                                 />
                                 <span>{item.label}</span>
                             </div>
-                            {item.badge && (
-                                <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold
-                                    ${isDarkest ? 'bg-neutral-800 text-neutral-300 group-hover:bg-neutral-700' :
-                                        isDark ? 'bg-slate-800 text-slate-300 group-hover:bg-slate-700' :
-                                            'bg-slate-100 text-slate-600 group-hover:bg-slate-200'}
-                                `}>
-                                    {item.badge}
-                                </span>
-                            )}
                         </button>
                     );
                 })}

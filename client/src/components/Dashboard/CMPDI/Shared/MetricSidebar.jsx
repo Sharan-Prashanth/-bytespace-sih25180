@@ -2,7 +2,7 @@
 
 import { Check, RotateCcw } from 'lucide-react';
 
-export default function RightSidebar({
+export default function MetricSidebar({
     allMetrics = [],
     selectedMetrics = [],
     toggleMetric,

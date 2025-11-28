@@ -1,3 +1,5 @@
+'use client';
+
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 
 export default function MetricCard({ metric, isActive, onClick, theme }) {

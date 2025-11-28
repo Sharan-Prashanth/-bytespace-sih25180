@@ -1,19 +1,30 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../context/AuthContext';
 import ProtectedRoute from '../../components/ProtectedRoute';
-import AdvancedProposalEditor from '../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor';
 import Chatbot from '../../components/Saarthi';
 import { useToast, ToastContainer } from '../../components/ui (plate files)/toast';
-import apiClient from '../../utils/api';
+
+// Import new modular components
+import Header from '../../components/create-page/Header';
+import Guidelines from '../../components/create-page/Guidelines';
+import PreSubmissionInfo from '../../components/create-page/PreSubmissionInfo';
+import ProposalInformation from '../../components/create-page/ProposalInformation';
+import InitialDocumentsUpload from '../../components/create-page/InitialDocumentsUpload';
+import AdditionalFormsUpload from '../../components/create-page/AdditionalFormsUpload';
+import SupportingDocumentsUpload from '../../components/create-page/SupportingDocumentsUpload';
+import ConfirmationModal from '../../components/create-page/ConfirmationModal';
+import SubmissionSuccessModal from '../../components/create-page/SubmissionSuccessModal';
+
+// Lazy load heavy components
+const FormIEditor = lazy(() => import('../../components/create-page/FormIEditor'));
 
 function CreateNewProposalContent() {
   const router = useRouter();
   const { user } = useAuth();
-  const editorRef = useRef(null);
-  const submissionInProgressRef = useRef(false);
+  const { toasts, removeToast, success, error, info } = useToast();
 
   // Proposal Information State
   const [proposalInfo, setProposalInfo] = useState({
@@ -29,170 +40,53 @@ function CreateNewProposalContent() {
 
   // Validation State
   const [validationErrors, setValidationErrors] = useState({});
-  const [isFormValid, setIsFormValid] = useState(false);
 
-  // Form State - Track which forms have content
-  const [formStatus, setFormStatus] = useState({
-    'formi': false,
-    'formia': false,
-    'formix': false,
-    'formx': false,
-    'formxi': false,
-    'formxii': false,
+  // Initial Documents State (covering letter and CV)
+  const [initialDocuments, setInitialDocuments] = useState({
+    coveringLetter: null,
+    cv: null,
   });
 
-  // Upload State for each form
-  const [uploadedFiles, setUploadedFiles] = useState({
-    'formi': null,
-    'formia': null,
-    'formix': null,
-    'formx': null,
-    'formxi': null,
-    'formxii': null,
+  // Form I Editor Content
+  const [formIContent, setFormIContent] = useState(null);
+
+  // Additional Forms State (IA, IX, X, XI, XII)
+  const [additionalForms, setAdditionalForms] = useState({
+    formia: null,
+    formix: null,
+    formx: null,
+    formxi: null,
+    formxii: null,
   });
 
-  const [uploadingForm, setUploadingForm] = useState(null);
-  const [extractingForm, setExtractingForm] = useState(null);
-  const [extractionProgress, setExtractionProgress] = useState(0);
+  // Supporting Documents State
+  const [supportingDocuments, setSupportingDocuments] = useState({
+    orgDetails: null,
+    infrastructure: null,
+    expertise: null,
+    rdComponent: null,
+    benefits: null,
+    webSurvey: null,
+    researchContent: null,
+    collaboration: null,
+  });
 
-  // Draft State
-  const [proposalId, setProposalId] = useState(null);
+  // Save State
   const [lastSavedTime, setLastSavedTime] = useState(null);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const [isManuallySaving, setIsManuallySaving] = useState(false);
 
-  // Toast notifications
-  const { toasts, removeToast, success, error, info } = useToast();
-
-  // Submission State
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionProgress, setSubmissionProgress] = useState(0);
-  const [submissionStage, setSubmissionStage] = useState('');
+  // Modal States
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submittedProposalId, setSubmittedProposalId] = useState('');
 
-  // AI Assistant State
+  // Chatbot State
   const [showChatbot, setShowChatbot] = useState(false);
-
-  // Editor Content State - Initial content for all forms
-  const [editorInitialContent, setEditorInitialContent] = useState(null);
-
-  // Signature State - For all forms
-  const [signatures, setSignatures] = useState({
-    headSignature: null, // Form IA
-    institutionSeal: null, // Form IA
-    projectLeaderSignature: null, // Forms IX, X, XI, XII
-    projectCoordinatorSignature: null, // Forms IX, X, XI, XII
-    financeOfficerSignature: null, // Forms XI, XII
-  });
-
-  // Form Configuration
-  const FORM_CONFIGS = [
-    {
-      id: 'formi',
-      label: 'Form I',
-      title: 'Project Proposal for S&T Grant',
-      pdfFile: '/files/FORM-I.pdf',
-      docxFile: '/files/FORM-I.docx',
-    },
-    {
-      id: 'formia',
-      label: 'Form IA',
-      title: 'Endorsement From',
-      pdfFile: '/files/FORM-IA_NEW.pdf',
-      docxFile: '/files/FORM-IA_NEW.docx',
-    },
-    {
-      id: 'formix',
-      label: 'Form IX',
-      title: 'Equipment Details (Already Procured)',
-      pdfFile: '/files/FORM-IX_NEW.pdf',
-      docxFile: '/files/FORM-IX_NEW.docx',
-    },
-    {
-      id: 'formx',
-      label: 'Form X',
-      title: 'Computer & Software Details',
-      pdfFile: '/files/FORM-X_NEW.pdf',
-      docxFile: '/files/FORM-X_NEW.docx',
-    },
-    {
-      id: 'formxi',
-      label: 'Form XI',
-      title: 'Manpower Cost (Salary & Wages)',
-      pdfFile: '/files/FORM-XI_NEW.pdf',
-      docxFile: '/files/FORM-XI_NEW.docx',
-    },
-    {
-      id: 'formxii',
-      label: 'Form XII',
-      title: 'Travel Expenditure (TA/DA)',
-      pdfFile: '/files/FORM-XII_NEW.pdf',
-      docxFile: '/files/FORM-XII_NEW.docx',
-    },
-  ];
-
-  // Load existing draft on mount
-  useEffect(() => {
-    loadExistingDraft();
-  }, []);
 
   // Validate proposal info
   useEffect(() => {
     validateProposalInfo();
   }, [proposalInfo]);
-
-  // Check if all forms have content
-  useEffect(() => {
-    const allFormsComplete = Object.values(formStatus).every((status) => status === true);
-    setIsFormValid(allFormsComplete && Object.keys(validationErrors).length === 0);
-  }, [formStatus, validationErrors]);
-
-  // Load existing draft from backend
-  const loadExistingDraft = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      // Get all proposals and find drafts
-      const response = await apiClient.get('/api/proposals?status=DRAFT');
-      
-      const proposalsData = response.data.data?.proposals || [];
-      
-      if (proposalsData.length > 0) {
-        // Load the most recent draft
-        const latestDraft = proposalsData[0];
-        setProposalId(latestDraft._id);
-        
-        setProposalInfo({
-          title: latestDraft.title || '',
-          fundingMethod: latestDraft.fundingMethod || 'S&T of MoC',
-          principalImplementingAgency: latestDraft.principalAgency || '',
-          subImplementingAgency: latestDraft.subAgencies?.[0] || '',
-          projectLeader: latestDraft.projectLeader || '',
-          projectCoordinator: latestDraft.projectCoordinator || '',
-          projectDurationMonths: latestDraft.durationMonths || '',
-          projectOutlayLakhs: latestDraft.outlayLakhs || '',
-        });
-
-        // Load form status - check which forms have content
-        const status = {};
-        if (latestDraft.forms) {
-          Object.keys(latestDraft.forms).forEach(formKey => {
-            const normalizedKey = formKey.toLowerCase();
-            if (latestDraft.forms[formKey] && Array.isArray(latestDraft.forms[formKey]) && latestDraft.forms[formKey].length > 0) {
-              status[normalizedKey] = true;
-            }
-          });
-        }
-        setFormStatus(status);
-
-        info('Draft loaded successfully');
-      }
-    } catch (error) {
-      console.error('Error loading draft:', error);
-    }
-  };
 
   // Validate proposal information
   const validateProposalInfo = () => {
@@ -206,26 +100,18 @@ function CreateNewProposalContent() {
 
     if (!proposalInfo.principalImplementingAgency || proposalInfo.principalImplementingAgency.trim().length === 0) {
       errors.principalImplementingAgency = 'Principal Implementing Agency is required';
-    } else if (proposalInfo.principalImplementingAgency.length > 100) {
-      errors.principalImplementingAgency = 'Agency name must be 100 characters or less';
     }
 
     if (!proposalInfo.subImplementingAgency || proposalInfo.subImplementingAgency.trim().length === 0) {
       errors.subImplementingAgency = 'Sub Implementing Agency is required';
-    } else if (proposalInfo.subImplementingAgency.length > 100) {
-      errors.subImplementingAgency = 'Agency name must be 100 characters or less';
     }
 
     if (!proposalInfo.projectLeader || proposalInfo.projectLeader.trim().length === 0) {
       errors.projectLeader = 'Project Leader is required';
-    } else if (proposalInfo.projectLeader.length > 100) {
-      errors.projectLeader = 'Name must be 100 characters or less';
     }
 
     if (!proposalInfo.projectCoordinator || proposalInfo.projectCoordinator.trim().length === 0) {
       errors.projectCoordinator = 'Project Coordinator is required';
-    } else if (proposalInfo.projectCoordinator.length > 100) {
-      errors.projectCoordinator = 'Name must be 100 characters or less';
     }
 
     if (!proposalInfo.projectDurationMonths || proposalInfo.projectDurationMonths < 1) {
@@ -247,997 +133,285 @@ function CreateNewProposalContent() {
     }));
   };
 
-  // Auto-save draft to backend
-  const autoSaveDraft = async () => {
-    if (isAutoSaving) return;
+  // Handle initial document upload
+  const handleInitialDocumentUpload = (docType, docData) => {
+    setInitialDocuments((prev) => ({
+      ...prev,
+      [docType]: docData,
+    }));
+    success(`${docType === 'coveringLetter' ? 'Covering Letter' : 'CV'} uploaded successfully`);
+  };
+
+  // Handle initial document remove
+  const handleInitialDocumentRemove = (docType) => {
+    setInitialDocuments((prev) => ({
+      ...prev,
+      [docType]: null,
+    }));
+    info(`${docType === 'coveringLetter' ? 'Covering Letter' : 'CV'} removed`);
+  };
+
+  // Handle Form I content change
+  const handleFormIContentChange = (data) => {
+    setFormIContent(data);
+  };
+
+  // Handle Form I save (both auto and manual)
+  const handleFormISave = async (data, isAutoSave = false) => {
+    if (isAutoSave) {
+      setIsAutoSaving(true);
+    }
 
     try {
-      setIsAutoSaving(true);
-
-      const payload = {
-        title: proposalInfo.title,
-        fundingMethod: proposalInfo.fundingMethod,
-        principalAgency: proposalInfo.principalImplementingAgency,
-        subAgencies: proposalInfo.subImplementingAgency ? [proposalInfo.subImplementingAgency] : [],
-        projectLeader: proposalInfo.projectLeader,
-        projectCoordinator: proposalInfo.projectCoordinator,
-        durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
-        outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0
-      };
-
-      let response;
-      if (proposalId) {
-        // Update existing draft
-        response = await apiClient.put(`/api/proposals/${proposalId}`, payload);
-      } else {
-        // Create new draft
-        response = await apiClient.post('/api/proposals', payload);
-        if (response.data.data?.proposal?._id) {
-          setProposalId(response.data.data.proposal._id);
-        }
-      }
-
+      // Mock API call to save Form I
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       setLastSavedTime(new Date());
-    } catch (error) {
-      console.error('Error auto-saving draft:', error);
+      
+      if (!isAutoSave) {
+        success('Form I saved successfully');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      if (!isAutoSave) {
+        error('Failed to save Form I');
+      }
     } finally {
-      setIsAutoSaving(false);
+      if (isAutoSave) {
+        setIsAutoSaving(false);
+      }
     }
   };
 
-  // Handle auto-save from editor
-  const handleAutoSave = useCallback(async (editorFormData) => {
-    try {
-      console.log('handleAutoSave called with', editorFormData ? Object.keys(editorFormData).length : 0, 'forms');
-      setIsAutoSaving(true);
+  // Handle additional form upload
+  const handleAdditionalFormUpload = (formId, formData) => {
+    setAdditionalForms((prev) => ({
+      ...prev,
+      [formId]: formData,
+    }));
+    success(`${formId.toUpperCase()} uploaded successfully`);
+  };
 
-      // Prepare forms object with Plate.js content
-      const formsObject = {};
-      if (editorFormData) {
-        Object.keys(editorFormData).forEach(formKey => {
-          // Map formKey to backend form names (formI, formIA, formIX, formX, formXI, formXII)
-          const backendFormKey = formKey.replace('form', 'form').toUpperCase();
-          formsObject[backendFormKey] = editorFormData[formKey].content;
-        });
-      }
+  // Handle additional form remove
+  const handleAdditionalFormRemove = (formId) => {
+    setAdditionalForms((prev) => ({
+      ...prev,
+      [formId]: null,
+    }));
+    info(`${formId.toUpperCase()} removed`);
+  };
 
-      const payload = {
-        title: proposalInfo.title,
-        fundingMethod: proposalInfo.fundingMethod,
-        principalAgency: proposalInfo.principalImplementingAgency,
-        subAgencies: proposalInfo.subImplementingAgency ? [proposalInfo.subImplementingAgency] : [],
-        projectLeader: proposalInfo.projectLeader,
-        projectCoordinator: proposalInfo.projectCoordinator,
-        durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
-        outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0,
-        forms: formsObject
-      };
+  // Handle supporting document upload
+  const handleSupportingDocumentUpload = (docId, docData) => {
+    setSupportingDocuments((prev) => ({
+      ...prev,
+      [docId]: docData,
+    }));
+    success('Supporting document uploaded successfully');
+  };
 
-      console.log('Auto-save payload:', {
-        hasProposalId: !!proposalId,
-        formsCount: Object.keys(formsObject).length,
-        formKeys: Object.keys(formsObject)
-      });
+  // Handle supporting document remove
+  const handleSupportingDocumentRemove = (docId) => {
+    setSupportingDocuments((prev) => ({
+      ...prev,
+      [docId]: null,
+    }));
+    info('Supporting document removed');
+  };
 
-      let response;
-      let savedProposalId = proposalId;
+  // Validate all required fields before submission
+  const validateSubmission = () => {
+    const errors = [];
 
-      if (proposalId) {
-        // Update existing draft
-        response = await apiClient.put(`/api/proposals/${proposalId}`, payload);
-      } else {
-        // Create new draft
-        response = await apiClient.post('/api/proposals', payload);
-        savedProposalId = response.data.data?.proposal?._id;
-        if (savedProposalId) {
-          setProposalId(savedProposalId);
-        }
-      }
-
-      console.log('Draft saved successfully:', savedProposalId);
-        if (!proposalId && savedProposalId) {
-          setProposalId(savedProposalId);
-        }
-        setLastSavedTime(new Date());
-        return savedProposalId;
-      } catch (error) {
-      console.error('Error auto-saving draft:', error);
-      return proposalId;
-    } finally {
-      setIsAutoSaving(false);
+    // Check proposal info
+    if (Object.keys(validationErrors).length > 0) {
+      errors.push('Please complete all required fields in Proposal Information');
     }
-  }, [proposalId, proposalInfo, formStatus, signatures, FORM_CONFIGS]);
 
-  // Handle file upload for a form
-  const handleFileUpload = async (formId, event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    // Check initial documents
+    if (!initialDocuments.coveringLetter) {
+      errors.push('Covering Letter is required');
+    }
+    if (!initialDocuments.cv) {
+      errors.push('CV / Resume is required');
+    }
 
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowedTypes.includes(file.type)) {
-      error('Please upload a PDF or DOCX file');
+    // Check Form I content
+    if (!formIContent || !formIContent.formi || !formIContent.formi.content || formIContent.formi.content.length === 0) {
+      errors.push('Form I must be completed');
+    }
+
+    // Check mandatory additional forms
+    if (!additionalForms.formia) {
+      errors.push('Form IA (Endorsement Form) is required');
+    }
+    if (!additionalForms.formxi) {
+      errors.push('Form XI (Manpower Cost) is required');
+    }
+    if (!additionalForms.formxii) {
+      errors.push('Form XII (Travel Expenditure) is required');
+    }
+
+    // Check mandatory supporting documents
+    const mandatorySupportingDocs = [
+      'orgDetails',
+      'infrastructure',
+      'expertise',
+      'rdComponent',
+      'benefits',
+      'webSurvey',
+      'researchContent'
+    ];
+
+    mandatorySupportingDocs.forEach(docId => {
+      if (!supportingDocuments[docId]) {
+        errors.push(`Supporting document for ${docId} is required`);
+      }
+    });
+
+    return errors;
+  };
+
+  // Handle submit button click
+  const handleSubmitClick = () => {
+    const errors = validateSubmission();
+
+    if (errors.length > 0) {
+      // Create formatted error message with line breaks
+      const errorMessage = errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n');
+      error(errorMessage);
+      // Scroll to first error
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    try {
-      setUploadingForm(formId);
-      info('Uploading and extracting file...');
-
-      const token = localStorage.getItem('token');
-      if (!token) {
-        error('Please log in to upload files');
-        return;
-      }
-
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      
-      reader.onload = async () => {
-        try {
-          setExtractingForm(formId);
-          setExtractionProgress(50);
-
-          // Extract content from file via backend
-          const response = await apiClient.post('/api/upload/extract-form', {
-            file: reader.result,
-            formId,
-            fileName: file.name
-          });
-
-          if (response.data.success) {
-            setUploadedFiles((prev) => ({
-              ...prev,
-              [formId]: { name: file.name, extracted: true },
-            }));
-
-            // TODO: Load extracted content into editor
-            // This would require passing the content to the editor ref
-            
-            setExtractionProgress(100);
-            
-            // Mark form as complete
-            setFormStatus((prev) => ({
-              ...prev,
-              [formId]: true,
-            }));
-
-            success(`${FORM_CONFIGS.find(f => f.id === formId)?.label} content extracted successfully`);
-            
-            setTimeout(() => {
-              setUploadingForm(null);
-              setExtractingForm(null);
-              setExtractionProgress(0);
-              autoSaveDraft();
-            }, 500);
-          } else {
-            throw new Error(data.message || 'Extraction failed');
-          }
-        } catch (err) {
-          console.error('Error extracting file:', err);
-          error('Error extracting file content. Please try again.');
-          setUploadingForm(null);
-          setExtractingForm(null);
-          setExtractionProgress(0);
-        }
-      };
-
-      reader.onerror = () => {
-        error('Error reading file');
-        setUploadingForm(null);
-        setExtractingForm(null);
-        setExtractionProgress(0);
-      };
-    } catch (err) {
-      console.error('Error uploading file:', err);
-      error('Error uploading file. Please try again.');
-      setUploadingForm(null);
-      setExtractingForm(null);
-      setExtractionProgress(0);
-    }
+    // Show confirmation modal
+    setShowConfirmationModal(true);
   };
 
-  // Manual save draft (called from editor)
-  const handleManualSave = async (editorFormData) => {
-    if (isManuallySaving) return;
+  // Handle final submission after confirmation
+  const handleFinalSubmission = async () => {
+    setShowConfirmationModal(false);
 
     try {
-      setIsManuallySaving(true);
-
-      const token = localStorage.getItem('token');
-      if (!token) {
-        error('Please log in to save');
-        return;
-      }
-
-      const response = await apiClient.post('/api/proposals/draft', {
-        proposalId,
-        title: proposalInfo.title,
-        researchFundingMethod: proposalInfo.fundingMethod,
-        principalImplementingAgency: proposalInfo.principalImplementingAgency,
-        subImplementingAgency: proposalInfo.subImplementingAgency,
-        projectLeader: proposalInfo.projectLeader,
-        projectCoordinator: proposalInfo.projectCoordinator,
-        projectDuration: proposalInfo.projectDurationMonths,
-        projectOutlay: proposalInfo.projectOutlayLakhs,
-        forms: editorFormData ? Object.keys(editorFormData).map(formKey => ({
-          formKey,
-          formLabel: FORM_CONFIGS.find(f => f.id === formKey)?.label || formKey,
-          editorContent: editorFormData[formKey].content,
-          wordCount: editorFormData[formKey].wordCount,
-          characterCount: editorFormData[formKey].characterCount
-        })) : undefined,
-        signatures
-      });
-
-      if (response.data.success) {
-        if (!proposalId && response.data.data?.proposal?._id) {
-          setProposalId(response.data.data.proposal._id);
-        }
-        setLastSavedTime(new Date());
-        success('Draft saved successfully');
-      } else {
-        error(response.data.message || 'Failed to save draft');
-      }
-    } catch (err) {
-      console.error('Error saving draft:', err);
-      error('Failed to save draft');
-    } finally {
-      setIsManuallySaving(false);
-    }
-  };
-
-  // Remove uploaded form
-  const handleRemoveForm = async (formId) => {
-    try {
-      info('Removing form...');
-
-      // Mock: Delete from S3 (real API call would go here)
-      // const fileUrl = uploadedFiles[formId]?.url;
-      // if (fileUrl) {
-      //   await fetch('/api/upload/delete', {
-      //     method: 'DELETE',
-      //     body: JSON.stringify({ url: fileUrl }),
-      //   });
-      // }
-
-      // Clear uploaded file
-      setUploadedFiles((prev) => ({
-        ...prev,
-        [formId]: null,
-      }));
-
-      // Clear form status
-      setFormStatus((prev) => ({
-        ...prev,
-        [formId]: false,
-      }));
-
-      success(`${FORM_CONFIGS.find(f => f.id === formId)?.label} removed successfully`);
-      autoSaveDraft();
-    } catch (err) {
-      console.error('Error removing form:', err);
-      error('Error removing form. Please try again.');
-    }
-  };
-
-  // Handle form content change from editor
-  const handleFormContentChange = (formId, hasContent) => {
-    setFormStatus((prev) => ({
-      ...prev,
-      [formId]: hasContent,
-    }));
-  };
-
-  // Handle signature changes from editor
-  const handleSignatureChange = (signatureType, signatureData) => {
-    setSignatures((prev) => ({
-      ...prev,
-      [signatureType]: signatureData,
-    }));
-  };
-
-  // Handle seal changes from editor
-  const handleSealChange = (sealData) => {
-    setSignatures((prev) => ({
-      ...prev,
-      institutionSeal: sealData,
-    }));
-  };
-
-  // Upload all base64 images to S3 (mock implementation)
-  const uploadImagesToS3 = useCallback(async (editorContent) => {
-    try {
-      info('Uploading images to cloud storage...');
-
-      // Prepare images for upload (only base64 strings need upload)
-      const uploadedUrls = { ...signatures };
-      
-      for (const [key, value] of Object.entries(signatures)) {
-        if (value && typeof value === 'string' && value.startsWith('data:image')) {
-          // Convert base64 to Blob
-          const base64Data = value.split(',')[1];
-          const mimeType = value.match(/data:(.*?);base64/)[1];
-          const byteCharacters = atob(base64Data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: mimeType });
-          
-          // Create File object
-          const file = new File([blob], `${key}_${Date.now()}.png`, { type: mimeType });
-          
-          // Upload to backend
-          const formData = new FormData();
-          formData.append('image', file);
-          formData.append('folder', 'signatures');
-          
-          const response = await apiClient.post('/api/collaboration/upload/image', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            }
-          });
-          
-          if (response.data.success) {
-            uploadedUrls[key] = response.data.data.url;
-          }
-        }
-      }
-
-      success('Images uploaded successfully');
-      return uploadedUrls;
-    } catch (err) {
-      console.error('Error uploading images:', err);
-      error('Failed to upload images');
-      throw err;
-    }
-  }, [signatures, info, success, error]);
-
-  // Handle chat message
-  const handleSendMessage = (message) => {
-    // Add user message
-    const userMessage = {
-      type: 'user',
-      content: message,
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    };
-    setChatMessages((prev) => [...prev, userMessage]);
-
-    // Mock AI response
-    setTimeout(() => {
-      const aiResponse = {
-        type: 'ai',
-        content: 'I understand your question. Let me help you with that...\n\n[This is a mock response. Actual AI integration will be added later.]',
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      };
-      setChatMessages((prev) => [...prev, aiResponse]);
-    }, 1000);
-  };
-
-  // Mock: Submit proposal
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (submissionInProgressRef.current) return;
-    if (!isFormValid) return;
-
-    try {
-      submissionInProgressRef.current = true;
-      setIsSubmitting(true);
-      setSubmissionProgress(0);
-
-      const token = localStorage.getItem('token');
-      if (!token) {
-        error('Please log in to submit');
-        return;
-      }
-
-      setSubmissionStage('Validating proposal information...');
-      setSubmissionProgress(10);
-
-      // Step 0: Save as draft first if no proposalId exists
-      let currentProposalId = proposalId;
-      if (!currentProposalId) {
-        setSubmissionStage('Saving draft...');
-        setSubmissionProgress(15);
-        
-        const editorFormDataTemp = editorRef.current?.getFormData?.() || {};
-        currentProposalId = await handleAutoSave(editorFormDataTemp);
-        
-        if (!currentProposalId) {
-          throw new Error('Failed to create draft. Please try again.');
-        }
-      }
-
-      // Step 1: Upload all signature images to S3
-      setSubmissionStage('Uploading signature images...');
-      setSubmissionProgress(20);
-      const uploadedSignatures = await uploadImagesToS3();
-
-      // Step 2: Get editor form data
-      setSubmissionStage('Preparing form data...');
-      setSubmissionProgress(30);
-      const editorFormData = editorRef.current?.getFormData?.() || {};
-
-      // Step 3: Submit proposal with uploaded signatures
-      setSubmissionStage('Submitting proposal...');
-      setSubmissionProgress(50);
-
-      // Prepare submission payload with commitMessage
-      const submissionPayload = {
-        commitMessage: 'Initial submission'
-      };
-
-      console.log('Submission payload:', {
-        proposalId: currentProposalId,
-        commitMessage: submissionPayload.commitMessage
-      });
-
-      const response = await apiClient.post(`/api/proposals/${currentProposalId}/submit`, submissionPayload);
-
-      const data = response.data;
-
-      console.log('Submission response:', {
-        success: data.success,
-        message: data.message,
-        proposal: data.data?.proposal ? {
-          id: data.data.proposal._id,
-          status: data.data.proposal.status,
-          proposalCode: data.data.proposal.proposalCode
-        } : null
-      });
-
-      if (!data.success) {
-        console.error('Submission failed:', data.message);
-        throw new Error(data.message || 'Submission failed');
-      }
-
-      console.log('Proposal submitted successfully:', data.data.proposal);
-
-      setSubmissionStage('AI Evaluation in progress...');
-      setSubmissionProgress(65);
-
-      // Wait for AI evaluation (backend handles this automatically)
+      // Mock API call to submit proposal
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      setSubmissionStage('Finalizing submission...');
-      setSubmissionProgress(85);
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      setSubmissionProgress(100);
-      setSubmissionStage('Submission complete!');
-
-      const submittedProposalCode = data.data?.proposal?.proposalCode || 'Unknown';
-      setSubmittedProposalId(submittedProposalCode);
+      // Mock proposal ID
+      const mockProposalId = `PROP-${Date.now()}`;
+      setSubmittedProposalId(mockProposalId);
 
       // Show success modal
-      setTimeout(() => {
-        setShowSuccessModal(true);
-      }, 500);
-    } catch (error) {
-      console.error('Error submitting proposal:', error);
-      error(error.message || 'Error submitting proposal. Please try again.');
-      setIsSubmitting(false);
-      submissionInProgressRef.current = false;
+      setShowSuccessModal(true);
+    } catch (err) {
+      console.error('Submission error:', err);
+      error('Failed to submit proposal. Please try again.');
     }
   };
 
-  // Handle success modal close and redirect
-  const handleSuccessClose = () => {
+  // Handle success modal close
+  const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
     router.push('/dashboard');
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Toast Container */}
+    <div className="min-h-screen bg-black/5">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      
+
       {/* Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold">Create New Proposal</h1>
-              <p className="text-blue-100 mt-1">Fill in all required information and complete all 6 forms</p>
-            </div>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back to Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
+      <Header />
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Guidelines */}
+        <Guidelines />
 
-        {/* Guidelines & Templates Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border-l-4 border-orange-500">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-black mb-2">Guidelines & Templates</h2>
-              <p className="text-black mb-4">
-                Please read the guidelines carefully. All 6 forms are mandatory for submission.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href="/files/S&T-Guidelines-MoC.pdf"
-                  download
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all shadow-md"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download Guidelines (PDF)
-                </a>
-                <a
-                  href="/files/proposal-template.docx"
-                  download
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download Proposal Template (DOCX)
-                </a>
+        {/* Pre-submission Information */}
+        <PreSubmissionInfo />
+
+        {/* Proposal Information */}
+        <ProposalInformation
+          proposalInfo={proposalInfo}
+          validationErrors={validationErrors}
+          onChange={handleInfoChange}
+        />
+
+        {/* Initial Documents Upload */}
+        <InitialDocumentsUpload
+          documents={initialDocuments}
+          onDocumentUpload={handleInitialDocumentUpload}
+          onDocumentRemove={handleInitialDocumentRemove}
+        />
+
+        {/* Form I Editor with Lazy Loading */}
+        <Suspense fallback={
+          <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-black">Loading editor...</p>
               </div>
             </div>
           </div>
-        </div>
+        }>
+          <FormIEditor
+            editorContent={formIContent}
+            onContentChange={handleFormIContentChange}
+            onSave={handleFormISave}
+            lastSavedTime={lastSavedTime}
+            isAutoSaving={isAutoSaving}
+          />
+        </Suspense>
 
-        {/* Proposal Information Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-orange-200">
-          <h2 className="text-xl font-bold text-black mb-4 flex items-center gap-2">
-            <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Proposal Information
-            <span className="text-sm text-red-600 font-normal">(All fields required)</span>
-          </h2>
+        {/* Additional Forms Upload */}
+        <AdditionalFormsUpload
+          forms={additionalForms}
+          onFormUpload={handleAdditionalFormUpload}
+          onFormRemove={handleAdditionalFormRemove}
+        />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Project Title */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-semibold text-black mb-2">
-                Project Title <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="text"
-                value={proposalInfo.title}
-                onChange={(e) => handleInfoChange('title', e.target.value)}
-                maxLength={150}
-                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter project title (max 150 characters)"
-              />
-              <div className="flex justify-between mt-1">
-                <span className="text-sm text-red-600">{validationErrors.title || ''}</span>
-                <span className="text-sm text-black">{proposalInfo.title.length}/150</span>
-              </div>
-            </div>
-
-            {/* Funding Method */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Funding Method <span className="text-red-600">*</span>
-              </label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    value="S&T_OF_MOC"
-                    checked={proposalInfo.fundingMethod === 'S&T_OF_MOC'}
-                    onChange={(e) => handleInfoChange('fundingMethod', e.target.value)}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <span className="text-black">S&T of MoC</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    value="R&D_OF_CIL"
-                    checked={proposalInfo.fundingMethod === 'R&D_OF_CIL'}
-                    onChange={(e) => handleInfoChange('fundingMethod', e.target.value)}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <span className="text-black">R&D of CIL</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Principal Implementing Agency */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Principal Implementing Agency <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="text"
-                value={proposalInfo.principalImplementingAgency}
-                onChange={(e) => handleInfoChange('principalImplementingAgency', e.target.value)}
-                maxLength={100}
-                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter agency name"
-              />
-              {validationErrors.principalImplementingAgency && (
-                <span className="text-sm text-red-600">{validationErrors.principalImplementingAgency}</span>
-              )}
-            </div>
-
-            {/* Sub Implementing Agency */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Sub Implementing Agency <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="text"
-                value={proposalInfo.subImplementingAgency}
-                onChange={(e) => handleInfoChange('subImplementingAgency', e.target.value)}
-                maxLength={100}
-                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter agency name"
-              />
-              {validationErrors.subImplementingAgency && (
-                <span className="text-sm text-red-600">{validationErrors.subImplementingAgency}</span>
-              )}
-            </div>
-
-            {/* Project Leader */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Project Leader <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="text"
-                value={proposalInfo.projectLeader}
-                onChange={(e) => handleInfoChange('projectLeader', e.target.value)}
-                maxLength={100}
-                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter leader name"
-              />
-              {validationErrors.projectLeader && (
-                <span className="text-sm text-red-600">{validationErrors.projectLeader}</span>
-              )}
-            </div>
-
-            {/* Project Coordinator */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Project Coordinator <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="text"
-                value={proposalInfo.projectCoordinator}
-                onChange={(e) => handleInfoChange('projectCoordinator', e.target.value)}
-                maxLength={100}
-                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter coordinator name"
-              />
-              {validationErrors.projectCoordinator && (
-                <span className="text-sm text-red-600">{validationErrors.projectCoordinator}</span>
-              )}
-            </div>
-
-            {/* Project Duration */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Project Duration (Months) <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="number"
-                value={proposalInfo.projectDurationMonths}
-                onChange={(e) => handleInfoChange('projectDurationMonths', e.target.value)}
-                min="1"
-                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter duration in months"
-              />
-              {validationErrors.projectDurationMonths && (
-                <span className="text-sm text-red-600">{validationErrors.projectDurationMonths}</span>
-              )}
-            </div>
-
-            {/* Project Outlay */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Project Outlay (Lakhs) <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="number"
-                value={proposalInfo.projectOutlayLakhs}
-                onChange={(e) => handleInfoChange('projectOutlayLakhs', e.target.value)}
-                min="0.01"
-                step="0.01"
-                className="w-full px-4 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                placeholder="Enter outlay in lakhs"
-              />
-              {validationErrors.projectOutlayLakhs && (
-                <span className="text-sm text-red-600">{validationErrors.projectOutlayLakhs}</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Forms Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-orange-200">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-black flex items-center gap-2">
-              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Proposal Forms (All 6 Required)
-            </h2>
-          </div>
-
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-            <p className="text-black text-sm">
-              <strong>Note:</strong> You can upload any subset of forms (1-6) and their content will be loaded into the editor. 
-              You can then make minor corrections directly in the editor, or you can choose to fill all forms directly in the editor without uploading.
-            </p>
-          </div>
-
-          {/* Form Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-            {FORM_CONFIGS.map((form) => (
-              <div
-                key={form.id}
-                className={`border-2 rounded-xl p-4 transition-all ${
-                  formStatus[form.id]
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-orange-200 bg-white hover:border-orange-400'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-black">{form.label}</h3>
-                    <p className="text-sm text-black">{form.title}</p>
-                  </div>
-                  {formStatus[form.id] && (
-                    <svg className="w-6 h-6 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
-                </div>
-
-                {/* Download Templates */}
-                <div className="flex gap-2 mb-3">
-                  <a
-                    href={form.pdfFile}
-                    download
-                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3" />
-                    </svg>
-                    PDF
-                  </a>
-                  <a
-                    href={form.docxFile}
-                    download
-                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3" />
-                    </svg>
-                    DOCX
-                  </a>
-                </div>
-
-                {/* Upload Section */}
-                <div className="border-t border-orange-200 pt-3">
-                  {/* Extraction Progress */}
-                  {extractingForm === form.id && (
-                    <div className="mb-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-black">Extracting content...</span>
-                        <span className="text-xs text-black">{extractionProgress}%</span>
-                      </div>
-                      <div className="w-full bg-orange-100 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-orange-500 to-red-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${extractionProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {uploadedFiles[form.id] ? (
-                    <div className="space-y-2">
-                      <div className="text-sm text-black">
-                        <div className="flex items-center gap-2 mb-1">
-                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="font-semibold">Uploaded:</span>
-                        </div>
-                        <p className="text-xs text-black truncate">{uploadedFiles[form.id].name}</p>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveForm(form.id)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-100 text-red-700 text-sm rounded-lg hover:bg-red-200 transition-all font-semibold"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="block">
-                      <input
-                        type="file"
-                        accept=".pdf,.docx"
-                        onChange={(e) => handleFileUpload(form.id, e)}
-                        disabled={uploadingForm === form.id || extractingForm === form.id}
-                        className="hidden"
-                      />
-                      <div className="flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white text-sm rounded-lg hover:from-orange-600 hover:to-red-700 cursor-pointer transition-all disabled:opacity-50">
-                        {uploadingForm === form.id ? (
-                          <>
-                            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
-                            Upload Form
-                          </>
-                        )}
-                      </div>
-                    </label>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Editor Integration */}
-          <div className="border-t-2 border-orange-200 pt-6">
-            <h3 className="text-lg font-bold text-black mb-4">Form Editor</h3>
-            <AdvancedProposalEditor
-              ref={editorRef}
-              proposalId={null}
-              mode="create"
-              proposalTitle={proposalInfo.title || 'Untitled Proposal'}
-              showStats={false}
-              initialContent={editorInitialContent}
-              signatures={signatures}
-              onFormStatusChange={handleFormContentChange}
-              onSignatureChange={handleSignatureChange}
-              onSealChange={handleSealChange}
-              onManualSave={handleManualSave}
-              onAutoSave={handleAutoSave}
-              onContentChange={(content) => {
-                // Content changes handled by auto-save
-              }}
-            />
-          </div>
-        </div>
+        {/* Supporting Documents Upload */}
+        <SupportingDocumentsUpload
+          documents={supportingDocuments}
+          onDocumentUpload={handleSupportingDocumentUpload}
+          onDocumentRemove={handleSupportingDocumentRemove}
+        />
 
         {/* Submit Button */}
-        <div className="bg-white rounded-xl shadow-lg p-6 sticky bottom-4 border border-orange-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-black mb-1">
-                <strong>Form Status:</strong> {Object.values(formStatus).filter((s) => s).length} of 6 completed
-              </p>
-              {!isFormValid && (
-                <p className="text-sm text-red-600">
-                  Please complete all required fields and all 6 forms before submitting
-                </p>
-              )}
-            </div>
-            <button
-              onClick={handleSubmit}
-              disabled={!isFormValid || isSubmitting}
-              className={`px-8 py-3 rounded-lg font-bold text-white transition-all shadow-lg ${
-                isFormValid && !isSubmitting
-                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 cursor-pointer'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Submitting...
-                </span>
-              ) : (
-                'Submit Proposal'
-              )}
-            </button>
-          </div>
+        <div className="flex justify-end mb-8">
+          <button
+            onClick={handleSubmitClick}
+            className="px-8 py-3 bg-black text-white rounded-lg hover:bg-black/90 transition-colors font-semibold text-lg"
+          >
+            Submit Proposal
+          </button>
         </div>
       </div>
 
-      {/* AI Assistant Toggle Button */}
-      <button
-        onClick={() => setShowChatbot(!showChatbot)}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full shadow-2xl hover:from-orange-600 hover:to-red-700 transition-all flex items-center justify-center z-40"
-        title="AI Assistant - SAARTHI"
-      >
-        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-      </button>
-
-      {/* AI Chatbot */}
-      <Chatbot
-        showSaarthi={showChatbot}
-        setShowSaarthi={setShowChatbot}
-        context="create"
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmationModal}
+        onClose={() => setShowConfirmationModal(false)}
+        onConfirm={handleFinalSubmission}
+        proposalData={{
+          proposalInfo,
+          initialDocuments,
+          additionalForms,
+          supportingDocuments,
+          formIContent,
+        }}
       />
 
-      {/* Submission Progress Modal */}
-      {isSubmitting && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 border-2 border-orange-200">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-orange-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-black mb-2">Submitting Proposal</h3>
-              <p className="text-black mb-4">{submissionStage}</p>
-              <div className="w-full bg-orange-100 rounded-full h-3 mb-2">
-                <div
-                  className="bg-gradient-to-r from-orange-500 to-red-600 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${submissionProgress}%` }}
-                />
-              </div>
-              <p className="text-sm text-black">{submissionProgress}% Complete</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Submission Success Modal */}
+      <SubmissionSuccessModal
+        isOpen={showSuccessModal}
+        onClose={handleSuccessModalClose}
+        proposalId={submittedProposalId}
+      />
 
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 border-2 border-green-200">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-black mb-2">Proposal Submitted Successfully!</h3>
-              <p className="text-black mb-4">
-                Your proposal has been submitted and is now under AI evaluation.
-              </p>
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-black mb-1">
-                  <strong>Proposal ID:</strong>
-                </p>
-                <p className="text-lg font-bold text-orange-600">{submittedProposalId}</p>
-              </div>
-              <button
-                onClick={handleSuccessClose}
-                className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all font-semibold shadow-lg"
-              >
-                Go to Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Saarthi Chatbot */}
+      <Chatbot showSaarthi={showChatbot} setShowSaarthi={setShowChatbot} />
     </div>
   );
 }
