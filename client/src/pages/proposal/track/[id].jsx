@@ -324,7 +324,7 @@ function TrackProposalContent() {
       pdf.setFontSize(10);
       pdf.setTextColor(51, 51, 51);
       pdf.setFont(undefined, 'normal');
-      pdf.text(`Proposal ID: ${proposal.id}`, pageWidth / 2, yPosition, { align: 'center' });
+      pdf.text(`Proposal ID: ${proposal.proposalCode || proposal._id}`, pageWidth / 2, yPosition, { align: 'center' });
       
       yPosition += 5;
       pdf.text(`Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, pageWidth / 2, yPosition, { align: 'center' });
@@ -351,7 +351,7 @@ function TrackProposalContent() {
       
       // Key information in professional format
       const infoItems = [
-        [`Proposal ID:`, proposal.id],
+        [`Proposal ID:`, proposal.proposalCode || proposal._id],
         [`Title:`, proposal.title],
         [`Principal Investigator:`, proposal.researcher],
         [`Institution:`, proposal.institution],
@@ -579,7 +579,7 @@ Key AI Features:
       }
 
       // Save the PDF
-      const fileName = `PRISM_Proposal_Report_${proposal.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `PRISM_Proposal_Report_${proposal.proposalCode || proposal._id}_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
       
     } catch (error) {
@@ -662,7 +662,7 @@ Key AI Features:
                 <div className="flex items-start justify-between mb-6">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">{proposal.id}</span>
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">{proposal.proposalCode || proposal._id}</span>
                       <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                         proposal.status === 'approved' ? 'bg-green-100 text-green-700' :
                         proposal.status === 'under_review' ? 'bg-orange-100 text-orange-700' :

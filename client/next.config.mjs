@@ -27,20 +27,27 @@ const nextConfig = {
     formats: ['image/webp', 'image/avif'],
   },
   // Transpile packages that need it
-  transpilePackages: ['@udecode/plate-math', 'katex', '@platejs/math'],
+  transpilePackages: ['@udecode/plate-math', 'katex', '@platejs/math', 'react-tweet'],
   
-  // Webpack configuration to ignore KaTeX CSS on server-side only
+  // Webpack configuration to ignore CSS on server-side
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // On server-side, replace KaTeX CSS import with empty module
+      // On server-side, replace CSS imports with empty module
       config.resolve.alias = {
         ...config.resolve.alias,
         'katex/dist/katex.min.css': false,
       };
       
-      // Add null-loader specifically for katex CSS files
+      // Add null-loader for CSS files from problematic packages on server-side
       config.module.rules.push({
         test: /katex\.min\.css$/,
+        use: 'null-loader',
+      });
+      
+      // Handle react-tweet CSS files on server-side
+      config.module.rules.push({
+        test: /\.module\.css$/,
+        include: /react-tweet/,
         use: 'null-loader',
       });
     }

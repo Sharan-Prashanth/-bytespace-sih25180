@@ -134,161 +134,109 @@ function SSRCDashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 min-h-[280px]">
-        {/* Animated geometric patterns */}
-        <div className="absolute inset-0">
-          <div className="absolute top-6 left-10 w-12 h-12 border border-blue-400/30 rounded-full animate-pulse"></div>
-          <div className="absolute top-20 right-20 w-10 h-10 border border-indigo-400/20 rounded-lg rotate-45 animate-spin-slow"></div>
-          <div className="absolute bottom-12 left-32 w-8 h-8 bg-blue-500/10 rounded-full animate-bounce"></div>
-          <div className="absolute top-12 right-40 w-4 h-4 bg-indigo-400/20 rounded-full animate-ping"></div>
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden text-slate-900">
+      {/* Header Section - Compact */}
+      <div className="shrink-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-20 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">SSRC Final Review</h1>
+            <p className="text-xs text-slate-500">Welcome, {user?.fullName}</p>
+          </div>
         </div>
         
-        {/* Overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
-        
-        {/* Header Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-10">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center">
-              <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl">
-                  <Shield className="w-8 h-8 text-white" />
-                </div>
-              </div>
-              
-              <div className="ml-6">
-                <h1 className="text-white text-4xl font-black tracking-tight">
-                  SSRC Final Review
-                </h1>
-                <div className="flex items-center space-x-3 mt-2">
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse mr-3"></div>
-                    <span className="text-blue-100 font-semibold text-lg">Welcome, {user?.fullName}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <button
-              onClick={logout}
-              className="px-6 py-3 bg-white/20 hover:bg-white/30 rounded-xl font-semibold transition-all duration-300 text-white"
-            >
-              Logout
-            </button>
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-2 animate-pulse"></div>
+            <span className="text-xs font-medium text-slate-600">System Active</span>
           </div>
-          
-          {/* PRISM Banner */}
-          <div className="bg-orange-600 backdrop-blur-md rounded-2xl p-4 border border-orange-300/40 shadow-2xl">
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0">
-                <div className="w-10 h-10 bg-gradient-to-br from-white to-orange-50 rounded-lg flex items-center justify-center shadow-lg overflow-hidden border border-orange-200/50">
-                  <img 
-                    src="/images/prism brand logo.png" 
-                    alt="PRISM Logo" 
-                    className="w-10 h-10 object-contain"
-                  />
-                </div>
-              </div>
-              <div>
-                <h2 className="text-white font-bold text-xl mb-1 flex items-center">
-                  <span className="text-white drop-shadow-md tracking-wide">PRISM</span>
-                  <div className="ml-3 px-2 py-0.5 bg-gradient-to-r from-blue-400/30 to-purple-400/30 rounded-full flex items-center justify-center border border-blue-300/40 backdrop-blur-sm">
-                    <div className="w-1.5 h-1.5 bg-blue-300 rounded-full mr-1.5 animate-pulse"></div>
-                    <span className="text-white text-xs font-semibold drop-shadow-sm">SSRC PORTAL</span>
-                  </div>
-                </h2>
-                <p className="text-orange-50 text-sm leading-relaxed font-medium opacity-95 drop-shadow-sm">
-                  Proposal Review & Innovation Support Mechanism - SSRC Final Review Dashboard
-                </p>
-              </div>
-            </div>
-          </div>
+          <button
+            onClick={logout}
+            className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-600 text-sm font-medium rounded-lg transition-colors border border-slate-200 shadow-sm"
+          >
+            Logout
+          </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      {/* Main Content - Scrollable */}
+      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         {/* Statistics Dashboard */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '0.1s' }}>
-          <h2 className="text-2xl font-bold text-black mb-6 flex items-center">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-              <BarChart3 className="w-6 h-6 text-orange-600" />
-            </div>
-            Decision Analytics
-          </h2>
-          
-          <div className="grid md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             {/* Received from TSSRC Card */}
-            <div className="group relative overflow-hidden border border-orange-200 rounded-lg p-6 bg-orange-50 hover:shadow-lg transition-all duration-300">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-orange-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-              <div className="relative text-center">
-                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-8 h-8 text-orange-600" />
+            <div className="group relative overflow-hidden border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Received</p>
+                  <div className="text-3xl font-black text-slate-900 mt-1">
+                    <AnimatedCounter targetValue={stats.receivedFromTSSRC} duration={2000} />
+                  </div>
                 </div>
-                <div className="text-4xl font-black text-black mb-2">
-                  <AnimatedCounter targetValue={stats.receivedFromTSSRC} duration={2000} />
+                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+                  <FileText className="w-5 h-5" />
                 </div>
-                <h3 className="text-sm font-bold text-black mb-3">Received from TSSRC</h3>
               </div>
             </div>
 
             {/* Under Review Card */}
-            <div className="group relative overflow-hidden border border-orange-200 rounded-lg p-6 bg-orange-50 hover:shadow-lg transition-all duration-300">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-orange-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-              <div className="relative text-center">
-                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Clock className="w-8 h-8 text-orange-600" />
+            <div className="group relative overflow-hidden border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Under Review</p>
+                  <div className="text-3xl font-black text-slate-900 mt-1">
+                    <AnimatedCounter targetValue={stats.underReview} duration={2200} />
+                  </div>
                 </div>
-                <div className="text-4xl font-black text-black mb-2">
-                  <AnimatedCounter targetValue={stats.underReview} duration={2200} />
+                <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600">
+                  <Clock className="w-5 h-5" />
                 </div>
-                <h3 className="text-sm font-bold text-black mb-3">Under Review</h3>
               </div>
             </div>
 
             {/* Approved Card */}
-            <div className="group relative overflow-hidden border border-orange-200 rounded-lg p-6 bg-orange-50 hover:shadow-lg transition-all duration-300">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-orange-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-              <div className="relative text-center">
-                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-8 h-8 text-orange-600" />
+            <div className="group relative overflow-hidden border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Approved</p>
+                  <div className="text-3xl font-black text-slate-900 mt-1">
+                    <AnimatedCounter targetValue={stats.approved} duration={2400} />
+                  </div>
                 </div>
-                <div className="text-4xl font-black text-black mb-2">
-                  <AnimatedCounter targetValue={stats.approved} duration={2400} />
+                <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
+                  <CheckCircle className="w-5 h-5" />
                 </div>
-                <h3 className="text-sm font-bold text-black mb-3">Approved</h3>
               </div>
             </div>
 
             {/* Rejected Card */}
-            <div className="group relative overflow-hidden border border-orange-200 rounded-lg p-6 bg-orange-50 hover:shadow-lg transition-all duration-300">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-orange-600/10 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-500"></div>
-              <div className="relative text-center">
-                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <XCircle className="w-8 h-8 text-orange-600" />
+            <div className="group relative overflow-hidden border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Rejected</p>
+                  <div className="text-3xl font-black text-slate-900 mt-1">
+                    <AnimatedCounter targetValue={stats.rejected} duration={2600} />
+                  </div>
                 </div>
-                <div className="text-4xl font-black text-black mb-2">
-                  <AnimatedCounter targetValue={stats.rejected} duration={2600} />
+                <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center text-red-600">
+                  <XCircle className="w-5 h-5" />
                 </div>
-                <h3 className="text-sm font-bold text-black mb-3">Rejected</h3>
               </div>
             </div>
-          </div>
         </div>
 
         {/* Tabs & Filters */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-black mb-1 flex items-center">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                  <SearchIcon className="w-6 h-6 text-orange-600" />
+              <h2 className="text-xl font-bold text-slate-900 mb-1 flex items-center">
+                <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center mr-3">
+                  <SearchIcon className="w-4 h-4 text-blue-600" />
                 </div>
                 Proposal Queue
               </h2>
-              <p className="text-gray-500 text-sm">Final decision on proposals from TSSRC</p>
+              <p className="text-slate-500 text-xs">Final decision on proposals from TSSRC</p>
             </div>
           </div>
 
@@ -296,30 +244,30 @@ function SSRCDashboardContent() {
           <div className="flex flex-wrap gap-2 mb-6">
             <button
               onClick={() => setActiveTab('incoming')}
-              className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                 activeTab === 'incoming'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-black hover:bg-gray-200'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Incoming from TSSRC ({stats.receivedFromTSSRC})
+              Incoming ({stats.receivedFromTSSRC})
             </button>
             <button
               onClick={() => setActiveTab('deliberation')}
-              className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                 activeTab === 'deliberation'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-black hover:bg-gray-200'
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Under Deliberation ({stats.underReview})
             </button>
             <button
               onClick={() => setActiveTab('decided')}
-              className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                 activeTab === 'decided'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-black hover:bg-gray-200'
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Decided ({stats.approved + stats.rejected})
@@ -335,7 +283,7 @@ function SSRCDashboardContent() {
                 placeholder="Search by ID, Title, or PI..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder-slate-400 text-sm"
               />
             </div>
 
@@ -344,7 +292,7 @@ function SSRCDashboardContent() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 text-sm appearance-none cursor-pointer"
               >
                 <option value="all">All Status</option>
                 <option value="incoming_tssrc">Incoming</option>
@@ -359,7 +307,7 @@ function SSRCDashboardContent() {
               <select
                 value={timePeriodFilter}
                 onChange={(e) => setTimePeriodFilter(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 text-sm appearance-none cursor-pointer"
               >
                 <option value="all">All Time</option>
                 <option value="7days">Last 7 days</option>
@@ -371,86 +319,85 @@ function SSRCDashboardContent() {
         </div>
 
         {/* Proposals List */}
-        <div className="bg-white rounded-xl shadow-lg border border-orange-200 overflow-hidden animate-slideInUp" style={{ animationDelay: '0.3s' }}>
-          <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-6 border-b border-orange-200">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-slate-50/50 p-4 border-b border-slate-200">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-bold text-black mb-1">Proposals</h2>
-                <p className="text-gray-500 text-sm">
+                <h2 className="text-lg font-bold text-slate-900 mb-0.5">Proposals</h2>
+                <p className="text-slate-500 text-xs">
                   Showing {filteredProposals.length} proposals
                 </p>
               </div>
-              <div className="text-xs text-gray-500 text-right">
+              <div className="text-[10px] text-slate-400 text-right uppercase tracking-wider font-medium">
                 <div>Government of India</div>
                 <div>Ministry of Coal</div>
               </div>
             </div>
           </div>
           
-          <div className="p-6">
+          <div className="p-4">
             {filteredProposals.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-orange-200">
-                      <th className="text-left py-4 px-4 text-sm font-bold text-black">Proposal ID</th>
-                      <th className="text-left py-4 px-4 text-sm font-bold text-black">Title</th>
-                      <th className="text-left py-4 px-4 text-sm font-bold text-black">PI</th>
-                      <th className="text-left py-4 px-4 text-sm font-bold text-black">TSSRC Summary</th>
-                      <th className="text-left py-4 px-4 text-sm font-bold text-black">CMPDI Summary</th>
-                      <th className="text-left py-4 px-4 text-sm font-bold text-black">Status</th>
-                      <th className="text-left py-4 px-4 text-sm font-bold text-black">Actions</th>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Proposal ID</th>
+                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Title</th>
+                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">PI</th>
+                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">TSSRC Summary</th>
+                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">CMPDI Summary</th>
+                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredProposals.map((proposal, index) => (
                       <tr 
-                        key={proposal.id} 
-                        className="border-b border-orange-100 hover:bg-orange-50 transition-colors duration-200"
-                        style={{ animationDelay: `${index * 0.05}s` }}
+                        key={proposal._id} 
+                        className="border-b border-slate-100 hover:bg-slate-50 transition-colors duration-200"
                       >
-                        <td className="py-4 px-4">
-                          <span className="text-sm font-semibold text-black">{proposal.id}</span>
+                        <td className="py-3 px-4">
+                          <span className="text-sm font-medium text-slate-700">{proposal.proposalCode || proposal._id}</span>
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-3 px-4">
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium text-black">{proposal.title}</span>
-                            <span className="text-xs text-gray-500">{proposal.organization}</span>
+                            <span className="text-sm font-medium text-slate-900 line-clamp-1">{proposal.title}</span>
+                            <span className="text-xs text-slate-500">{proposal.organization}</span>
                           </div>
                         </td>
-                        <td className="py-4 px-4">
-                          <span className="text-sm text-black">{proposal.principalInvestigator}</span>
+                        <td className="py-3 px-4">
+                          <span className="text-sm text-slate-600">{proposal.principalInvestigator}</span>
                         </td>
-                        <td className="py-4 px-4">
-                          <span className="text-xs text-black max-w-xs line-clamp-2">{proposal.tssrcSummary}</span>
+                        <td className="py-3 px-4">
+                          <span className="text-xs text-slate-500 max-w-xs line-clamp-2">{proposal.tssrcSummary}</span>
                         </td>
-                        <td className="py-4 px-4">
-                          <span className="text-xs text-black max-w-xs line-clamp-2">{proposal.cmpdiSummary}</span>
+                        <td className="py-3 px-4">
+                          <span className="text-xs text-slate-500 max-w-xs line-clamp-2">{proposal.cmpdiSummary}</span>
                         </td>
-                        <td className="py-4 px-4">
-                          <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                            proposal.status === 'approved' ? 'bg-green-100 text-green-700' :
-                            proposal.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                            'bg-orange-100 text-orange-700'
+                        <td className="py-3 px-4">
+                          <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide ${
+                            proposal.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                            proposal.status === 'rejected' ? 'bg-red-100 text-red-700 border border-red-200' :
+                            'bg-blue-100 text-blue-700 border border-blue-200'
                           }`}>
-                            {statusLabels[proposal.status]}
+                            {statusLabels[proposal.status] || proposal.status}
                           </span>
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-3 px-4">
                           <div className="flex gap-2">
-                            <Link href={`/proposal/decision-chain/${proposal.id}`}>
-                              <button className="p-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors" title="View Full Decision Chain">
-                                <TrendingUp className="w-4 h-4" />
+                            <Link href={`/proposal/decision-chain/${proposal._id}`}>
+                              <button className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200" title="View Full Decision Chain">
+                                <TrendingUp className="w-3.5 h-3.5" />
                               </button>
                             </Link>
-                            <Link href={`/proposal/view/${proposal.id}`}>
-                              <button className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors" title="View Documents">
-                                <Eye className="w-4 h-4" />
+                            <Link href={`/proposal/view/${proposal._id}`}>
+                              <button className="p-1.5 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200" title="View Documents">
+                                <Eye className="w-3.5 h-3.5" />
                               </button>
                             </Link>
                             {(proposal.status === 'incoming_tssrc' || proposal.status === 'under_deliberation') && (
-                              <button className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors" title="Record Final Decision">
-                                <CheckCircle className="w-4 h-4" />
+                              <button className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors border border-emerald-200" title="Record Final Decision">
+                                <CheckCircle className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
@@ -461,12 +408,12 @@ function SSRCDashboardContent() {
                 </table>
               </div>
             ) : (
-              <div className="text-center py-12 bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl border border-slate-200">
-                <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-slate-100 to-blue-100 rounded-full flex items-center justify-center border border-slate-200">
-                  <FileText className="w-10 h-10 text-gray-400" />
+              <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
+                <div className="w-16 h-16 mx-auto mb-4 bg-white rounded-full flex items-center justify-center shadow-sm">
+                  <FileText className="w-8 h-8 text-slate-400" />
                 </div>
-                <h3 className="text-xl font-bold text-black mb-3">No Proposals Found</h3>
-                <p className="text-gray-500 mb-6 text-sm max-w-md mx-auto leading-relaxed">
+                <h3 className="text-lg font-bold text-slate-700 mb-2">No Proposals Found</h3>
+                <p className="text-slate-500 text-sm max-w-md mx-auto">
                   No proposals match your search criteria. Try adjusting your filters.
                 </p>
               </div>

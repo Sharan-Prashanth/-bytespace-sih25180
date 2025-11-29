@@ -7,6 +7,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute';
 import Chatbot from '../../../components/Saarthi';
 import jsPDF from 'jspdf';
 import { createPortal } from 'react-dom';
+import { Moon, Sun } from 'lucide-react';
 import apiClient from '../../../utils/api';
 import {
   createReport,
@@ -83,6 +84,17 @@ function ReviewProposalContent() {
   const [showChatbot, setShowChatbot] = useState(true);
   const [showClarificationModal, setShowClarificationModal] = useState(false);
   const [clarificationMessage, setClarificationMessage] = useState('');
+  const [theme, setTheme] = useState('dark');
+
+  const isDark = theme === 'dark';
+
+  // Theme classes
+  const bgClass = isDark ? 'bg-slate-950' : 'bg-white';
+  const cardBgClass = isDark ? 'bg-slate-900/50 border-slate-800 backdrop-blur-sm' : 'bg-white border-orange-200 shadow-lg';
+  const textClass = isDark ? 'text-white' : 'text-black';
+  const subTextClass = isDark ? 'text-slate-400' : 'text-gray-500';
+  const borderClass = isDark ? 'border-slate-800' : 'border-orange-200';
+  const inputBgClass = isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-black';
 
   useEffect(() => {
     const loadProposal = async () => {
@@ -221,7 +233,7 @@ function ReviewProposalContent() {
       pdf.setTextColor(51, 51, 51);
       
       const reviewInfo = [
-        [`Proposal ID:`, proposal.id],
+        [`Proposal ID:`, proposal.proposalCode || proposal._id],
         [`Title:`, proposal.title],
         [`Principal Investigator:`, proposal.researcher],
         [`Institution:`, proposal.institution],
@@ -292,7 +304,7 @@ function ReviewProposalContent() {
       }
 
       // Save PDF
-      const fileName = `PRISM_Review_Report_${proposal.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `PRISM_Review_Report_${proposal.proposalCode || proposal._id}_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
       
     } catch (error) {
@@ -388,10 +400,10 @@ function ReviewProposalContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600 mx-auto"></div>
-          <p className="text-black text-xl mt-4">Loading proposal for review...</p>
+          <p className={`${textClass} text-xl mt-4`}>Loading proposal for review...</p>
         </div>
       </div>
     );
@@ -399,8 +411,8 @@ function ReviewProposalContent() {
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-black text-xl">Proposal not found</div>
+      <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
+        <div className={`${textClass} text-xl`}>Proposal not found</div>
       </div>
     );
   }
@@ -408,7 +420,7 @@ function ReviewProposalContent() {
   return (
     <>
       <style jsx>{reviewAnimationStyles}</style>
-      <div className="min-h-screen bg-white">
+      <div className={`min-h-screen ${bgClass}`}>
         {/* Header Section - Matching other pages */}
         <div className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 min-h-[280px]" style={{ overflow: 'visible' }}>
           {/* Animated geometric patterns */}
@@ -424,40 +436,50 @@ function ReviewProposalContent() {
           {/* Header Content */}
           <div className="relative z-10 max-w-7xl mx-auto px-6 py-10" style={{ overflow: 'visible' }}>
             <div className="group animate-fadeIn">
-              <div className="flex items-center mb-5">
-                <div className="relative">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl group-hover:shadow-orange-500/25 transition-all duration-500 group-hover:scale-110">
-                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                  </div>
-                </div>
-                
-                <div className="ml-6">
-                  <div className="flex items-center mb-2">
-                    <h1 className="text-white text-4xl font-black tracking-tight bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent animate-slideInUp">
-                      Review Proposal
-                    </h1>
-                  </div>
-                  <div className="flex items-center space-x-3 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse mr-3"></div>
-                      <span className="text-blue-100 font-semibold text-lg">Expert Review Portal</span>
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center">
+                  <div className="relative">
+                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl group-hover:shadow-orange-500/25 transition-all duration-500 group-hover:scale-110">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
                     </div>
-                    <div className="h-4 w-px bg-blue-300/50"></div>
-                    <span className="text-blue-200 font-medium text-sm">Proposal Assessment System</span>
                   </div>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-blue-200 animate-slideInUp" style={{ animationDelay: '0.4s' }}>
-                    <span>Proposal ID: {proposal.id}</span>
-                    <span>•</span>
-                    <span>Reviewer: {user?.name || 'Expert Reviewer'}</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      {proposal.currentPhase}
-                    </span>
+                  
+                  <div className="ml-6">
+                    <div className="flex items-center mb-2">
+                      <h1 className="text-white text-4xl font-black tracking-tight bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent animate-slideInUp">
+                        Review Proposal
+                      </h1>
+                    </div>
+                    <div className="flex items-center space-x-3 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse mr-3"></div>
+                        <span className="text-blue-100 font-semibold text-lg">Expert Review Portal</span>
+                      </div>
+                      <div className="h-4 w-px bg-blue-300/50"></div>
+                      <span className="text-blue-200 font-medium text-sm">Proposal Assessment System</span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-sm text-blue-200 animate-slideInUp" style={{ animationDelay: '0.4s' }}>
+                      <span>Proposal ID: {proposal.proposalCode || proposal._id}</span>
+                      <span>•</span>
+                      <span>Reviewer: {user?.name || 'Expert Reviewer'}</span>
+                      <span>•</span>
+                      <span className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        {proposal.currentPhase}
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Theme Toggle */}
+                <button 
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="p-3 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-all"
+                >
+                  {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                </button>
               </div>
               
               {/* PRISM Banner */}
@@ -499,10 +521,10 @@ function ReviewProposalContent() {
           <div className="flex justify-between items-center mb-6">
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 text-green-800 border border-green-300 transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer"
+              className={`px-5 py-2.5 rounded-xl ${isDark ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 text-green-800 border-green-300'} border transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer`}
             >
-              <div className="w-5 h-5 bg-green-200 rounded-full flex items-center justify-center">
-                <svg className="w-3 h-3 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className={`w-5 h-5 ${isDark ? 'bg-slate-700' : 'bg-green-200'} rounded-full flex items-center justify-center`}>
+                <svg className={`w-3 h-3 ${isDark ? 'text-slate-300' : 'text-green-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
               </div>
@@ -512,16 +534,16 @@ function ReviewProposalContent() {
             <button 
               onClick={handleExportReview}
               disabled={isExporting}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-800 border border-blue-300 transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className={`px-5 py-2.5 rounded-xl ${isDark ? 'bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50' : 'bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-800 border-blue-300'} border transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
             >
-              <div className="w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center">
+              <div className={`w-5 h-5 ${isDark ? 'bg-blue-800/50' : 'bg-blue-200'} rounded-full flex items-center justify-center`}>
                 {isExporting ? (
                   <svg className="w-3 h-3 text-blue-700 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 ) : (
-                  <svg className="w-3 h-3 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-3 h-3 ${isDark ? 'text-blue-300' : 'text-blue-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 )}
@@ -535,9 +557,9 @@ function ReviewProposalContent() {
             <div className="lg:col-span-2 space-y-6">
               
               {/* Proposal Overview */}
-              <div className="bg-white rounded-xl shadow-lg p-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
-                <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+              <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
+                <h2 className={`text-2xl font-bold ${textClass} mb-4 flex items-center`}>
+                  <div className={`w-10 h-10 ${isDark ? 'bg-orange-500/20' : 'bg-orange-100'} rounded-lg flex items-center justify-center mr-3`}>
                     <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -547,45 +569,45 @@ function ReviewProposalContent() {
                 
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-xl font-bold text-black mb-2">{proposal.title}</h3>
+                    <h3 className={`text-xl font-bold ${textClass} mb-2`}>{proposal.title}</h3>
                     <div className="grid md:grid-cols-3 gap-4 mb-4">
-                      <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                      <div className={`${isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-200'} rounded-lg p-4 border`}>
                         <div className="text-orange-600 text-sm font-semibold mb-1">Principal Investigator</div>
-                        <div className="text-black font-semibold text-sm">{proposal.researcher}</div>
+                        <div className={`${textClass} font-semibold text-sm`}>{proposal.researcher}</div>
                       </div>
-                      <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <div className={`${isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'} rounded-lg p-4 border`}>
                         <div className="text-blue-600 text-sm font-semibold mb-1">Institution</div>
-                        <div className="text-black font-semibold text-sm">{proposal.institution}</div>
+                        <div className={`${textClass} font-semibold text-sm`}>{proposal.institution}</div>
                       </div>
-                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <div className={`${isDark ? 'bg-green-500/10 border-green-500/20' : 'bg-green-50 border-green-200'} rounded-lg p-4 border`}>
                         <div className="text-green-600 text-sm font-semibold mb-1">Domain</div>
-                        <div className="text-black font-semibold text-sm">{proposal.domain}</div>
+                        <div className={`${textClass} font-semibold text-sm`}>{proposal.domain}</div>
                       </div>
                     </div>
                   </div>
                   
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <div className="text-gray-500 text-sm font-semibold mb-1">Budget</div>
-                      <div className="text-black font-bold text-lg">₹{proposal.budget.toLocaleString()}</div>
+                    <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-orange-50/50 border-orange-100'} rounded-lg p-4 border`}>
+                      <div className={`${subTextClass} text-sm font-semibold mb-1`}>Budget</div>
+                      <div className={`${textClass} font-bold text-lg`}>₹{proposal.budget.toLocaleString()}</div>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <div className="text-gray-500 text-sm font-semibold mb-1">Submitted Date</div>
-                      <div className="text-black font-bold text-lg">{new Date(proposal.submittedDate).toLocaleDateString()}</div>
+                    <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-orange-50/50 border-orange-100'} rounded-lg p-4 border`}>
+                      <div className={`${subTextClass} text-sm font-semibold mb-1`}>Submitted Date</div>
+                      <div className={`${textClass} font-bold text-lg`}>{new Date(proposal.submittedDate).toLocaleDateString()}</div>
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="text-lg font-bold text-black mb-2">Project Description</h4>
-                    <p className="text-gray-500 leading-relaxed">{proposal.description}</p>
+                    <h4 className={`text-lg font-bold ${textClass} mb-2`}>Project Description</h4>
+                    <p className={`${subTextClass} leading-relaxed`}>{proposal.description}</p>
                   </div>
                 </div>
               </div>
 
               {/* Supporting Documents */}
-              <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-200 animate-slideInUp" style={{ animationDelay: '0.4s' }}>
-                <h3 className="text-xl font-bold text-black mb-6 flex items-center">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+              <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.4s' }}>
+                <h3 className={`text-xl font-bold ${textClass} mb-6 flex items-center`}>
+                  <div className={`w-10 h-10 ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'} rounded-lg flex items-center justify-center mr-3`}>
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -595,25 +617,25 @@ function ReviewProposalContent() {
                 
                 <div className="grid md:grid-cols-2 gap-4">
                   {proposal.documents.map((doc, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                    <div key={index} className={`flex items-center justify-between p-4 ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-orange-50/50 border-orange-100 hover:bg-orange-50'} rounded-lg border transition-colors`}>
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          doc.type === 'proposal' ? 'bg-orange-100 text-orange-600' :
-                          doc.type === 'technical' ? 'bg-blue-100 text-blue-600' :
-                          doc.type === 'financial' ? 'bg-green-100 text-green-600' :
-                          doc.type === 'research' ? 'bg-purple-100 text-purple-600' :
-                          'bg-gray-100 text-gray-600'
+                          doc.type === 'proposal' ? (isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600') :
+                          doc.type === 'technical' ? (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600') :
+                          doc.type === 'financial' ? (isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600') :
+                          doc.type === 'research' ? (isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600') :
+                          (isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-600')
                         }`}>
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                         </div>
                         <div>
-                          <div className="text-black font-medium text-sm">{doc.name}</div>
-                          <div className="text-gray-500 text-xs">{doc.size} • {doc.uploadDate}</div>
+                          <div className={`${textClass} font-medium text-sm`}>{doc.name}</div>
+                          <div className={`${subTextClass} text-xs`}>{doc.size} • {doc.uploadDate}</div>
                         </div>
                       </div>
-                      <button className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm transition-colors">
+                      <button className={`px-3 py-2 ${isDark ? 'bg-blue-900/30 text-blue-300 hover:bg-blue-900/50' : 'bg-blue-100 hover:bg-blue-200 text-blue-700'} rounded-lg text-sm transition-colors`}>
                         View
                       </button>
                     </div>
@@ -622,9 +644,9 @@ function ReviewProposalContent() {
               </div>
 
               {/* Review History */}
-              <div className="bg-white rounded-xl shadow-lg p-6 border border-purple-200 animate-slideInUp" style={{ animationDelay: '0.6s' }}>
-                <h3 className="text-xl font-bold text-black mb-6 flex items-center">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+              <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.6s' }}>
+                <h3 className={`text-xl font-bold ${textClass} mb-6 flex items-center`}>
+                  <div className={`w-10 h-10 ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-lg flex items-center justify-center mr-3`}>
                     <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
@@ -634,19 +656,19 @@ function ReviewProposalContent() {
                 
                 <div className="space-y-4">
                   {proposal.existingFeedback.map((feedback) => (
-                    <div key={feedback.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div key={feedback.id} className={`p-4 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-orange-50/50 border-orange-100'} rounded-lg border`}>
                       <div className="flex items-start gap-3 mb-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                        <div className={`w-10 h-10 ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-full flex items-center justify-center`}>
                           <span className="text-purple-600 text-sm font-bold">
                             {feedback.reviewer.split(' ').map(n => n.charAt(0)).join('').substring(0, 2)}
                           </span>
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
-                            <div className="font-semibold text-black">{feedback.reviewer}</div>
-                            <div className="text-xs text-gray-500">{feedback.date}</div>
+                            <div className={`font-semibold ${textClass}`}>{feedback.reviewer}</div>
+                            <div className={`text-xs ${subTextClass}`}>{feedback.date}</div>
                           </div>
-                          <p className="text-gray-500 text-sm leading-relaxed">{feedback.comment}</p>
+                          <p className={`${subTextClass} text-sm leading-relaxed`}>{feedback.comment}</p>
                         </div>
                       </div>
                     </div>
@@ -660,9 +682,9 @@ function ReviewProposalContent() {
               <div className="sticky top-8 space-y-6">
                 
                 {/* Review Decision */}
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-green-200 animate-slideInUp" style={{ animationDelay: '0.8s' }}>
-                  <h3 className="text-xl font-bold text-black mb-4 flex items-center">
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.8s' }}>
+                  <h3 className={`text-xl font-bold ${textClass} mb-4 flex items-center`}>
+                    <div className={`w-10 h-10 ${isDark ? 'bg-green-500/20' : 'bg-green-100'} rounded-lg flex items-center justify-center mr-3`}>
                       <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                       </svg>
@@ -676,7 +698,7 @@ function ReviewProposalContent() {
                       { value: 'REVISION_REQUESTED', label: 'Needs Revision', color: 'yellow' },
                       { value: 'REJECTED', label: 'Reject', color: 'red' }
                     ].map((option) => (
-                      <label key={option.value} className="flex items-center cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                      <label key={option.value} className={`flex items-center cursor-pointer p-3 rounded-lg border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-orange-200 hover:bg-orange-50'} transition-colors`}>
                         <input
                           type="radio"
                           name="reviewStatus"
@@ -688,14 +710,14 @@ function ReviewProposalContent() {
                         <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center transition-colors ${
                           reviewStatus === option.value
                             ? `border-${option.color}-500 bg-${option.color}-500`
-                            : 'border-gray-300'
+                            : isDark ? 'border-slate-600' : 'border-gray-300'
                         }`}>
                           {reviewStatus === option.value && (
                             <div className="w-2 h-2 bg-white rounded-full"></div>
                           )}
                         </div>
                         <span className={`font-medium ${
-                          reviewStatus === option.value ? 'text-black' : 'text-gray-500'
+                          reviewStatus === option.value ? textClass : subTextClass
                         }`}>
                           {option.label}
                         </span>
@@ -721,9 +743,9 @@ function ReviewProposalContent() {
                 </div>
 
                 {/* Feedback Section */}
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '1.0s' }}>
-                  <h3 className="text-xl font-bold text-black mb-4 flex items-center">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+                <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '1.0s' }}>
+                  <h3 className={`text-xl font-bold ${textClass} mb-4 flex items-center`}>
+                    <div className={`w-10 h-10 ${isDark ? 'bg-orange-500/20' : 'bg-orange-100'} rounded-lg flex items-center justify-center mr-3`}>
                       <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
@@ -735,7 +757,7 @@ function ReviewProposalContent() {
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                     placeholder="Enter your detailed review comments, suggestions, and recommendations here..."
-                    className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-black placeholder-gray-500"
+                    className={`w-full h-32 p-4 border rounded-lg resize-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${inputBgClass} placeholder-gray-500`}
                   />
                   
                   <button
@@ -756,15 +778,15 @@ function ReviewProposalContent() {
         {/* Success Modal */}
         {showSuccessModal && createPortal(
           <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl">
+            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-black mb-2">Review Submitted Successfully!</h3>
-                <p className="text-gray-500 mb-6">Your expert review has been recorded and will be processed by the PRISM system.</p>
+                <h3 className={`text-xl font-bold ${textClass} mb-2`}>Review Submitted Successfully!</h3>
+                <p className={`${subTextClass} mb-6`}>Your expert review has been recorded and will be processed by the PRISM system.</p>
                 <button
                   onClick={() => setShowSuccessModal(false)}
                   className="bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-6 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300"
@@ -780,22 +802,22 @@ function ReviewProposalContent() {
         {/* Decision Confirmation Modal */}
         {showDecisionConfirm && createPortal(
           <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl">
+            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
               <div className="text-center">
                 <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-black mb-2">Confirm Review Decision</h3>
-                <p className="text-gray-500 mb-2">Are you sure you want to submit this decision?</p>
-                <p className="text-black font-semibold mb-6">
+                <h3 className={`text-xl font-bold ${textClass} mb-2`}>Confirm Review Decision</h3>
+                <p className={`${subTextClass} mb-2`}>Are you sure you want to submit this decision?</p>
+                <p className={`${textClass} font-semibold mb-6`}>
                   Decision: {reviewStatus.replace('_', ' ').toUpperCase()}
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowDecisionConfirm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+                    className={`flex-1 px-4 py-2 border ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-300 text-gray-500 hover:bg-gray-50'} rounded-lg transition-colors`}
                   >
                     Cancel
                   </button>
@@ -815,7 +837,7 @@ function ReviewProposalContent() {
         {/* Commit Modal */}
         {showCommitModal && createPortal(
           <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl">
+            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
               {committing ? (
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -823,8 +845,8 @@ function ReviewProposalContent() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   </div>
-                  <h3 className="text-xl font-bold text-black mb-2">Submitting Decision...</h3>
-                  <p className="text-gray-500">Processing your review decision</p>
+                  <h3 className={`text-xl font-bold ${textClass} mb-2`}>Submitting Decision...</h3>
+                  <p className={subTextClass}>Processing your review decision</p>
                 </div>
               ) : (
                 <div className="text-center">
@@ -833,15 +855,15 @@ function ReviewProposalContent() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
-                  <h3 className="text-xl font-bold text-black mb-2">Add Commit Message</h3>
-                  <p className="text-gray-500 mb-6">Describe your review decision for tracking purposes</p>
+                  <h3 className={`text-xl font-bold ${textClass} mb-2`}>Add Commit Message</h3>
+                  <p className={`${subTextClass} mb-6`}>Describe your review decision for tracking purposes</p>
                   
                   <div className="mb-6">
                     <textarea
                       value={commitMessage}
                       onChange={(e) => setCommitMessage(e.target.value)}
                       placeholder="Enter commit message..."
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-black resize-none"
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${inputBgClass} resize-none`}
                       rows="3"
                     />
                   </div>
@@ -849,7 +871,7 @@ function ReviewProposalContent() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowCommitModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+                      className={`flex-1 px-4 py-2 border ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-300 text-gray-500 hover:bg-gray-50'} rounded-lg transition-colors`}
                     >
                       Cancel
                     </button>
@@ -871,16 +893,16 @@ function ReviewProposalContent() {
         {/* Decision Success Modal */}
         {showDecisionSuccess && createPortal(
           <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl">
+            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
               <div className="text-center">
                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-2xl font-bold text-black mb-3">Decision Submitted Successfully!</h3>
+                <h3 className={`text-2xl font-bold ${textClass} mb-3`}>Decision Submitted Successfully!</h3>
                 <div className="mb-4">
-                  <p className="text-gray-500 mb-2">Your review decision has been recorded:</p>
+                  <p className={`${subTextClass} mb-2`}>Your review decision has been recorded:</p>
                   <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${
                     submittedDecision === 'approved' ? 'bg-green-100 text-green-800' :
                     submittedDecision === 'needs_revision' ? 'bg-yellow-100 text-yellow-800' :
@@ -904,7 +926,7 @@ function ReviewProposalContent() {
                     {submittedDecision.replace('_', ' ').toUpperCase()}
                   </div>
                 </div>
-                <p className="text-gray-500 mb-6">The proposal status has been updated and all stakeholders have been notified through the PRISM system.</p>
+                <p className={`${subTextClass} mb-6`}>The proposal status has been updated and all stakeholders have been notified through the PRISM system.</p>
                 <button
                   onClick={() => setShowDecisionSuccess(false)}
                   className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-8 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105"
@@ -920,21 +942,21 @@ function ReviewProposalContent() {
         {/* Clarification Request Modal */}
         {showClarificationModal && createPortal(
           <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl">
+            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
               <div className="text-center">
                 <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-black mb-2">Request Clarification</h3>
-                <p className="text-gray-500 mb-6">Ask the Principal Investigator for additional information or clarification</p>
+                <h3 className={`text-xl font-bold ${textClass} mb-2`}>Request Clarification</h3>
+                <p className={`${subTextClass} mb-6`}>Ask the Principal Investigator for additional information or clarification</p>
                 
                 <textarea
                   value={clarificationMessage}
                   onChange={(e) => setClarificationMessage(e.target.value)}
                   placeholder="Enter your clarification request here..."
-                  className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-black placeholder-gray-500 mb-4"
+                  className={`w-full h-32 p-4 border rounded-lg resize-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 ${inputBgClass} placeholder-gray-500 mb-4`}
                 />
                 
                 <div className="flex gap-3">
@@ -943,7 +965,7 @@ function ReviewProposalContent() {
                       setShowClarificationModal(false);
                       setClarificationMessage('');
                     }}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+                    className={`flex-1 px-4 py-2 border ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-300 text-gray-500 hover:bg-gray-50'} rounded-lg transition-colors`}
                   >
                     Cancel
                   </button>

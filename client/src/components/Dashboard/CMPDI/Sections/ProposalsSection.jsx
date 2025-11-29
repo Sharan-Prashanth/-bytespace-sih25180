@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/router';
 import { 
     Search, Filter, LayoutGrid, List, Calendar, DollarSign, 
     FileText, CheckCircle, AlertCircle, Clock, ChevronRight, 
     MoreVertical, Download, Upload, MessageSquare, UserPlus,
-    Users, Gavel, Activity, ArrowLeft, Send, Eye, X
+    Users, Gavel, Activity, ArrowLeft, Send, Eye, X, ClipboardCheck
 } from 'lucide-react';
 import { assignReviewer } from '../../../../utils/workflowApi';
 
@@ -96,6 +97,22 @@ const MOCK_PROPOSALS = [
         timeline: [
             { date: '2025-10-30', event: 'Proposal Submitted', user: 'Dr. K. Patel' },
             { date: '2025-11-15', event: 'Project Approved', user: 'SSRC' }
+        ]
+    },
+    {
+        id: 'PROP-2025-045',
+        title: 'IoT-Based Underground Communication',
+        pi: 'Dr. S. Verma',
+        institution: 'NIT Trichy',
+        submissionDate: '2025-11-28',
+        budget: 3800000,
+        duration: '20 Months',
+        stage: 'submitted',
+        status: 'New',
+        priority: 'High',
+        description: 'Robust wireless communication system for deep underground mines using mesh networking.',
+        timeline: [
+            { date: '2025-11-28', event: 'Proposal Submitted', user: 'Dr. S. Verma' }
         ]
     }
 ];
@@ -232,18 +249,18 @@ const AssignReviewerModal = ({ isOpen, onClose, onAssign, theme }) => {
     );
 };
 
-const ProposalDetailView = ({ proposal, onBack, theme }) => {
-    const [activeTab, setActiveTab] = useState('overview');
+const ProposalDetailView = ({ proposal, onBack, theme, initialTab = 'overview' }) => {
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const isDark = theme === 'dark' || theme === 'darkest';
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: FileText },
         { id: 'documents', label: 'Documents', icon: Download },
-        { id: 'cmpdi', label: 'CMPDI Review', icon: Search },
-        { id: 'experts', label: 'Expert Review', icon: Users },
+        { id: 'review', label: 'Review', icon: ClipboardCheck },
+        { id: 'track', label: 'Track', icon: Activity },
+        { id: 'collaborate', label: 'Collaborate', icon: MessageSquare },
         { id: 'committee', label: 'Committee', icon: Gavel },
-        { id: 'clarifications', label: 'Clarifications', icon: MessageSquare },
     ];
 
     const handleAssignReviewer = async (reviewer, dueDate) => {
@@ -369,6 +386,106 @@ const ProposalDetailView = ({ proposal, onBack, theme }) => {
                         </div>
                     </div>
                 )}
+                
+                {activeTab === 'review' && (
+                    <div className="space-y-6">
+                        <div className={`${cardBgClass} border rounded-xl p-6`}>
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className={`text-lg font-semibold ${textClass}`}>Review Status</h3>
+                                <button 
+                                    onClick={() => setShowAssignModal(true)}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                                >
+                                    <UserPlus size={16} /> Assign Reviewer
+                                </button>
+                            </div>
+                            <div className="space-y-4">
+                                {MOCK_REVIEWERS.slice(0, 2).map((reviewer, idx) => (
+                                    <div key={idx} className={`p-4 rounded-lg border ${isDark ? 'bg-slate-900/30 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                                                    {reviewer.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <h4 className={`font-medium ${textClass}`}>{reviewer.name}</h4>
+                                                    <p className={`text-xs ${subTextClass}`}>{reviewer.expertise}</p>
+                                                </div>
+                                            </div>
+                                            <span className={`px-2 py-1 rounded text-xs ${idx === 0 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                {idx === 0 ? 'Completed' : 'Pending'}
+                                            </span>
+                                        </div>
+                                        {idx === 0 && (
+                                            <div className={`mt-3 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                                                "The proposal is technically sound but the budget estimation for equipment seems slightly high. Recommended with minor revisions."
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'track' && (
+                    <div className="space-y-6">
+                        <div className={`${cardBgClass} border rounded-xl p-6`}>
+                            <h3 className={`text-lg font-semibold ${textClass} mb-6`}>Project Tracking</h3>
+                            <div className="relative pl-8 border-l-2 border-blue-500 space-y-8">
+                                {proposal.timeline.map((item, idx) => (
+                                    <div key={idx} className="relative">
+                                        <div className="absolute -left-[41px] top-0 w-5 h-5 rounded-full bg-blue-500 border-4 border-white dark:border-slate-900"></div>
+                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                                            <div>
+                                                <h4 className={`font-medium ${textClass}`}>{item.event}</h4>
+                                                <p className={`text-sm ${subTextClass}`}>{item.user}</p>
+                                            </div>
+                                            <span className={`text-xs font-mono px-2 py-1 rounded ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                                                {item.date}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'collaborate' && (
+                    <div className="h-full flex flex-col">
+                        <div className={`flex-1 ${cardBgClass} border rounded-xl p-6 flex flex-col`}>
+                            <h3 className={`text-lg font-semibold ${textClass} mb-4`}>Discussion Board</h3>
+                            <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+                                <div className="flex gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs">PI</div>
+                                    <div className={`flex-1 p-3 rounded-lg rounded-tl-none ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                        <p className={`text-sm ${textClass}`}>We have updated the budget breakdown as requested.</p>
+                                        <span className={`text-xs ${subTextClass} mt-1 block`}>Yesterday, 10:30 AM</span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 flex-row-reverse">
+                                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">You</div>
+                                    <div className="flex-1 p-3 rounded-lg rounded-tr-none bg-blue-600 text-white">
+                                        <p className="text-sm">Noted. I will forward this to the technical committee for final approval.</p>
+                                        <span className="text-xs text-blue-100 mt-1 block">Today, 09:15 AM</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="Type a message..." 
+                                    className={`flex-1 p-2 rounded-lg border ${isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'}`}
+                                />
+                                <button className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg">
+                                    <Send size={20} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Other tabs would follow similar pattern with theme props */}
                 {/* For brevity, I'm applying the pattern to the main structure first */}
             </div>
@@ -385,8 +502,8 @@ const ProposalDetailView = ({ proposal, onBack, theme }) => {
 };
 
 export default function ProposalsSection({ proposals = [], theme }) {
+    const router = useRouter();
     const [viewMode, setViewMode] = useState('list'); // Default to list view as per screenshot
-    const [selectedProposal, setSelectedProposal] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const isDark = theme === 'dark' || theme === 'darkest';
@@ -401,9 +518,17 @@ export default function ProposalsSection({ proposals = [], theme }) {
     const tableRowHoverClass = isDark ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50';
     const divideClass = isDark ? 'divide-slate-800' : 'divide-slate-200';
 
-    if (selectedProposal) {
-        return <ProposalDetailView proposal={selectedProposal} onBack={() => setSelectedProposal(null)} theme={theme} />;
-    }
+    const handleViewProposal = (proposal, tab = 'overview') => {
+        const routes = {
+            'overview': 'view',
+            'review': 'review',
+            'track': 'track',
+            'collaborate': 'collaborate'
+        };
+        
+        const action = routes[tab] || 'view';
+        router.push(`/proposal/${action}/${proposal.id}`);
+    };
 
     return (
         <div className="h-full flex flex-col space-y-6">
@@ -462,7 +587,7 @@ export default function ProposalsSection({ proposals = [], theme }) {
                                     </div>
                                     <div className={`flex-1 rounded-xl border p-3 space-y-3 overflow-y-auto ${isDark ? 'bg-slate-950/30 border-slate-800/50' : 'bg-slate-50/50 border-slate-200'}`}>
                                         {MOCK_PROPOSALS.filter(p => p.stage === stage.id).map(proposal => (
-                                            <ProposalCard key={proposal.id} proposal={proposal} onClick={setSelectedProposal} theme={theme} />
+                                            <ProposalCard key={proposal.id} proposal={proposal} onClick={(p) => handleViewProposal(p, 'overview')} theme={theme} />
                                         ))}
                                     </div>
                                 </div>
@@ -504,12 +629,36 @@ export default function ProposalsSection({ proposals = [], theme }) {
                                         </td>
                                         <td className={`p-4 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>₹{(proposal.budget/100000).toFixed(1)}L</td>
                                         <td className="p-4 text-right">
-                                            <button 
-                                                onClick={() => setSelectedProposal(proposal)}
-                                                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900'}`}
-                                            >
-                                                <Eye size={16} />
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button 
+                                                    onClick={() => handleViewProposal(proposal, 'overview')}
+                                                    title="View Details"
+                                                    className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-900'}`}
+                                                >
+                                                    <Eye size={16} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleViewProposal(proposal, 'review')}
+                                                    title="Review"
+                                                    className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-blue-400' : 'hover:bg-slate-100 text-slate-400 hover:text-blue-600'}`}
+                                                >
+                                                    <ClipboardCheck size={16} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleViewProposal(proposal, 'track')}
+                                                    title="Track Progress"
+                                                    className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-emerald-400' : 'hover:bg-slate-100 text-slate-400 hover:text-emerald-600'}`}
+                                                >
+                                                    <Activity size={16} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleViewProposal(proposal, 'collaborate')}
+                                                    title="Collaborate"
+                                                    className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-purple-400' : 'hover:bg-slate-100 text-slate-400 hover:text-purple-600'}`}
+                                                >
+                                                    <MessageSquare size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
