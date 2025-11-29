@@ -14,8 +14,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocketCollaboration, getUserColor } from '@/hooks/useSocketCollaboration';
 import { createUsersData } from '@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit';
 import VersionHistory from '@/components/VersionHistory';
-import SignaturePad from '@/components/ProposalEditor/editor (our files)/SignaturePad';
-import SealUpload from '@/components/ProposalEditor/editor (our files)/SealUpload';
 import apiClient from '@/utils/api';
 // Removed direct Supabase upload - now handled by parent component via backend API
 

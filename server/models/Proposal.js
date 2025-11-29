@@ -143,7 +143,10 @@ const proposalSchema = new mongoose.Schema({
   },
   supportingDocs: [{
     formName: String,
+    fileName: String,
     fileUrl: String,
+    s3Key: String,
+    fileSize: Number,
     uploadedAt: {
       type: Date,
       default: Date.now

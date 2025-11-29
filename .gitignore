@@ -58,3 +58,6 @@ Thumbs.db
 
 # Ignore pre-trained model directories and their artifacts
 **/pre-trained/
+
+# History files created by local history extensions
+.history
