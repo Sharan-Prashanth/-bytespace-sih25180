@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { FiUpload, FiFile, FiX, FiDownload, FiCheck } from 'react-icons/fi';
+import { uploadDocument } from '../../utils/proposalApi';
 
-const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove }) => {
+const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode }) => {
   const [uploading, setUploading] = useState({});
 
   const handleFileUpload = async (formId, event) => {
@@ -23,20 +24,19 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove }) => {
     setUploading({ ...uploading, [formId]: true });
 
     try {
-      // Mock upload to S3
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const mockUrl = `https://s3.bucket.com/proposal-files/${formId}-${Date.now()}.pdf`;
+      // Upload to S3 via backend API
+      const response = await uploadDocument(file, proposalCode || 'temp');
       
       onFormUpload(formId, {
         name: file.name,
-        url: mockUrl,
+        url: response.data.fileUrl,
+        s3Key: response.data.s3Key, // Store S3 key for deletion
         size: file.size,
         uploadedAt: new Date().toISOString()
       });
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to upload form. Please try again.');
+      alert(`Failed to upload form: ${error.message || 'Please try again.'}`);
     } finally {
       setUploading({ ...uploading, [formId]: false });
     }

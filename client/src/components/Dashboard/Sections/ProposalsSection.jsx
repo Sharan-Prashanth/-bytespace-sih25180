@@ -6,86 +6,49 @@ import {
     FileText,
     LayoutGrid,
     List,
-    Search
+    Search,
+    Eye
 } from "lucide-react";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ProposalDetail from "../Proposals/ProposalDetail";
-
-// Mock Data
-const PROPOSALS_DATA = [
-    {
-        id: "PROP001",
-        title: "AI-Powered Coal Quality Assessment System",
-        submitterName: "Dr. Rajesh Kumar",
-        category: "Technology",
-        department: "IIT Delhi",
-        status: "Approved",
-        budget: "₹25,00,000",
-        dateSubmitted: "Sep 01, 2025",
-        summary: "This proposal aims to develop an AI-driven system for real-time coal quality assessment using computer vision and machine learning techniques. The system will reduce manual inspection time and improve accuracy."
-    },
-    {
-        id: "PROP002",
-        title: "Sustainable Mining Waste Management",
-        submitterName: "Dr. Priya Sharma",
-        category: "Environment",
-        department: "CSIR-CIMFR",
-        status: "Pending",
-        budget: "₹40,00,000",
-        dateSubmitted: "Sep 05, 2025",
-        summary: "A comprehensive study on managing mining waste effectively to minimize environmental impact. The project focuses on converting waste into usable construction materials."
-    },
-    {
-        id: "PROP003",
-        title: "Advanced Coal Gasification Process",
-        submitterName: "Dr. Amit Patel",
-        category: "Energy",
-        department: "NEIST",
-        status: "Rejected",
-        budget: "₹15,00,000",
-        dateSubmitted: "Aug 20, 2025",
-        summary: "Investigation into novel catalysts for improving the efficiency of coal gasification. The proposal outlines a 2-year research plan with pilot plant testing."
-    },
-    {
-        id: "PROP004",
-        title: "Digital Twin for Mining Operations",
-        submitterName: "Dr. Sunita Mehta",
-        category: "Technology",
-        department: "NIT Rourkela",
-        status: "Pending",
-        budget: "₹35,00,000",
-        dateSubmitted: "Sep 10, 2025",
-        summary: "Creation of a digital twin for underground mining operations to simulate scenarios, optimize workflows, and enhance safety protocols."
-    },
-    {
-        id: "PROP005",
-        title: "Carbon Capture Technology Research",
-        submitterName: "Dr. Vikram Singh",
-        category: "Environment",
-        department: "IIT Kharagpur",
-        status: "Approved",
-        budget: "₹50,00,000",
-        dateSubmitted: "Sep 15, 2025",
-        summary: "Research into cost-effective carbon capture technologies specifically designed for coal-fired power plants. Includes feasibility study and prototype development."
-    }
-];
+import apiClient from "../../../utils/api";
 
 export default function ProposalsSection({ theme }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState("table"); // 'table' | 'card'
     const [selectedProposal, setSelectedProposal] = useState(null);
+    const [proposals, setProposals] = useState([]);
+    const [loading, setLoading] = useState(true);
     const router = useRouter();
+
+    // Fetch proposals from API
+    useEffect(() => {
+        const fetchProposals = async () => {
+            try {
+                setLoading(true);
+                const response = await apiClient.get('/api/proposals');
+                const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+                setProposals(Array.isArray(proposalData) ? proposalData : []);
+            } catch (error) {
+                console.error("Error fetching proposals:", error);
+                setProposals([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProposals();
+    }, []);
 
     // Handle URL query param for proposal ID
     useEffect(() => {
-        if (router.query.proposalId) {
-            const proposal = PROPOSALS_DATA.find(p => p.id === router.query.proposalId);
+        if (router.query.proposalId && proposals.length > 0) {
+            const proposal = proposals.find(p => p._id === router.query.proposalId || p.proposalCode === router.query.proposalId);
             if (proposal) setSelectedProposal(proposal);
         } else {
             setSelectedProposal(null);
         }
-    }, [router.query.proposalId]);
+    }, [router.query.proposalId, proposals]);
 
     const handleProposalClick = (proposal) => {
         setSelectedProposal(proposal);
@@ -93,7 +56,7 @@ export default function ProposalsSection({ theme }) {
         const currentPath = router.pathname;
         router.push({
             pathname: currentPath,
-            query: { ...router.query, proposalId: proposal.id }
+            query: { ...router.query, proposalId: proposal._id }
         }, undefined, { shallow: true });
     };
 
@@ -106,12 +69,49 @@ export default function ProposalsSection({ theme }) {
         }, undefined, { shallow: true });
     };
 
-    const filteredProposals = PROPOSALS_DATA.filter(p =>
-        p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.submitterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.department.toLowerCase().includes(searchTerm.toLowerCase())
+    const handleViewProposal = (proposalId) => {
+        router.push(`/proposal/view/${proposalId}`);
+    };
+
+    const filteredProposals = proposals.filter(p =>
+        (p.title?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (p.createdBy?.fullName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (p.proposalCode?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (p.principalAgency?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
+
+    // Helper to format date
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+    };
+
+    // Helper to format budget
+    const formatBudget = (amount) => {
+        if (!amount) return 'N/A';
+        return `₹${Number(amount).toLocaleString('en-IN')}`;
+    };
+
+    // Helper to get status display
+    const getStatusDisplay = (status) => {
+        const statusMap = {
+            'DRAFT': 'Draft',
+            'SUBMITTED': 'Submitted',
+            'CMPDI_REVIEW': 'CMPDI Review',
+            'CMPDI_APPROVED': 'CMPDI Approved',
+            'EXPERT_REVIEW': 'Expert Review',
+            'TSSRC_REVIEW': 'TSSRC Review',
+            'TSSRC_APPROVED': 'TSSRC Approved',
+            'SSRC_REVIEW': 'SSRC Review',
+            'APPROVED': 'Approved',
+            'REJECTED': 'Rejected'
+        };
+        return statusMap[status] || status;
+    };
 
     const isDark = theme === 'dark' || theme === 'darkest';
     const isDarkest = theme === 'darkest';
@@ -124,17 +124,43 @@ export default function ProposalsSection({ theme }) {
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'Approved': return isDark ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100';
-            case 'Rejected': return isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-600 border-red-100';
-            default: return isDark ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50 text-amber-600 border-amber-100';
+            case 'APPROVED': 
+            case 'CMPDI_APPROVED':
+            case 'TSSRC_APPROVED':
+                return isDark ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100';
+            case 'REJECTED': 
+                return isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-600 border-red-100';
+            case 'SUBMITTED':
+            case 'CMPDI_REVIEW':
+            case 'EXPERT_REVIEW':
+            case 'TSSRC_REVIEW':
+            case 'SSRC_REVIEW':
+                return isDark ? 'bg-blue-900/30 text-blue-400 border-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100';
+            case 'DRAFT':
+                return isDark ? 'bg-slate-700/50 text-slate-400 border-slate-600' : 'bg-slate-100 text-slate-600 border-slate-200';
+            default: 
+                return isDark ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50 text-amber-600 border-amber-100';
         }
     };
 
     const getStatusDot = (status) => {
         switch (status) {
-            case 'Approved': return 'bg-emerald-500';
-            case 'Rejected': return 'bg-red-500';
-            default: return 'bg-amber-500';
+            case 'APPROVED': 
+            case 'CMPDI_APPROVED':
+            case 'TSSRC_APPROVED':
+                return 'bg-emerald-500';
+            case 'REJECTED': 
+                return 'bg-red-500';
+            case 'SUBMITTED':
+            case 'CMPDI_REVIEW':
+            case 'EXPERT_REVIEW':
+            case 'TSSRC_REVIEW':
+            case 'SSRC_REVIEW':
+                return 'bg-blue-500';
+            case 'DRAFT':
+                return 'bg-slate-500';
+            default: 
+                return 'bg-amber-500';
         }
     };
 
@@ -217,13 +243,26 @@ export default function ProposalsSection({ theme }) {
                                     <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Category</th>
                                     <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Status</th>
                                     <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Budget</th>
-                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor} text-right`}>Date</th>
+                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor}`}>Date</th>
+                                    <th className={`p-6 text-xs font-bold uppercase tracking-wider ${subTextColor} text-right`}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody className={`divide-y ${isDarkest ? 'divide-neutral-800' : isDark ? 'divide-slate-700' : 'divide-slate-50'}`}>
-                                {filteredProposals.map((proposal) => (
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan="7" className="p-6 text-center">
+                                            <div className={`${subTextColor}`}>Loading proposals...</div>
+                                        </td>
+                                    </tr>
+                                ) : filteredProposals.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="7" className="p-6 text-center">
+                                            <div className={`${subTextColor}`}>No proposals found</div>
+                                        </td>
+                                    </tr>
+                                ) : filteredProposals.map((proposal) => (
                                     <tr
-                                        key={proposal.id}
+                                        key={proposal._id}
                                         onClick={() => handleProposalClick(proposal)}
                                         className={`group transition-colors cursor-pointer ${hoverBg}`}
                                     >
@@ -234,28 +273,45 @@ export default function ProposalsSection({ theme }) {
                                                 </div>
                                                 <div>
                                                     <div className={`font-bold ${textColor} line-clamp-1`}>{proposal.title}</div>
-                                                    <div className={`text-xs ${subTextColor}`}>{proposal.id}</div>
+                                                    <div className={`text-xs ${subTextColor}`}>{proposal.proposalCode}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="p-6">
-                                            <div className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.submitterName}</div>
-                                            <div className={`text-xs ${subTextColor}`}>{proposal.department}</div>
+                                            <div className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.createdBy?.fullName || proposal.projectLeader || 'N/A'}</div>
+                                            <div className={`text-xs ${subTextColor}`}>{proposal.principalAgency || 'N/A'}</div>
                                         </td>
                                         <td className="p-6">
-                                            <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.category}</span>
+                                            <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.fundingMethod || 'N/A'}</span>
                                         </td>
                                         <td className="p-6">
                                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(proposal.status)}`}>
                                                 <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(proposal.status)}`}></div>
-                                                {proposal.status}
+                                                {getStatusDisplay(proposal.status)}
                                             </span>
                                         </td>
                                         <td className="p-6">
-                                            <span className={`text-sm font-bold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.budget}</span>
+                                            <span className={`text-sm font-bold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{formatBudget(proposal.outlayLakhs * 100000)}</span>
+                                        </td>
+                                        <td className="p-6">
+                                            <span className={`text-sm font-medium ${subTextColor}`}>{formatDate(proposal.createdAt)}</span>
                                         </td>
                                         <td className="p-6 text-right">
-                                            <span className={`text-sm font-medium ${subTextColor}`}>{proposal.dateSubmitted}</span>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleViewProposal(proposal._id);
+                                                }}
+                                                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                                    isDark 
+                                                        ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' 
+                                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                                }`}
+                                                title="View Proposal"
+                                            >
+                                                <Eye size={16} />
+                                                View
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -266,9 +322,13 @@ export default function ProposalsSection({ theme }) {
             ) : (
                 // Card View
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredProposals.map((proposal) => (
+                    {loading ? (
+                        <div className={`col-span-full text-center py-12 ${subTextColor}`}>Loading proposals...</div>
+                    ) : filteredProposals.length === 0 ? (
+                        <div className={`col-span-full text-center py-12 ${subTextColor}`}>No proposals found</div>
+                    ) : filteredProposals.map((proposal) => (
                         <div
-                            key={proposal.id}
+                            key={proposal._id}
                             onClick={() => handleProposalClick(proposal)}
                             className={`${cardBg} p-6 rounded-3xl shadow-sm border flex flex-col transition-all cursor-pointer hover:shadow-md ${hoverBg}`}
                         >
@@ -278,7 +338,7 @@ export default function ProposalsSection({ theme }) {
                                 </div>
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(proposal.status)}`}>
                                     <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(proposal.status)}`}></div>
-                                    {proposal.status}
+                                    {getStatusDisplay(proposal.status)}
                                 </span>
                             </div>
 
@@ -286,19 +346,35 @@ export default function ProposalsSection({ theme }) {
 
                             <div className="flex items-center gap-2 mb-6">
                                 <span className={`text-xs font-medium px-2 py-1 rounded-md ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
-                                    {proposal.category}
+                                    {proposal.fundingMethod || 'N/A'}
                                 </span>
-                                <span className={`text-xs font-medium ${subTextColor}`}>• {proposal.department}</span>
+                                <span className={`text-xs font-medium ${subTextColor}`}>• {proposal.principalAgency || 'N/A'}</span>
                             </div>
 
                             <div className={`flex items-center justify-between pt-4 border-t mt-auto ${borderColor}`}>
                                 <div className="flex items-center gap-2">
                                     <DollarSign size={16} className={isDark ? 'text-emerald-400' : 'text-emerald-600'} />
-                                    <span className={`text-sm font-bold ${textColor}`}>{proposal.budget}</span>
+                                    <span className={`text-sm font-bold ${textColor}`}>{formatBudget(proposal.outlayLakhs * 100000)}</span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Calendar size={16} className={subTextColor} />
-                                    <span className={`text-xs font-medium ${subTextColor}`}>{proposal.dateSubmitted}</span>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar size={16} className={subTextColor} />
+                                        <span className={`text-xs font-medium ${subTextColor}`}>{formatDate(proposal.createdAt)}</span>
+                                    </div>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleViewProposal(proposal._id);
+                                        }}
+                                        className={`p-2 rounded-lg transition-all ${
+                                            isDark 
+                                                ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' 
+                                                : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                        }`}
+                                        title="View Proposal"
+                                    >
+                                        <Eye size={16} />
+                                    </button>
                                 </div>
                             </div>
                         </div>

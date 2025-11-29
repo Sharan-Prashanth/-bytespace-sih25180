@@ -37,7 +37,22 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit (default)
+  }
+});
+
+// Special multer for Form I PDFs (20MB limit)
+export const uploadFormIPdf = multer({
+  storage,
+  limits: {
+    fileSize: 20 * 1024 * 1024 // 20MB limit for Form I PDFs
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = file.originalname.toLowerCase().split('.').pop();
+    if (ext === 'pdf') {
+      return cb(null, true);
+    }
+    return cb(new Error('Only PDF files are allowed for Form I'));
   }
 });
 

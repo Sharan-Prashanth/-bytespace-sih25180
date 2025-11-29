@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { FiUpload, FiFile, FiX, FiCheck } from 'react-icons/fi';
+import { uploadDocument } from '../../utils/proposalApi';
 
-const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove }) => {
+const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove, proposalCode }) => {
   const [uploading, setUploading] = useState({});
 
   const handleFileUpload = async (documentType, event) => {
@@ -25,21 +26,19 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove 
     setUploading({ ...uploading, [documentType]: true });
 
     try {
-      // Mock upload to S3 - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Mock S3 URL
-      const mockUrl = `https://s3.bucket.com/proposal-files/${documentType}-${Date.now()}.pdf`;
+      // Upload to S3 via backend API
+      const response = await uploadDocument(file, proposalCode || 'temp');
       
       onDocumentUpload(documentType, {
         name: file.name,
-        url: mockUrl,
+        url: response.data.fileUrl,
+        s3Key: response.data.s3Key, // Store S3 key for deletion
         size: file.size,
         uploadedAt: new Date().toISOString()
       });
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to upload document. Please try again.');
+      alert(`Failed to upload document: ${error.message || 'Please try again.'}`);
     } finally {
       setUploading({ ...uploading, [documentType]: false });
     }

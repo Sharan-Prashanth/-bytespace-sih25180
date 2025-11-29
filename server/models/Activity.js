@@ -21,6 +21,7 @@ const activitySchema = new mongoose.Schema({
       'PROPOSAL_UPDATED',
       'PROPOSAL_SUBMITTED',
       'PROPOSAL_DELETED',
+      'UPLOAD_FORMI',
       'VERSION_CREATED',
       'VERSION_REVERTED',
       'STATUS_CHANGED',

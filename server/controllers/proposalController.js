@@ -6,6 +6,7 @@ import proposalIdGenerator from '../utils/proposalIdGenerator.js';
 import emailService from '../services/emailService.js';
 import aiService from '../services/aiService.js';
 import storageService from '../services/storageService.js';
+import formExtractionService from '../services/formExtractionService.js';
 import activityLogger from '../utils/activityLogger.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
@@ -322,7 +323,7 @@ export const updateProposal = asyncHandler(async (req, res) => {
   // Update fields
   const updateableFields = [
     'title', 'fundingMethod', 'principalAgency', 'subAgencies',
-    'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs', 'forms'
+    'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs', 'forms', 'supportingDocs'
   ];
 
   for (const field of updateableFields) {
@@ -334,6 +335,12 @@ export const updateProposal = asyncHandler(async (req, res) => {
         proposal[field] = req.body[field];
       }
     }
+  }
+  
+  // Increment version for drafts (0.1 -> 0.2 -> ... -> 0.9 -> 0.10)
+  if (proposal.status === 'DRAFT') {
+    const currentMinor = Math.round((proposal.currentVersion - Math.floor(proposal.currentVersion)) * 100);
+    proposal.currentVersion = parseFloat(`0.${currentMinor + 1}`);
   }
 
   await proposal.save();
@@ -459,16 +466,16 @@ export const submitProposal = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update status to AI_EVALUATION
+  // Update status to AI_EVALUATION and set version to 1.0
   proposal.status = 'AI_EVALUATION';
-  proposal.currentVersion = 1;
+  proposal.currentVersion = 1.0;
   await proposal.save();
 
-  // Create version 1
+  // Create version 1.0
   const version = await ProposalVersion.create({
     proposalId: proposal._id,
-    versionNumber: 1,
-    commitMessage: 'Initial submission',
+    versionNumber: 1.0,
+    commitMessage: req.body.commitMessage || 'Initial submission',
     forms: proposal.forms,
     proposalInfo: {
       title: proposal.title,
@@ -483,49 +490,50 @@ export const submitProposal = asyncHandler(async (req, res) => {
     createdBy: req.user._id
   });
 
-  // Trigger AI evaluation (async)
-  aiService.evaluateProposal({
-    proposalCode: proposal.proposalCode,
-    title: proposal.title,
-    forms: proposal.forms,
-    ...proposal.toObject()
-  }).then(async (aiResult) => {
-    if (aiResult.success) {
-      // Upload AI report to S3
-      const uploadResult = await storageService.uploadAIReport(
-        aiResult.aiReport,
-        proposal.proposalCode,
-        1
-      );
-
-      if (uploadResult.success) {
-        // Update version with AI report URL
-        version.aiReportUrl = uploadResult.url;
-        await version.save();
-
-        // Add to proposal's AI reports array
-        proposal.aiReports.push({
-          version: 1,
-          reportUrl: uploadResult.url,
-          generatedAt: new Date()
-        });
-
-        // Update status to CMPDI_REVIEW
-        proposal.status = 'CMPDI_REVIEW';
-        await proposal.save();
-
-        // Send notification email to PI
-        await emailService.sendProposalSubmittedEmail(
-          proposal.createdBy.email,
-          proposal.createdBy.fullName,
-          proposal.proposalCode,
-          proposal.title
-        );
-      }
+  // Mock AI evaluation (async) - In production, this would call actual AI service
+  setTimeout(async () => {
+    try {
+      // Mock AI report generation
+      const mockAIReport = {
+        proposalCode: proposal.proposalCode,
+        evaluation: {
+          novelty: 'High',
+          technicalFeasibility: 'Good',
+          benefitToIndustry: 'Significant',
+          costValidation: 'Appropriate',
+          overallScore: 8.5
+        },
+        recommendations: [
+          'Proposal demonstrates strong technical merit',
+          'Budget allocation is reasonable',
+          'Timeline is realistic'
+        ],
+        generatedAt: new Date()
+      };
+      
+      // Mock S3 upload for AI report
+      const mockReportUrl = `https://s3.bucket.com/ai-reports/${proposal.proposalCode}-v1.0-ai-report.pdf`;
+      
+      // Update version with AI report URL
+      version.aiReportUrl = mockReportUrl;
+      await version.save();
+      
+      // Add to proposal's AI reports array
+      proposal.aiReports.push({
+        version: 1.0,
+        reportUrl: mockReportUrl,
+        generatedAt: new Date()
+      });
+      
+      // Update status to CMPDI_REVIEW after AI evaluation
+      proposal.status = 'CMPDI_REVIEW';
+      await proposal.save();
+      
+      console.log(`AI evaluation completed for proposal ${proposal.proposalCode}`);
+    } catch (error) {
+      console.error('AI evaluation error:', error);
     }
-  }).catch(error => {
-    console.error('AI evaluation error:', error);
-  });
+  }, 3000); // 3 seconds delay to simulate AI processing
 
   // Log activity
   await activityLogger.log({
@@ -645,11 +653,10 @@ export const updateProposalInfo = asyncHandler(async (req, res) => {
   await proposal.save();
 
   // Log activity
-  await activityLogger.logActivity({
-    userId: req.user._id,
+  await activityLogger.log({
+    user: req.user._id,
     action: 'UPDATE_PROPOSAL_INFO',
-    resourceType: 'PROPOSAL',
-    resourceId: proposal._id,
+    proposalId: proposal._id,
     details: { proposalCode: proposal.proposalCode }
   });
 
@@ -659,3 +666,268 @@ export const updateProposalInfo = asyncHandler(async (req, res) => {
     data: proposal
   });
 });
+
+/**
+ * @route   POST /api/proposals/:proposalCode/upload-formi
+ * @desc    Upload Form I PDF, extract content using AI backend, and return Slate.js content
+ * @access  Private
+ */
+export const uploadFormI = asyncHandler(async (req, res) => {
+  const { proposalCode } = req.params;
+
+  // Validate file upload
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'No file uploaded'
+    });
+  }
+
+  // Validate file type
+  if (req.file.mimetype !== 'application/pdf') {
+    return res.status(400).json({
+      success: false,
+      message: 'Only PDF files are allowed for Form I'
+    });
+  }
+
+  // Validate file size (20MB max)
+  if (req.file.size > 20 * 1024 * 1024) {
+    return res.status(400).json({
+      success: false,
+      message: 'File size must be less than 20MB'
+    });
+  }
+
+  // Find proposal
+  const proposal = await findProposal(proposalCode);
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+
+  try {
+    // Step 0: Check if there's an existing Form I PDF and delete it
+    const existingDoc = proposal.supportingDocs.find(
+      doc => doc.formName === 'formIPdf'
+    );
+
+    if (existingDoc && existingDoc.s3Key) {
+      console.log(`Deleting old Form I PDF: ${existingDoc.s3Key}`);
+      const deleteResult = await storageService.deleteFile(
+        storageService.buckets.proposalFiles,
+        existingDoc.s3Key
+      );
+      
+      if (deleteResult.success) {
+        console.log('Old Form I PDF deleted successfully');
+      } else {
+        console.warn('Failed to delete old Form I PDF:', deleteResult.error);
+        // Continue anyway - we'll replace the DB entry
+      }
+    }
+
+    // Step 1: Upload PDF to S3 (Supabase Storage)
+    console.log(`Uploading Form I PDF for proposal: ${proposalCode}`);
+    const uploadResult = await storageService.uploadProposalFile(
+      req.file,
+      proposalCode,
+      'formi-pdf'
+    );
+
+    if (!uploadResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to upload PDF to storage',
+        error: uploadResult.error
+      });
+    }
+
+    const fileUrl = uploadResult.url;
+    const s3Key = uploadResult.path;
+
+    // Step 2: Extract content using AI backend
+    console.log(`Extracting Form I content from: ${req.file.originalname}`);
+    const extractionResult = await formExtractionService.extractFormI(
+      fileUrl,
+      req.file.originalname
+    );
+
+    if (!extractionResult.success) {
+      // Even if extraction fails, we keep the uploaded file
+      return res.status(500).json({
+        success: false,
+        message: 'PDF uploaded but content extraction failed',
+        error: extractionResult.error,
+        uploadedFile: {
+          name: req.file.originalname,
+          url: fileUrl,
+          s3Key: s3Key,
+          size: req.file.size,
+          uploadedAt: new Date().toISOString()
+        }
+      });
+    }
+
+    // Log the extracted content structure for debugging
+    console.log('Extracted content structure:', JSON.stringify(extractionResult.content).substring(0, 200));
+    console.log('Extracted content keys:', Object.keys(extractionResult.content));
+
+    // Step 3: Save to proposal's supportingDocs
+    const existingDocIndex = proposal.supportingDocs.findIndex(
+      doc => doc.formName === 'formIPdf'
+    );
+
+    const docData = {
+      formName: 'formIPdf',
+      fileName: req.file.originalname,
+      fileUrl: fileUrl,
+      s3Key: s3Key,
+      fileSize: req.file.size,
+      uploadedAt: new Date()
+    };
+
+    if (existingDocIndex !== -1) {
+      // Replace existing Form I PDF
+      proposal.supportingDocs[existingDocIndex] = docData;
+    } else {
+      // Add new Form I PDF
+      proposal.supportingDocs.push(docData);
+    }
+
+    // Save without validating the entire document (only update supportingDocs)
+    await proposal.save({ validateModifiedOnly: true });
+
+    // Log activity
+    await activityLogger.log({
+      user: req.user._id,
+      action: 'UPLOAD_FORMI',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        fileName: req.file.originalname
+      }
+    });
+
+    // Step 4: Return success with extracted content
+    res.json({
+      success: true,
+      message: 'Form I uploaded and content extracted successfully',
+      data: {
+        uploadedFile: {
+          name: req.file.originalname,
+          url: fileUrl,
+          s3Key: s3Key,
+          size: req.file.size,
+          uploadedAt: docData.uploadedAt
+        },
+        extractedContent: extractionResult.content
+      }
+    });
+
+  } catch (error) {
+    console.error('Form I upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process Form I upload',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   DELETE /api/proposals/:proposalCode/formi
+ * @desc    Delete Form I PDF from storage and database
+ * @access  Private
+ */
+export const deleteFormI = asyncHandler(async (req, res) => {
+  const { proposalCode } = req.params;
+
+  // Find proposal
+  const proposal = await findProposal(proposalCode);
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+
+  try {
+    // Find the Form I PDF document
+    const existingDoc = proposal.supportingDocs.find(
+      doc => doc.formName === 'formIPdf'
+    );
+
+    if (!existingDoc) {
+      return res.status(404).json({
+        success: false,
+        message: 'Form I PDF not found'
+      });
+    }
+
+    // Delete from S3 (Supabase Storage)
+    if (existingDoc.s3Key) {
+      console.log(`Deleting Form I PDF: ${existingDoc.s3Key}`);
+      const deleteResult = await storageService.deleteFile(
+        storageService.buckets.proposalFiles,
+        existingDoc.s3Key
+      );
+      
+      if (!deleteResult.success) {
+        console.warn('Failed to delete file from storage:', deleteResult.error);
+        // Continue to remove from DB even if storage deletion fails
+      }
+    }
+
+    // Remove from database
+    proposal.supportingDocs = proposal.supportingDocs.filter(
+      doc => doc.formName !== 'formIPdf'
+    );
+
+    // Save without validating the entire document
+    await proposal.save({ validateModifiedOnly: true });
+
+    // Log activity
+    await activityLogger.log({
+      user: req.user._id,
+      action: 'PROPOSAL_UPDATED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        action: 'Deleted Form I PDF'
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Form I PDF deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Form I delete error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete Form I PDF',
+      error: error.message
+    });
+  }
+});
+

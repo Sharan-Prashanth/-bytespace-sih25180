@@ -183,6 +183,34 @@ export const uploadDocument = async (file, proposalCode) => {
   }
 };
 
+// Upload Form I with AI extraction
+export const uploadFormI = async (file, proposalCode) => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await apiClient.post(`/api/proposals/${proposalCode}/upload-formi`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 120000 // 2 minutes timeout for AI processing
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Delete Form I PDF
+export const deleteFormI = async (proposalCode) => {
+  try {
+    const response = await apiClient.delete(`/api/proposals/${proposalCode}/formi`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
 // Comment APIs
 
 // Get all comments for a proposal
@@ -373,6 +401,8 @@ export default {
   addCollaborator,
   uploadImage,
   uploadDocument,
+  uploadFormI,
+  deleteFormI,
   getComments,
   addComment,
   replyToComment,

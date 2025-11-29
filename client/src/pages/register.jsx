@@ -11,11 +11,14 @@ export default function Register() {
   const { register } = useAuth();
   const [form, setForm] = useState({
     fullName: "",
-    email: "",
-    password: "",
-    phoneNumber: "",
+    qualification: "",
     designation: "",
     organisationName: "",
+    expertiseDomains: "",
+    email: "",
+    phoneNumber: "",
+    password: "",
+    confirmPassword: "",
     organisationType: "INDIAN_ACADEMIC_RESEARCH",
     country: "India",
     address: {
@@ -24,9 +27,9 @@ export default function Register() {
       city: "",
       state: "",
       postalCode: ""
-    },
-    expertiseDomains: ""
+    }
   });
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -54,12 +57,27 @@ export default function Register() {
     setLoading(true);
     setError("");
 
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    if (!consent) {
+      setError("Please provide your consent to proceed");
+      setLoading(false);
+      return;
+    }
+
     try {
       // Prepare form data
       const registrationData = {
         ...form,
         expertiseDomains: form.expertiseDomains ? form.expertiseDomains.split(',').map(e => e.trim()).filter(e => e) : []
       };
+      
+      // Remove confirmPassword before sending
+      delete registrationData.confirmPassword;
 
       await register(registrationData);
       router.push("/dashboard");
@@ -136,7 +154,7 @@ export default function Register() {
             {/* Personal Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-white text-xs font-semibold mb-1.5">Full Name *</label>
+                <label className="block text-white text-xs font-semibold mb-1.5">Name *</label>
                 <input
                   type="text"
                   name="fullName"
@@ -149,12 +167,81 @@ export default function Register() {
               </div>
 
               <div>
-                <label className="block text-white text-xs font-semibold mb-1.5">Email Address *</label>
+                <label className="block text-white text-xs font-semibold mb-1.5">Qualification *</label>
+                <input
+                  type="text"
+                  name="qualification"
+                  placeholder="Enter your qualification"
+                  value={form.qualification}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-white text-xs font-semibold mb-1.5">Designation *</label>
+                <input
+                  type="text"
+                  name="designation"
+                  placeholder="e.g., Research Scholar, Professor"
+                  value={form.designation}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-white text-xs font-semibold mb-1.5">Organization *</label>
+                <input
+                  type="text"
+                  name="organisationName"
+                  placeholder="Enter your organisation name"
+                  value={form.organisationName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-white text-xs font-semibold mb-1.5">Research Interest Area *</label>
+              <input
+                type="text"
+                name="expertiseDomains"
+                placeholder="e.g., Coal Mining, Environmental Science"
+                value={form.expertiseDomains}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-white text-xs font-semibold mb-1.5">Email *</label>
                 <input
                   type="email"
                   name="email"
                   placeholder="Enter your email address"
                   value={form.email}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-white text-xs font-semibold mb-1.5">Contact *</label>
+                <input
+                  type="tel"
+                  name="phoneNumber"
+                  placeholder="Enter your phone number"
+                  value={form.phoneNumber}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
                   required
@@ -178,40 +265,12 @@ export default function Register() {
               </div>
 
               <div>
-                <label className="block text-white text-xs font-semibold mb-1.5">Phone Number</label>
+                <label className="block text-white text-xs font-semibold mb-1.5">Re-enter Password *</label>
                 <input
-                  type="tel"
-                  name="phoneNumber"
-                  placeholder="Enter your phone number"
-                  value={form.phoneNumber}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Professional Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-white text-xs font-semibold mb-1.5">Designation *</label>
-                <input
-                  type="text"
-                  name="designation"
-                  placeholder="e.g., Research Scholar, Professor"
-                  value={form.designation}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-xs font-semibold mb-1.5">Organisation Name *</label>
-                <input
-                  type="text"
-                  name="organisationName"
-                  placeholder="Enter your organisation name"
-                  value={form.organisationName}
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="Confirm your password"
+                  value={form.confirmPassword}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
                   required
@@ -219,50 +278,18 @@ export default function Register() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-white text-xs font-semibold mb-1.5">Organisation Type *</label>
-                <select
-                  name="organisationType"
-                  value={form.organisationType}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white font-medium transition-all duration-300 text-sm"
-                  required
-                >
-                  <option value="INDIAN_ACADEMIC_RESEARCH" className="bg-slate-900">Indian Academic/Research Institution</option>
-                  <option value="INDIAN_GOVT_ORGANISATION" className="bg-slate-900">Indian Government Organisation</option>
-                  <option value="PUBLIC_SECTOR_SUBSIDIARY" className="bg-slate-900">Public Sector Subsidiary</option>
-                  <option value="FOREIGN_INSTITUTE" className="bg-slate-900">Foreign Institute</option>
-                  <option value="CMPDI" className="bg-slate-900">CMPDI</option>
-                  <option value="OTHER" className="bg-slate-900">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-white text-xs font-semibold mb-1.5">Country *</label>
+            <div className="mb-6">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
-                  type="text"
-                  name="country"
-                  placeholder="Enter your country"
-                  value={form.country}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
-                  required
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
                 />
-              </div>
-            </div>
-
-            {/* Expertise Domains */}
-            <div className="mb-4">
-              <label className="block text-white text-xs font-semibold mb-1.5">Expertise Domains (comma-separated)</label>
-              <input
-                type="text"
-                name="expertiseDomains"
-                placeholder="e.g., Coal Mining, Environmental Science"
-                value={form.expertiseDomains}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-white/20 rounded-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none bg-white/10 backdrop-blur-md text-white placeholder-slate-400 font-medium transition-all duration-300 text-sm"
-              />
+                <span className="text-slate-300 text-xs">
+                  I agree to the <a href="#" className="text-blue-400 hover:text-blue-300">Terms of Service</a> and <a href="#" className="text-blue-400 hover:text-blue-300">Privacy Policy</a>
+                </span>
+              </label>
             </div>
 
             <button

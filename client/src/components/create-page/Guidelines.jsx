@@ -13,8 +13,8 @@ const Guidelines = () => {
 
   const handleDownloadDOCX = () => {
     const link = document.createElement('a');
-    link.href = '/files/FORM-I.docx';
-    link.download = 'FORM-I-Template.docx';
+    link.href = '/files/proposal-template.docx';
+    link.download = 'proposal-template.docx';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

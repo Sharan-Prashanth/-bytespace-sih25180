@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
-import TimelineChart from '../../../components/TimelineChart';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import apiClient from '../../../utils/api';
 import { getProposalTracking } from '../../../utils/proposalApi';
+import UserDashboardLayout from '../../../components/Dashboard/User/Layout/UserDashboardLayout';
 
 // Custom CSS animations for the track page
 const trackAnimationStyles = `
@@ -65,9 +65,30 @@ const trackAnimationStyles = `
 function TrackProposalContent() {
   const router = useRouter();
   const { id } = router.query;
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [activeSection, setActiveSection] = useState(null);
+  const [theme, setTheme] = useState('darkest');
+  const [showProgressSuggestion, setShowProgressSuggestion] = useState(true);
+  const [showFeedbackSuggestion, setShowFeedbackSuggestion] = useState(true);
+
+  const detailsContainerRef = useRef(null);
+
+  const handleSectionClick = (section) => {
+    if (activeSection === section) {
+      setActiveSection(null);
+    } else {
+      setActiveSection(section);
+      setTimeout(() => {
+        detailsContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  };
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : prev === 'dark' ? 'darkest' : 'light');
+  };
 
   // Mock data for coal R&D proposal tracking
   const [proposal] = useState({
@@ -303,7 +324,7 @@ function TrackProposalContent() {
       pdf.setFontSize(10);
       pdf.setTextColor(51, 51, 51);
       pdf.setFont(undefined, 'normal');
-      pdf.text(`Proposal ID: ${proposal.id}`, pageWidth / 2, yPosition, { align: 'center' });
+      pdf.text(`Proposal ID: ${proposal.proposalCode || proposal._id}`, pageWidth / 2, yPosition, { align: 'center' });
       
       yPosition += 5;
       pdf.text(`Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, pageWidth / 2, yPosition, { align: 'center' });
@@ -330,7 +351,7 @@ function TrackProposalContent() {
       
       // Key information in professional format
       const infoItems = [
-        [`Proposal ID:`, proposal.id],
+        [`Proposal ID:`, proposal.proposalCode || proposal._id],
         [`Title:`, proposal.title],
         [`Principal Investigator:`, proposal.researcher],
         [`Institution:`, proposal.institution],
@@ -558,7 +579,7 @@ Key AI Features:
       }
 
       // Save the PDF
-      const fileName = `PRISM_Proposal_Report_${proposal.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `PRISM_Proposal_Report_${proposal.proposalCode || proposal._id}_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
       
     } catch (error) {
@@ -570,629 +591,466 @@ Key AI Features:
   };
 
   return (
-    <>
+    <UserDashboardLayout
+      activeSection="proposals"
+      user={user}
+      logout={logout}
+      theme={theme}
+      toggleTheme={toggleTheme}
+    >
       <style jsx>{trackAnimationStyles}</style>
-      <div className="min-h-screen bg-white">
-        {/* Distinctive Header Section - Matching create.jsx and view.jsx */}
-        <div className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 min-h-[280px]" style={{ overflow: 'visible' }}>
-          {/* Animated geometric patterns */}
-          <div className="absolute inset-0" style={{ overflow: 'hidden' }}>
-            <div className="absolute top-6 left-10 w-12 h-12 border border-blue-400/30 rounded-full animate-pulse"></div>
-            <div className="absolute top-20 right-20 w-10 h-10 border border-indigo-400/20 rounded-lg rotate-45 animate-spin-slow"></div>
-            <div className="absolute bottom-12 left-32 w-8 h-8 bg-blue-500/10 rounded-full animate-bounce"></div>
-            <div className="absolute top-12 right-40 w-4 h-4 bg-indigo-400/20 rounded-full animate-ping"></div>
-          </div>
-          
-          {/* Overlay gradient */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
-          
-          {/* Header Content */}
-          <div className="relative z-10 max-w-7xl mx-auto px-6 py-10" style={{ overflow: 'visible' }}>
-            <div className="group animate-fadeIn">
-              <div className="flex items-center mb-5">
-                <div className="relative">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl group-hover:shadow-orange-500/25 transition-all duration-500 group-hover:scale-110">
-                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-6 bg-green-400 rounded-full border-2 border-white animate-pulse flex items-center justify-center">
-                    <span className="text-xs text-white font-bold">{Math.round(progressPercentage)}%</span>
-                  </div>
-                </div>
-                
-                <div className="ml-6">
-                  <div className="flex items-center mb-2">
-                    <h1 className="text-white text-4xl font-black tracking-tight bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent animate-slideInUp">
-                      Track Proposal
-                    </h1>
-                  </div>
-                  <div className="flex items-center space-x-3 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse mr-3"></div>
-                      <span className="text-blue-100 font-semibold text-lg">NaCCER Research Portal</span>
-                    </div>
-                    <div className="h-4 w-px bg-blue-300/50"></div>
-                    <span className="text-blue-200 font-medium text-sm">Proposal Tracking System</span>
-                  </div>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-blue-200 animate-slideInUp" style={{ animationDelay: '0.4s' }}>
-                    <span>Proposal ID: {proposal.id}</span>
-                    <span>•</span>
-                    <span>Status: {proposal.status.replace('_', ' ').toUpperCase()}</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      {completedMilestones}/{totalMilestones} milestones
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* PRISM Banner */}
-              <div className="bg-orange-600 backdrop-blur-md rounded-2xl p-4 border border-orange-300/40 shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 animate-slideInUp" style={{ animationDelay: '0.6s' }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-gradient-to-br from-white to-orange-50 rounded-lg flex items-center justify-center shadow-lg overflow-hidden border border-orange-200/50">
-                        <img 
-                          src="/images/prism brand logo.png" 
-                          alt="PRISM Logo" 
-                          className="w-10 h-10 object-contain"
-                        />
-                      </div>
+      <div className="max-w-7xl mx-auto">
+              <h1 className={`text-2xl font-bold mb-6 tracking-tight ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Proposal Tracking</h1>
+
+              {/* Quick Stats Section */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div 
+                  onClick={() => handleSectionClick('milestones')}
+                  className={`rounded-xl shadow-md border p-4 cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-1 ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} ${activeSection === 'milestones' ? 'ring-2 ring-blue-500' : ''}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
                     </div>
                     <div>
-                      <h2 className="text-white font-bold text-xl mb-1 flex items-center">
-                        <span className="text-white drop-shadow-md tracking-wide">PRISM</span>
-                        <div className="ml-3 px-2 py-0.5 bg-gradient-to-r from-blue-400/30 to-purple-400/30 rounded-full flex items-center justify-center border border-blue-300/40 backdrop-blur-sm">
-                          <div className="w-1.5 h-1.5 bg-blue-300 rounded-full mr-1.5 animate-pulse"></div>
-                          <span className="text-white text-xs font-semibold drop-shadow-sm">TRACKING</span>
-                        </div>
-                      </h2>
-                      <p className="text-orange-50 text-sm leading-relaxed font-medium opacity-95 drop-shadow-sm">
-                        Proposal Review & Innovation Support Mechanism for Department of Coal's Advanced Research Platform
-                      </p>
+                      <div className={`text-2xl font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{completedMilestones}/{totalMilestones}</div>
+                      <div className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Milestones Complete</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => handleSectionClick('feedback')}
+                  className={`rounded-xl shadow-md border p-4 cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-1 ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} ${activeSection === 'feedback' ? 'ring-2 ring-green-500' : ''}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className={`text-2xl font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{proposal.feedback.length}</div>
+                      <div className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Expert Reviews</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => handleSectionClick('timeline')}
+                  className={`rounded-xl shadow-md border p-4 cursor-pointer hover:shadow-lg transition-all transform hover:-translate-y-1 ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} ${activeSection === 'timeline' ? 'ring-2 ring-orange-500' : ''}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className={`text-2xl font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{proposal.currentPhase}</div>
+                      <div className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Current Stage</div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Main Content Container */}
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          
-          {/* Navigation and Control Buttons */}
-          <div className="flex justify-between items-center mb-6">
-            {/* Back to Dashboard Button */}
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 text-green-800 border border-green-300 transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer"
-            >
-              <div className="w-5 h-5 bg-green-200 rounded-full flex items-center justify-center">
-                <svg className="w-3 h-3 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </div>
-              Back to Dashboard
-            </button>
+              {/* Proposal Card */}
+              <div className={`rounded-xl shadow-md border p-6 mb-6 ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                {/* Proposal Header */}
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">{proposal.proposalCode || proposal._id}</span>
+                      <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                        proposal.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        proposal.status === 'under_review' ? 'bg-orange-100 text-orange-700' :
+                        proposal.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>{proposal.status.replace('_', ' ').toUpperCase()}</span>
+                    </div>
+                    <h2 className={`text-lg font-semibold mb-1 ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{proposal.title}</h2>
+                    <p className={`text-sm mb-1 ${theme === 'darkest' || theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}><span className="font-medium">Principal Investigator:</span> {proposal.researcher}</p>
+                    <p className={`text-sm ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}><span className="font-medium">Institution:</span> {proposal.institution}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-sm font-medium mb-1 ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Review Progress</div>
+                    <div className={`text-3xl font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{proposal.progress}%</div>
+                    <div className={`w-32 rounded-full h-2 mt-2 ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`}>
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${proposal.progress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="text-right ml-8">
+                    <div className={`text-sm font-medium mb-1 ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Decision Expected</div>
+                    <div className={`text-lg font-semibold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Oct 15, 2025</div>
+                    <div className={`text-sm font-medium ${theme === 'darkest' || theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{Math.ceil((new Date('2025-10-15') - new Date()) / (1000 * 60 * 60 * 24))} Days Remaining</div>
+                  </div>
+                </div>
 
-            {/* Export Button */}
-            <button 
-              onClick={handleExportReport}
-              disabled={isExporting}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-800 border border-blue-300 transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              <div className="w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center">
-                {isExporting ? (
-                  <svg className="w-3 h-3 text-blue-700 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg className="w-3 h-3 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                )}
-              </div>
-              {isExporting ? 'Generating...' : 'Export Report'}
-            </button>
-          </div>
+                {/* Review Timeline */}
+                <div className="mb-6">
+                  <h3 className={`text-sm font-semibold mb-4 ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Review Stages</h3>
+                  {/* Timeline Steps */}
+                  <div className="relative">
+                    {/* Progress Line */}
+                    <div className={`absolute top-4 left-0 right-0 h-0.5 ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+                    <div 
+                      className="absolute top-4 left-0 h-0.5 bg-blue-600 transition-all duration-500"
+                      style={{ width: `${(proposal.timeline.filter(t => t.status === 'completed').length / proposal.timeline.length) * 100}%` }}
+                    ></div>
 
-          {/* Proposal Overview Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-orange-200 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
-            <h2 className="text-2xl font-bold text-black mb-4 flex items-center">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              Proposal Overview
-            </h2>
-            
-            <div className="grid md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                <div className="text-orange-600 text-sm font-semibold mb-1">Title</div>
-                <div className="text-black font-semibold text-sm">{proposal.title}</div>
-              </div>
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <div className="text-blue-600 text-sm font-semibold mb-1">Principal Investigator</div>
-                <div className="text-black font-semibold text-sm">{proposal.researcher}</div>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                <div className="text-green-600 text-sm font-semibold mb-1">Current Phase</div>
-                <div className="text-black font-semibold text-sm">{proposal.currentPhase}</div>
-              </div>
-            </div>
+                    {/* Timeline Items */}
+                    <div className="relative flex justify-between">
+                      {proposal.timeline.slice(0, 6).map((item, index) => (
+                        <div key={index} className="flex flex-col items-center" style={{ width: '16.66%' }}>
+                          <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center mb-2 z-10 shadow-sm ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800' : 'bg-white'} ${
+                            item.status === 'completed' 
+                              ? 'border-blue-500' 
+                              : item.status === 'active'
+                              ? 'border-blue-500'
+                              : (theme === 'darkest' || theme === 'dark' ? 'border-slate-600' : 'border-slate-300')
+                          }`}>
+                            {item.status === 'completed' ? (
+                              <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                            ) : item.status === 'active' ? (
+                              <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                            ) : (
+                              <div className={`w-2 h-2 rounded-full ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-600' : 'bg-slate-300'}`}></div>
+                            )}
+                          </div>
+                          <span className={`text-xs text-center font-medium ${
+                            item.status === 'completed' || item.status === 'active' ? (theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900') : (theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600')
+                          }`}>
+                            {item.phase.split(' ').slice(0, 2).join(' ')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-            {/* Progress Bar */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-black">Overall Progress</span>
-                <span className="text-sm font-bold text-orange-600">{progressPercentage}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div 
-                  className="bg-gradient-to-r from-orange-500 to-red-600 h-3 rounded-full transition-all duration-1000 ease-out animate-pulse-gentle"
-                  style={{ width: `${progressPercentage}%` }}
-                ></div>
-              </div>
-            </div>
+                {/* AI Suggestions Section */}
+                <div className={`border-t pt-6 ${theme === 'darkest' || theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
+                  <h3 className={`text-base font-semibold mb-4 flex items-center space-x-2 ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span>AI-Powered Suggestions</span>
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    {showProgressSuggestion && (
+                    <div className={`flex items-center justify-between p-3 rounded-lg border ${theme === 'darkest' || theme === 'dark' ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
+                      <div className="flex items-start space-x-3">
+                        <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2"></div>
+                        <p className={`text-sm font-medium ${theme === 'darkest' || theme === 'dark' ? 'text-slate-200' : 'text-slate-900'}`}>
+                          {proposal.progress}% increase in proposal completeness. Would you like to view detailed progress?
+                        </p>
+                      </div>
+                      <div className="flex space-x-2 ml-4">
+                        <button 
+                          onClick={() => handleSectionClick('milestones')}
+                          className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors shadow-sm"
+                        >
+                          Yes
+                        </button>
+                        <button 
+                          onClick={() => setShowProgressSuggestion(false)}
+                          className={`px-4 py-1.5 border rounded-lg text-sm transition-colors ${theme === 'darkest' || theme === 'dark' ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                    )}
 
-            <div className="grid md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600">{proposal.budget.toLocaleString()}</div>
-                <div className="text-sm text-gray-500">Budget (₹)</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{proposal.submittedDate}</div>
-                <div className="text-sm text-gray-500">Submitted</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{completedMilestones}/{totalMilestones}</div>
-                <div className="text-sm text-gray-500">Milestones</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{proposal.feedback.length}</div>
-                <div className="text-sm text-gray-500">Reviews</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Timeline and Milestones using TimelineChart component */}
-          <TimelineChart 
-            timeline={proposal.timeline}
-            milestones={proposal.milestones}
-            currentPhase={proposal.currentPhase}
-          />
-
-          {/* Recent Activity Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-blue-200 animate-slideInUp" style={{ animationDelay: '0.8s' }}>
-            <h3 className="text-xl font-bold text-black mb-6 flex items-center">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              Recent Activity
-            </h3>
-            
-            <div className="space-y-4">
-              {proposal.recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                    activity.type === 'reviewer_comment' ? 'bg-blue-500' :
-                    activity.type === 'ai_suggestion' ? 'bg-purple-500' :
-                    activity.type === 'proposal_edit' ? 'bg-orange-500' :
-                    activity.type === 'reviewer_assigned' ? 'bg-green-500' :
-                    'bg-gray-500'
-                  }`}>
-                    {activity.type === 'reviewer_comment' ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                    ) : activity.type === 'ai_suggestion' ? (
-                      <img src="/images/AI assistant logo.png" alt="AI" className="w-6 h-6 rounded-full" />
-                    ) : activity.type === 'proposal_edit' ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    ) : activity.type === 'reviewer_assigned' ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                    {showFeedbackSuggestion && (
+                    <div className={`flex items-center justify-between p-3 rounded-lg border ${theme === 'darkest' || theme === 'dark' ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'}`}>
+                      <div className="flex items-start space-x-3">
+                        <div className="w-1.5 h-1.5 bg-green-600 rounded-full mt-2"></div>
+                        <p className={`text-sm font-medium ${theme === 'darkest' || theme === 'dark' ? 'text-slate-200' : 'text-slate-900'}`}>
+                          We recommend that you review expert feedback to improve your proposal quality.
+                        </p>
+                      </div>
+                      <div className="flex space-x-2 ml-4">
+                        <button 
+                          onClick={() => handleSectionClick('feedback')}
+                          className="px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
+                        >
+                          View Feedback
+                        </button>
+                        <button 
+                          onClick={() => setShowFeedbackSuggestion(false)}
+                          className={`px-4 py-1.5 border rounded-lg text-sm transition-colors ${theme === 'darkest' || theme === 'dark' ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-black">{activity.actor}</span>
-                      <span className="text-gray-500 text-sm">{activity.action}</span>
-                      <span className="text-xs text-gray-500">{activity.timestamp}</span>
-                    </div>
-                    <p className="text-sm text-gray-500">{activity.details}</p>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Reviewer Feedback Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-green-200 animate-slideInUp" style={{ animationDelay: '1.0s' }}>
-            <h3 className="text-xl font-bold text-black mb-6 flex items-center">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-6a2 2 0 012-2h8z" />
-                </svg>
-              </div>
-              Reviewer Feedback
-            </h3>
-            
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {proposal.feedback.map((feedback, index) => (
-                <div key={index} className={`p-4 rounded-lg border-l-4 ${
-                  feedback.type === 'positive' ? 'bg-green-50 border-green-500' :
-                  feedback.type === 'suggestion' ? 'bg-blue-50 border-blue-500' :
-                  'bg-gray-50 border-gray-400'
-                }`}>
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                      feedback.type === 'positive' ? 'bg-green-500' :
-                      feedback.type === 'suggestion' ? 'bg-blue-500' :
-                      'bg-gray-400'
-                    }`}>
-                      {feedback.reviewer.split(' ').map(n => n.charAt(0)).join('').substring(0, 2)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-semibold text-black text-sm mb-1">{feedback.reviewer}</div>
-                      <div className="text-xs text-gray-500 mb-2">{feedback.designation}</div>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-500 leading-relaxed mb-2">{feedback.comment}</p>
-                  <div className="text-xs text-gray-500">{feedback.date}</div>
+                {/* Expandable Details */}
+                <div className={`mt-6 pt-6 border-t ${theme === 'darkest' || theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
+                  <button 
+                    onClick={() => handleSectionClick(activeSection === 'all' ? null : 'all')}
+                    className={`text-sm hover:text-blue-600 transition-colors flex items-center font-medium ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}
+                  >
+                    <span>{activeSection === 'all' ? 'Hide Details' : 'View Full Details'}</span>
+                    <svg 
+                      className={`w-4 h-4 ml-1 transition-transform ${activeSection === 'all' ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white">
-      {/* Header Section with Government Branding */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => router.back()}
-              className="inline-flex items-center px-4 py-2 border border-blue-600 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              ⬅ Back to Dashboard
-            </button>
-            
-            <div className="text-center flex-1">
-              <h1 className="text-4xl font-bold text-blue-900 mb-2">Track Proposal Progress</h1>
-              <p className="text-blue-700 text-lg">PRISM - Proposal Review & Innovation Support Mechanism</p>
-              <p className="text-black mt-2">Real-time tracking for Department of Coal R&D proposals</p>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <div className="text-sm text-black">Proposal ID</div>
-                <div className="font-semibold text-blue-900">{proposal.id}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Proposal Overview Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="border-l-4 border-blue-600 pl-6">
-            <h2 className="text-2xl font-bold text-blue-900 mb-2">{proposal.title}</h2>
-            <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <span className="text-black font-medium">Principal Investigator:</span>
-                <span className="ml-2 text-blue-900">{proposal.researcher}</span>
-              </div>
-              <div>
-                <span className="text-black font-medium">Institution:</span>
-                <span className="ml-2 text-blue-900">{proposal.institution}</span>
-              </div>
-              <div>
-                <span className="text-black font-medium">Domain:</span>
-                <span className="ml-2 text-blue-900">{proposal.domain}</span>
-              </div>
-              <div>
-                <span className="text-black font-medium">Budget:</span>
-                <span className="ml-2 text-blue-900">₹{proposal.budget.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-            
-            {/* Status and Progress */}
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex items-center space-x-4">
-                <div className={`px-4 py-2 rounded-full text-sm font-semibold ${
-                  proposal.status === 'under_review' 
-                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                    : proposal.status === 'approved'
-                    ? 'bg-green-100 text-green-800 border border-green-200'
-                    : 'bg-red-100 text-red-800 border border-red-200'
-                }`}>
-                  ● {proposal.currentPhase}
-                </div>
-                <div className="text-sm text-black">
-                  Submitted on {new Date(proposal.submittedDate).toLocaleDateString('en-IN')}
-                </div>
-              </div>
-              
-              <div className="text-right">
-                <div className="text-sm text-black mb-1">Overall Progress</div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-32 bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
-                      style={{ width: `${proposal.progress}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-blue-900 font-bold text-lg">{proposal.progress}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Dashboard Content */}
-        <div className="space-y-8">
-          {/* Progress Timeline Section */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-blue-900 mb-6">🔄 Progress Timeline</h2>
-            <div className="relative">
-              <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-blue-200"></div>
-              <div className="space-y-6">
-                {proposal.timeline.map((item, index) => (
-                  <div key={index} className="relative flex items-start">
-                    <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center border-4 ${
-                      item.status === 'completed' 
-                        ? 'bg-green-500 border-green-200' 
-                        : item.status === 'active' 
-                        ? 'bg-blue-500 border-blue-200 animate-pulse' 
-                        : 'bg-gray-300 border-gray-200'
-                    }`}>
-                      {item.status === 'completed' ? (
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : item.status === 'active' ? (
-                        <div className="w-4 h-4 bg-white rounded-full"></div>
-                      ) : (
-                        <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                      )}
-                    </div>
-                    <div className="ml-6 flex-1 pb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className={`text-lg font-semibold ${
-                          item.status === 'completed' ? 'text-green-700' :
-                          item.status === 'active' ? 'text-blue-700' :
-                          'text-gray-600'
-                        }`}>
-                          {item.phase}
-                        </h3>
-                        {item.date && (
-                          <span className="text-sm text-black bg-gray-100 px-2 py-1 rounded">
-                            {new Date(item.date).toLocaleDateString('en-IN')}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-black">{item.description}</p>
-                      {item.status === 'active' && (
-                        <div className="mt-2 text-sm text-blue-600 font-medium">⚡ Currently in progress</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Dashboard Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Milestones Section */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-blue-900 mb-6">📋 Key Milestones</h2>
-              <div className="space-y-4">
-                {proposal.milestones.map((milestone, index) => (
-                  <div key={index} className={`border rounded-lg p-4 ${
-                    milestone.completed 
-                      ? 'border-green-200 bg-green-50' 
-                      : 'border-gray-200 bg-gray-50'
-                  }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          milestone.completed ? 'bg-green-500' : 'bg-gray-400'
-                        }`}>
-                          {milestone.completed ? (
-                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <div className="w-2 h-2 bg-white rounded-full"></div>
-                          )}
-                        </div>
-                        <h3 className={`font-semibold ${milestone.completed ? 'text-green-700' : 'text-black'}`}>
-                          {milestone.title}
-                        </h3>
-                      </div>
-                      <span className={`text-sm px-2 py-1 rounded ${
-                        milestone.completed ? 'bg-green-200 text-green-800' : 'bg-yellow-200 text-yellow-800'
-                      }`}>
-                        {milestone.completed ? '✅ Completed' : '⏳ Pending'}
-                      </span>
-                    </div>
-                    <div className="text-sm text-black">
-                      <span className="font-medium">Due:</span> {new Date(milestone.dueDate).toLocaleDateString('en-IN')}
-                      {milestone.completedDate && (
-                        <span className="ml-4">
-                          <span className="font-medium">Completed:</span> {new Date(milestone.completedDate).toLocaleDateString('en-IN')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Recent Activity Feed */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-blue-900 mb-6">🔔 Recent Activity</h2>
-              <div className="space-y-4">
-                {proposal.recentActivity.map((activity, index) => {
-                  const getIcon = (type) => {
-                    switch(type) {
-                      case 'reviewer_comment': return '💬';
-                      case 'ai_suggestion': return '🤖';
-                      case 'proposal_edit': return '✏️';
-                      case 'reviewer_assigned': return '👤';
-                      case 'milestone_completed': return '✅';
-                      default: return '📝';
-                    }
-                  };
-                  
-                  const getTypeColor = (type) => {
-                    switch(type) {
-                      case 'reviewer_comment': return 'border-blue-200 bg-blue-50';
-                      case 'ai_suggestion': return 'border-purple-200 bg-purple-50';
-                      case 'proposal_edit': return 'border-orange-200 bg-orange-50';
-                      case 'reviewer_assigned': return 'border-green-200 bg-green-50';
-                      case 'milestone_completed': return 'border-green-200 bg-green-50';
-                      default: return 'border-gray-200 bg-gray-50';
-                    }
-                  };
-                  
-                  return (
-                    <div key={index} className={`border rounded-lg p-4 ${getTypeColor(activity.type)}`}>
-                      <div className="flex items-start space-x-3">
-                        <span className="text-2xl">{getIcon(activity.type)}</span>
-                        <div className="flex-1">
-                          <div className="text-sm text-black mb-1">
-                            <span className="font-semibold text-blue-900">{activity.actor}</span>
-                            <span className="mx-1">•</span>
-                            <span>{activity.action}</span>
-                          </div>
-                          <p className="text-sm text-black mb-2">{activity.details}</p>
-                          <div className="text-xs text-gray-600">{activity.timestamp}</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Feedback Highlights Section */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-blue-900 mb-6">💭 Reviewer Feedback Highlights</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {proposal.feedback.map((feedback, index) => {
-                const getTypeColor = (type) => {
-                  switch(type) {
-                    case 'positive': return 'border-green-200 bg-green-50';
-                    case 'suggestion': return 'border-blue-200 bg-blue-50';
-                    case 'neutral': return 'border-gray-200 bg-gray-50';
-                    default: return 'border-yellow-200 bg-yellow-50';
-                  }
-                };
-                
-                const getTypeIcon = (type) => {
-                  switch(type) {
-                    case 'positive': return '👍';
-                    case 'suggestion': return '💡';
-                    case 'neutral': return '📝';
-                    default: return '⚠️';
-                  }
-                };
-                
-                return (
-                  <div key={index} className={`border rounded-lg p-4 ${getTypeColor(feedback.type)}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-bold">
-                            {feedback.reviewer.split(' ').map(n => n[0]).join('')}
-                          </span>
-                        </div>
-                        <span className="text-xs">{getTypeIcon(feedback.type)}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        {[...Array(5)].map((_, i) => (
-                          <svg key={i} className={`w-4 h-4 ${i < Math.floor(feedback.rating) ? 'text-yellow-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                {/* Expanded Content */}
+                {activeSection && (
+                  <div ref={detailsContainerRef} className="mt-6 space-y-4 animate-slideInUp scroll-mt-20">
+                    {/* Section 1: Detailed Timeline */}
+                    {(activeSection === 'timeline' || activeSection === 'all') && (
+                    <div className={`rounded-xl p-6 border ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center space-x-3 mb-5">
+                        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
+                        </div>
+                        <div>
+                          <h4 className={`text-lg font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Review Timeline</h4>
+                          <p className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Detailed progression of your proposal through review stages</p>
+                        </div>
+                      </div>
+                      <div className="space-y-4 pl-2">
+                        {proposal.timeline.map((item, index) => (
+                          <div key={index} className="flex items-start space-x-4">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              item.status === 'completed' 
+                                ? 'bg-green-100 text-green-600' 
+                                : item.status === 'active'
+                                ? 'bg-orange-100 text-orange-600'
+                                : 'bg-gray-100 text-gray-400'
+                            }`}>
+                              {item.status === 'completed' ? (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              ) : item.status === 'active' ? (
+                                <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
+                              ) : (
+                                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <h5 className={`font-semibold ${
+                                  item.status === 'completed' ? 'text-green-700' :
+                                  item.status === 'active' ? 'text-blue-600' :
+                                  (theme === 'darkest' || theme === 'dark' ? 'text-slate-300' : 'text-slate-700')
+                                }`}>
+                                  {item.phase}
+                                </h5>
+                                <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                  item.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                  item.status === 'active' ? 'bg-orange-100 text-orange-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>{item.date}</span>
+                              </div>
+                              <p className={`text-sm leading-relaxed ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{item.description}</p>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
-                    <h4 className="font-semibold text-black mb-1">{feedback.reviewer}</h4>
-                    <p className="text-xs text-black mb-2">{feedback.designation}</p>
-                    <p className="text-sm text-black mb-2 leading-relaxed">{feedback.comment}</p>
-                    <div className="text-xs text-gray-600">{new Date(feedback.date).toLocaleDateString('en-IN')}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    )}
 
-          {/* Quick Actions Section */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-blue-900 mb-6">⚡ Quick Actions</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button
-                onClick={() => router.push(`/proposal/view/${id}`)}
-                className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <span>📄</span>
-                <span>View Proposal</span>
-              </button>
-              
-              <button
-                onClick={() => router.push(`/proposal/edit/${id}`)}
-                className="flex items-center justify-center space-x-2 bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <span>✏️</span>
-                <span>Edit Proposal</span>
-              </button>
-              
-              <button
-                onClick={() => router.push(`/proposal/collaborate/${id}`)}
-                className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                <span>👥</span>
-                <span>Collaborate</span>
-              </button>
-              
-              <button
-                onClick={() => window.print()}
-                className="flex items-center justify-center space-x-2 bg-gray-600 text-white px-6 py-4 rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                <span>🖨️</span>
-                <span>Print Report</span>
-              </button>
-            </div>
-          </div>
-        </div>
+                    {/* Section 2: Key Milestones */}
+                    {(activeSection === 'milestones' || activeSection === 'all') && (
+                    <div className={`rounded-xl p-6 border ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center space-x-3 mb-5">
+                        <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className={`text-lg font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Key Milestones</h4>
+                          <p className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Track important checkpoints in the review process</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {proposal.milestones.map((milestone, index) => (
+                          <div key={index} className={`p-4 rounded-lg border-2 transition-all ${
+                            milestone.completed 
+                              ? 'bg-white border-green-300 shadow-sm' 
+                              : (theme === 'darkest' || theme === 'dark' ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-200')
+                          }`}>
+                            <div className="flex items-start space-x-3">
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                                milestone.completed ? 'bg-green-500' : 'bg-gray-300'
+                              }`}>
+                                {milestone.completed && (
+                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <span className={`text-sm font-semibold block ${
+                                  milestone.completed ? 'text-green-700' : (theme === 'darkest' || theme === 'dark' ? 'text-slate-300' : 'text-slate-700')
+                                }`}>
+                                  {milestone.title}
+                                </span>
+                                <div className={`text-xs mt-1 ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                                  <span className="font-medium">Due:</span> {milestone.dueDate}
+                                </div>
+                                {milestone.completedDate && (
+                                  <div className="text-xs text-green-600 mt-0.5 font-medium">
+                                    ✓ Completed: {milestone.completedDate}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    )}
+
+                    {/* Section 3: Expert Feedback */}
+                    {(activeSection === 'feedback' || activeSection === 'all') && proposal.feedback.length > 0 && (
+                      <div className={`rounded-xl p-6 border ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className="flex items-center space-x-3 mb-5">
+                          <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <h4 className={`text-lg font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Expert Feedback</h4>
+                            <p className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Reviews and comments from domain experts</p>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {proposal.feedback.map((feedback, index) => (
+                            <div key={index} className={`rounded-lg p-4 border shadow-sm ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-200'}`}>
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <h5 className={`font-semibold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{feedback.reviewer}</h5>
+                                  <p className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{feedback.designation}</p>
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                  </svg>
+                                  <span className={`text-sm font-semibold ${theme === 'darkest' || theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{feedback.rating}</span>
+                                </div>
+                              </div>
+                              <p className={`text-sm leading-relaxed ${theme === 'darkest' || theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{feedback.comment}</p>
+                              <div className={`mt-2 text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                                <span className="font-medium">Date:</span> {feedback.date}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section 4: Recent Activity */}
+                    {activeSection === 'all' && (
+                    <div className={`rounded-xl p-6 border ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center space-x-3 mb-5">
+                        <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className={`text-lg font-bold ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Recent Activity</h4>
+                          <p className={`text-xs ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Latest updates and actions on your proposal</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {proposal.recentActivity.slice(0, 5).map((activity, index) => (
+                          <div key={index} className={`flex items-start space-x-3 p-3 rounded-lg border ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-200'}`}>
+                            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 text-lg">
+                              {activity.type === 'reviewer_comment' ? '💬' :
+                               activity.type === 'ai_suggestion' ? '🤖' :
+                               activity.type === 'proposal_edit' ? '✏️' :
+                               activity.type === 'reviewer_assigned' ? '👤' : '✅'}
+                            </div>
+                            <div className="flex-1">
+                              <p className={`text-sm ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                                <span className="font-semibold">{activity.actor}</span> {activity.action}
+                              </p>
+                              <p className={`text-xs mt-1 ${theme === 'darkest' || theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{activity.timestamp}</p>
+                              {activity.details && (
+                                <p className={`text-xs mt-2 p-2 rounded ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-600 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>{activity.details}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    )}
+
+                  </div>
+                )}
+
+                {/* Action Buttons Section - Always Visible */}
+                <div className={`mt-6 rounded-xl p-6 border ${theme === 'darkest' || theme === 'dark' ? 'bg-gradient-to-r from-slate-800 to-slate-900 border-slate-700' : 'bg-gradient-to-r from-blue-50 to-slate-50 border-blue-200'}`}>
+                  <h4 className={`text-sm font-semibold mb-4 ${theme === 'darkest' || theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Quick Actions</h4>
+                  <div className="flex items-center flex-wrap gap-3">
+                    <button 
+                      onClick={() => router.push(`/proposal/view/${id}`)}
+                      className={`px-5 py-2.5 border-2 rounded-lg text-sm font-medium transition-all shadow-sm ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:border-slate-500' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400'}`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <span>View Full Proposal</span>
+                      </div>
+                    </button>
+                    <button 
+                      onClick={() => router.push(`/proposal/edit/${id}`)}
+                      className={`px-5 py-2.5 border-2 rounded-lg text-sm font-medium transition-all shadow-sm ${theme === 'darkest' || theme === 'dark' ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:border-slate-500' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400'}`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>Edit Proposal</span>
+                      </div>
+                    </button>
+                    <button 
+                      onClick={handleExportReport}
+                      disabled={isExporting}
+                      className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>{isExporting ? 'Exporting...' : 'Export Report'}</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
       </div>
-    </div>
+    </UserDashboardLayout>
   );
 }
 

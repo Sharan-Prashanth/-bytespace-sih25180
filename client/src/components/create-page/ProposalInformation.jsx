@@ -43,8 +43,8 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             onChange={(e) => handleChange('fundingMethod', e.target.value)}
             className="w-full px-4 py-2 border border-black/20 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-black/20"
           >
-            <option value="S&T_OF_MOC">S&T of MoC</option>
-            <option value="R&D_OF_CIL">R&D of CIL</option>
+            <option value="S&T of MoC">S&T of MoC</option>
+            <option value="R&D of CIL">R&D of CIL</option>
           </select>
         </div>
 
