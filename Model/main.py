@@ -21,6 +21,7 @@ from Json_extraction import extractor
 import uvicorn
 from data_files import file_storage
 from Common.ai_validator import ai_detector_pipeline
+from ai_validaton import validation
 from Report import report_gen
 app = FastAPI()
 
@@ -39,6 +40,7 @@ app.include_router(benefit.router)
 app.include_router(deliverables.router)
 app.include_router(non_ocr.router)
 # app.include_router(similarity_checker.router)
+app.include_router(validation.router)
 app.include_router(rag_chat_guidlines.router)
 app.include_router(rag_chat_specialist.router)
 app.include_router(extractor.router)
