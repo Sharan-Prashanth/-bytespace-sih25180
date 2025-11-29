@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { getProposalById } from '../../../utils/proposalApi';
+import { Edit, Users, FileText, MessageSquare, Download, ChevronUp, ChevronDown } from 'lucide-react';
 
 // Lazy load heavy components
 const AdvancedProposalEditor = lazy(() => import('../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor'));
@@ -21,6 +22,48 @@ function ViewProposalContent() {
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [fabExpanded, setFabExpanded] = useState(true);
+
+  // Determine which buttons to show based on user role
+  const userRoles = user?.roles || [];
+  const isAdmin = userRoles.includes('SUPER_ADMIN');
+  const isExpert = userRoles.includes('EXPERT_REVIEWER');
+  const isCMPDI = userRoles.includes('CMPDI_MEMBER');
+  const isTSSRC = userRoles.includes('TSSRC_MEMBER');
+  const isSSRC = userRoles.includes('SSRC_MEMBER');
+  const isRegularUser = userRoles.includes('USER') || userRoles.length === 0;
+
+  // Determine the correct dashboard path based on user role
+  const getDashboardPath = () => {
+    if (isAdmin) return '/dashboard/admin';
+    if (isExpert) return '/dashboard/expert';
+    if (isCMPDI) return '/dashboard/cmpdi';
+    if (isTSSRC) return '/dashboard/tssrc';
+    if (isSSRC) return '/dashboard/ssrc';
+    return '/dashboard'; // Default for regular users
+  };
+
+  // Get role-specific label
+  const getRoleLabel = () => {
+    if (isAdmin) return 'Admin Dashboard';
+    if (isExpert) return 'Expert Dashboard';
+    if (isCMPDI) return 'CMPDI Dashboard';
+    if (isTSSRC) return 'TSSRC Dashboard';
+    if (isSSRC) return 'SSRC Dashboard';
+    return 'Dashboard';
+  };
+
+  // Button visibility based on roles:
+  // user - collaborate, track
+  // expert - collaborate, track, review
+  // cmpdi - collaborate, track, review
+  // admin - everything (edit, collaborate, track, review, download)
+  // tssrc, ssrc - collaborate, track, review
+  const showEdit = isAdmin;
+  const showCollaborate = true; // Everyone can collaborate
+  const showReview = isAdmin || isExpert || isCMPDI || isTSSRC || isSSRC;
+  const showTrack = true; // Everyone can track
+  const showDownload = isAdmin;
 
   // Load proposal data
   useEffect(() => {
@@ -130,10 +173,10 @@ function ViewProposalContent() {
             {error || 'Proposal not found'}
           </p>
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(getDashboardPath())}
             className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
           >
-            Back to Dashboard
+            Back to {getRoleLabel()}
           </button>
         </div>
       </div>
@@ -142,17 +185,101 @@ function ViewProposalContent() {
 
   return (
     <div className="min-h-screen bg-black/5">
+      {/* Floating Action Button Panel - Fixed position, scrolls with user */}
+      <div className="fixed right-6 top-1/2 -translate-y-1/2 z-50">
+        <div className={`bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
+          {/* Toggle Button */}
+          <button
+            onClick={() => setFabExpanded(!fabExpanded)}
+            className="w-full flex items-center justify-between p-3 hover:bg-slate-50 transition-colors border-b border-slate-100"
+          >
+            {fabExpanded && <span className="text-sm font-semibold text-slate-700">Actions</span>}
+            {fabExpanded ? (
+              <ChevronDown className="w-5 h-5 text-slate-500" />
+            ) : (
+              <ChevronUp className="w-5 h-5 text-slate-500 mx-auto" />
+            )}
+          </button>
+
+          {/* Action Buttons */}
+          <div className="p-2 space-y-1">
+            {/* Edit Button - Admin only */}
+            {showEdit && (
+              <button
+                onClick={() => router.push(`/proposal/collaborate/${id}?mode=edit`)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                title="Edit Proposal"
+              >
+                <Edit className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                {fabExpanded && <span className="text-sm font-medium">Edit</span>}
+              </button>
+            )}
+
+            {/* Collaborate Button - Everyone */}
+            {showCollaborate && (
+              <button
+                onClick={() => router.push(`/proposal/collaborate/${id}`)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                title="Collaborate"
+              >
+                <Users className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                {fabExpanded && <span className="text-sm font-medium">Collaborate</span>}
+              </button>
+            )}
+
+            {/* Review Button - Expert, CMPDI, TSSRC, SSRC, Admin */}
+            {showReview && (
+              <button
+                onClick={() => router.push(`/proposal/review/${id}`)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                title="Review"
+              >
+                <FileText className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                {fabExpanded && <span className="text-sm font-medium">Review</span>}
+              </button>
+            )}
+
+            {/* Track Button - Everyone */}
+            {showTrack && (
+              <button
+                onClick={() => router.push(`/proposal/track/${id}`)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                title="Track Progress"
+              >
+                <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                {fabExpanded && <span className="text-sm font-medium">Track</span>}
+              </button>
+            )}
+
+            {/* Download Button - Admin only */}
+            {showDownload && (
+              <button
+                onClick={() => {
+                  // Download functionality - can be expanded later
+                  alert('Download feature coming soon!');
+                }}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                title="Download PDF"
+              >
+                <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                {fabExpanded && <span className="text-sm font-medium">Download</span>}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Header with Back Button */}
       <div className="bg-white border-b border-black/10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(getDashboardPath())}
             className="flex items-center gap-2 px-4 py-2 text-sm border border-black/20 text-black rounded-lg hover:bg-black/5 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Back to Dashboard
+            Back to {getRoleLabel()}
           </button>
         </div>
       </div>

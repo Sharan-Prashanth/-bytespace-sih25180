@@ -398,6 +398,11 @@ function TSSRCDashboardContent() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex gap-2">
+                            <Link href={`/proposal/view/${proposal._id}`}>
+                              <button className="p-1.5 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200" title="View Proposal">
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                            </Link>
                             <Link href={`/proposal/tssrc-review/${proposal._id}`}>
                               <button className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200" title="Open TSSRC Review">
                                 <Eye className="w-3.5 h-3.5" />

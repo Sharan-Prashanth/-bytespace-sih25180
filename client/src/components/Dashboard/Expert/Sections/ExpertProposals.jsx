@@ -201,8 +201,8 @@ export default function ExpertProposals({ proposals, user, theme }) {
                                             </td>
                                             <td className="py-4 px-4">
                                                 <div className="flex gap-2">
-                                                    <Link href={`/proposal/expert-review/${proposal._id}`}>
-                                                        <button className={`p-2 ${isDark ? 'bg-orange-900/30 text-orange-400 hover:bg-orange-900/50' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'} rounded-lg transition-colors`} title="Open Expert Review">
+                                                    <Link href={`/proposal/view/${proposal._id}`}>
+                                                        <button className={`p-2 ${isDark ? 'bg-orange-900/30 text-orange-400 hover:bg-orange-900/50' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'} rounded-lg transition-colors`} title="View Proposal">
                                                             <Eye className="w-4 h-4" />
                                                         </button>
                                                     </Link>
@@ -211,8 +211,8 @@ export default function ExpertProposals({ proposals, user, theme }) {
                                                             <Edit className="w-4 h-4" />
                                                         </button>
                                                     </Link>
-                                                    <Link href={`/proposal/view/${proposal._id}`}>
-                                                        <button className={`p-2 ${isDark ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50' : 'bg-green-100 text-green-700 hover:bg-green-200'} rounded-lg transition-colors`} title="View Documents">
+                                                    <Link href={`/proposal/review/${proposal._id}`}>
+                                                        <button className={`p-2 ${isDark ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50' : 'bg-green-100 text-green-700 hover:bg-green-200'} rounded-lg transition-colors`} title="Submit Review">
                                                             <FileText className="w-4 h-4" />
                                                         </button>
                                                     </Link>

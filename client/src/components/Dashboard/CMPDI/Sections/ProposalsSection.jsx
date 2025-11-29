@@ -139,39 +139,52 @@ const MOCK_REVIEWERS = [
 const ProposalCard = ({ proposal, onClick, theme }) => {
     const isDark = theme === 'dark' || theme === 'darkest';
     
+    // Format date
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
+
+    // Format budget
+    const formatBudget = (amount) => {
+        if (!amount) return 'N/A';
+        const lakhs = amount / 100000;
+        return `₹${lakhs.toFixed(1)}L`;
+    };
+
     return (
         <div 
             onClick={() => onClick(proposal)}
             className={`${isDark ? 'bg-slate-900/50 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-500'} border rounded-xl p-4 transition-all cursor-pointer group shadow-sm`}
         >
             <div className="flex justify-between items-start mb-3">
-                <span className={`text-xs font-mono px-2 py-1 rounded ${isDark ? 'text-blue-400 bg-blue-400/10' : 'text-blue-600 bg-blue-50'}`}>{proposal.id}</span>
+                <span className={`text-xs font-mono px-2 py-1 rounded ${isDark ? 'text-blue-400 bg-blue-400/10' : 'text-blue-600 bg-blue-50'}`}>{proposal.proposalCode || proposal._id || proposal.id}</span>
                 <span className={`text-xs px-2 py-1 rounded-full border ${
                     proposal.priority === 'High' ? (isDark ? 'text-red-400 border-red-400/20 bg-red-400/10' : 'text-red-600 border-red-200 bg-red-50') :
                     proposal.priority === 'Medium' ? (isDark ? 'text-yellow-400 border-yellow-400/20 bg-yellow-400/10' : 'text-yellow-600 border-yellow-200 bg-yellow-50') :
                     (isDark ? 'text-slate-400 border-slate-400/20 bg-slate-400/10' : 'text-slate-500 border-slate-200 bg-slate-50')
                 }`}>
-                    {proposal.priority}
+                    {proposal.priority || proposal.status || 'Normal'}
                 </span>
             </div>
             <h3 className={`${isDark ? 'text-white group-hover:text-blue-400' : 'text-slate-900 group-hover:text-blue-600'} font-semibold mb-2 line-clamp-2 transition-colors`}>{proposal.title}</h3>
             <div className={`space-y-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 <div className="flex items-center gap-2">
                     <Users size={14} />
-                    <span>{proposal.pi}</span>
+                    <span>{proposal.projectLeader || proposal.createdBy?.fullName || proposal.pi || 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <FileText size={14} />
-                    <span>{proposal.institution}</span>
+                    <span>{proposal.principalAgency || proposal.institution || 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <Calendar size={14} />
-                    <span>{proposal.submissionDate}</span>
+                    <span>{formatDate(proposal.createdAt || proposal.submissionDate)}</span>
                 </div>
             </div>
             <div className={`mt-4 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-100'} flex justify-between items-center`}>
-                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{proposal.stage}</span>
-                <span className={`${isDark ? 'text-emerald-400' : 'text-emerald-600'} font-medium text-sm`}>₹{(proposal.budget/100000).toFixed(1)}L</span>
+                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{proposal.status || proposal.stage}</span>
+                <span className={`${isDark ? 'text-emerald-400' : 'text-emerald-600'} font-medium text-sm`}>{formatBudget(proposal.outlayLakhs * 100000 || proposal.totalBudget || proposal.budget)}</span>
             </div>
         </div>
     );
@@ -527,7 +540,8 @@ export default function ProposalsSection({ proposals = [], theme }) {
         };
         
         const action = routes[tab] || 'view';
-        router.push(`/proposal/${action}/${proposal.id}`);
+        const proposalId = proposal._id || proposal.id;
+        router.push(`/proposal/${action}/${proposalId}`);
     };
 
     return (
@@ -582,12 +596,12 @@ export default function ProposalsSection({ proposals = [], theme }) {
                                             <h3 className={`font-semibold ${textClass}`}>{stage.label}</h3>
                                         </div>
                                         <span className={`text-xs px-2 py-1 rounded-full border ${isDark ? 'text-slate-500 bg-slate-900 border-slate-800' : 'text-slate-500 bg-white border-slate-200'}`}>
-                                            {MOCK_PROPOSALS.filter(p => p.stage === stage.id).length}
+                                            {proposals.filter(p => p.stage === stage.id || p.status === stage.id).length}
                                         </span>
                                     </div>
                                     <div className={`flex-1 rounded-xl border p-3 space-y-3 overflow-y-auto ${isDark ? 'bg-slate-950/30 border-slate-800/50' : 'bg-slate-50/50 border-slate-200'}`}>
-                                        {MOCK_PROPOSALS.filter(p => p.stage === stage.id).map(proposal => (
-                                            <ProposalCard key={proposal.id} proposal={proposal} onClick={(p) => handleViewProposal(p, 'overview')} theme={theme} />
+                                        {proposals.filter(p => p.stage === stage.id || p.status === stage.id).map(proposal => (
+                                            <ProposalCard key={proposal._id || proposal.id} proposal={proposal} onClick={(p) => handleViewProposal(p, 'overview')} theme={theme} />
                                         ))}
                                     </div>
                                 </div>
@@ -609,15 +623,15 @@ export default function ProposalsSection({ proposals = [], theme }) {
                                 </tr>
                             </thead>
                             <tbody className={`divide-y ${divideClass}`}>
-                                {MOCK_PROPOSALS.map(proposal => (
-                                    <tr key={proposal.id} className={`${tableRowHoverClass} transition-colors`}>
-                                        <td className={`p-4 text-sm font-mono ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>{proposal.id}</td>
+                                {proposals.map(proposal => (
+                                    <tr key={proposal._id || proposal.id} className={`${tableRowHoverClass} transition-colors`}>
+                                        <td className={`p-4 text-sm font-mono ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>{proposal.proposalCode || proposal._id}</td>
                                         <td className={`p-4 text-sm font-medium ${textClass}`}>{proposal.title}</td>
                                         <td className="p-4">
-                                            <div className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{proposal.pi}</div>
-                                            <div className={`text-xs ${subTextClass}`}>{proposal.institution}</div>
+                                            <div className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{proposal.projectLeader || proposal.createdBy?.fullName || proposal.pi}</div>
+                                            <div className={`text-xs ${subTextClass}`}>{proposal.principalAgency || proposal.institution}</div>
                                         </td>
-                                        <td className={`p-4 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.stage}</td>
+                                        <td className={`p-4 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{proposal.status || proposal.stage}</td>
                                         <td className="p-4">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                                                 proposal.status === 'Active' ? (isDark ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200') :
@@ -627,7 +641,7 @@ export default function ProposalsSection({ proposals = [], theme }) {
                                                 {proposal.status}
                                             </span>
                                         </td>
-                                        <td className={`p-4 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>₹{(proposal.budget/100000).toFixed(1)}L</td>
+                                        <td className={`p-4 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>₹{((proposal.outlayLakhs || proposal.totalBudget/100000 || proposal.budget/100000 || 0)).toFixed(1)}L</td>
                                         <td className="p-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button 
