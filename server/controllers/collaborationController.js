@@ -7,6 +7,16 @@ import activityLogger from '../utils/activityLogger.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 /**
+ * Helper to find proposal by ObjectId or proposalCode
+ */
+const findProposal = async (proposalId) => {
+  if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
+    return await Proposal.findById(proposalId);
+  }
+  return await Proposal.findOne({ proposalCode: proposalId });
+};
+
+/**
  * @route   POST /api/proposals/:proposalId/invite-ci
  * @desc    Invite co-investigator
  * @access  Private (PI only)
@@ -15,12 +25,10 @@ export const inviteCoInvestigator = asyncHandler(async (req, res) => {
   const { email, fullName } = req.body;
   const { proposalId } = req.params;
 
-  // Check if proposalId is a valid MongoDB ObjectId or a proposalCode
-  let proposal;
-  if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
-    proposal = await Proposal.findById(proposalId).populate('createdBy', 'fullName email');
-  } else {
-    proposal = await Proposal.findOne({ proposalCode: proposalId }).populate('createdBy', 'fullName email');
+  // Find proposal
+  let proposal = await findProposal(proposalId);
+  if (proposal) {
+    await proposal.populate('createdBy', 'fullName email');
   }
 
   if (!proposal) {
@@ -76,35 +84,44 @@ export const inviteCoInvestigator = asyncHandler(async (req, res) => {
   await proposal.save();
 
   // Send invitation email
-  await emailService.sendCollaborationInviteEmail(
-    user.email,
-    user.fullName,
-    proposal.createdBy.fullName,
-    proposal.proposalCode,
-    proposal.title
-  );
+  try {
+    await emailService.sendCollaborationInviteEmail(
+      user.email,
+      user.fullName,
+      proposal.createdBy.fullName,
+      proposal.proposalCode,
+      proposal.title
+    );
+  } catch (emailError) {
+    console.error('Failed to send invitation email:', emailError);
+  }
 
   // Log activity
-  await activityLogger.log({
-    user: req.user._id,
-    action: 'COLLABORATOR_ADDED',
-    proposalId: proposal._id,
-    details: { 
-      proposalCode: proposal.proposalCode,
-      addedUser: user._id,
-      role: 'CI'
-    },
-    ipAddress: req.ip
-  });
+  try {
+    await activityLogger.log({
+      user: req.user._id,
+      action: 'COLLABORATOR_ADDED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        addedUser: user._id,
+        role: 'CI'
+      },
+      ipAddress: req.ip
+    });
+  } catch (logError) {
+    console.error('Failed to log activity:', logError);
+  }
 
   res.json({
     success: true,
     message: 'Co-investigator invited successfully',
     data: {
       user: {
-        id: user._id,
+        _id: user._id,
         fullName: user.fullName,
-        email: user.email
+        email: user.email,
+        role: 'CI'
       }
     }
   });
@@ -380,6 +397,277 @@ export const uploadDocument = asyncHandler(async (req, res) => {
     data: {
       url: uploadResult.url,
       path: uploadResult.path
+    }
+  });
+});
+
+/**
+ * @route   DELETE /api/collaboration/delete/image
+ * @desc    Delete an image from storage
+ * @access  Private
+ */
+export const deleteImage = asyncHandler(async (req, res) => {
+  const { url, path } = req.body;
+
+  if (!url && !path) {
+    return res.status(400).json({
+      success: false,
+      message: 'Image URL or path is required'
+    });
+  }
+
+  try {
+    const deleteResult = await storageService.deleteFile(path || url);
+
+    if (!deleteResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Image deletion failed',
+        error: deleteResult.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Image deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Image deletion failed',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   DELETE /api/collaboration/:proposalId/collaborators/:collaboratorId
+ * @desc    Remove a collaborator from proposal
+ * @access  Private (PI only for CI removal)
+ */
+export const removeCollaborator = asyncHandler(async (req, res) => {
+  const { proposalId, collaboratorId } = req.params;
+
+  const proposal = await findProposal(proposalId);
+  if (proposal) {
+    await proposal.populate('createdBy', 'fullName email');
+  }
+
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Only PI can remove collaborators (or admin)
+  const isPI = proposal.createdBy._id.toString() === req.user._id.toString();
+  const isAdmin = req.user.roles?.includes('SUPER_ADMIN');
+
+  if (!isPI && !isAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only Principal Investigator can remove collaborators'
+    });
+  }
+
+  // Remove from coInvestigators array
+  proposal.coInvestigators = proposal.coInvestigators.filter(
+    ci => ci.toString() !== collaboratorId
+  );
+
+  // Remove from collaborators array
+  proposal.collaborators = proposal.collaborators.filter(
+    collab => collab.userId.toString() !== collaboratorId
+  );
+
+  await proposal.save();
+
+  // Log activity
+  try {
+    await activityLogger.log({
+      user: req.user._id,
+      action: 'COLLABORATOR_REMOVED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        removedUser: collaboratorId
+      },
+      ipAddress: req.ip
+    });
+  } catch (logError) {
+    console.error('Failed to log activity:', logError);
+  }
+
+  res.json({
+    success: true,
+    message: 'Collaborator removed successfully'
+  });
+});
+
+/**
+ * @route   GET /api/collaboration/:proposalId/active-users
+ * @desc    Get currently active users in collaboration room
+ * @access  Private
+ */
+export const getActiveUsers = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+
+  // Get collaboration service from app
+  const collaborationService = req.app.get('collaborationService');
+  
+  if (!collaborationService) {
+    return res.json({
+      success: true,
+      data: []
+    });
+  }
+
+  // Get room state
+  const roomState = collaborationService.getRoomState(proposalId);
+  
+  if (!roomState) {
+    return res.json({
+      success: true,
+      data: []
+    });
+  }
+
+  res.json({
+    success: true,
+    data: roomState.activeUsers || []
+  });
+});
+
+/**
+ * @route   GET /api/collaboration/proposals/:proposalId/collaborate
+ * @desc    Get proposal for collaboration with full details
+ * @access  Private (must be collaborator)
+ */
+export const getProposalForCollaboration = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Populate all relevant fields
+  await proposal.populate([
+    { path: 'createdBy', select: 'fullName email roles designation organisationName' },
+    { path: 'coInvestigators', select: 'fullName email roles designation organisationName' },
+    { path: 'collaborators.userId', select: 'fullName email roles designation organisationName' },
+    { path: 'assignedReviewers.reviewer', select: 'fullName email roles designation' }
+  ]);
+
+  // Check if user has access
+  const userId = req.user._id.toString();
+  const isPI = proposal.createdBy?._id?.toString() === userId;
+  const isCI = proposal.coInvestigators?.some(ci => ci?._id?.toString() === userId);
+  const isCollaborator = proposal.collaborators?.some(c => c?.userId?._id?.toString() === userId);
+  const isReviewer = proposal.assignedReviewers?.some(r => r?.reviewer?._id?.toString() === userId);
+  const isAdmin = req.user.roles?.includes('SUPER_ADMIN');
+  const isCommittee = req.user.roles?.some(r => ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER'].includes(r));
+
+  if (!isPI && !isCI && !isCollaborator && !isReviewer && !isAdmin && !isCommittee) {
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have access to this proposal'
+    });
+  }
+
+  res.json({
+    success: true,
+    data: proposal
+  });
+});
+
+/**
+ * @route   POST /api/collaboration/:proposalId/sync
+ * @desc    Sync proposal data and optionally create minor version
+ * @access  Private (PI or CI only)
+ */
+export const syncProposalData = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { proposalInfo, createMinorVersion } = req.body;
+
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  await proposal.populate('createdBy', 'fullName email');
+
+  // Only PI or CI can sync
+  const userId = req.user._id.toString();
+  const isPI = proposal.createdBy?._id?.toString() === userId;
+  const isCI = proposal.coInvestigators?.some(ci => ci?.toString() === userId);
+
+  if (!isPI && !isCI) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only PI or CI can sync proposal data'
+    });
+  }
+
+  // Update proposal info if provided
+  if (proposalInfo) {
+    const updateFields = ['title', 'fundingMethod', 'principalAgency', 'subAgencies', 
+      'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs'];
+    
+    updateFields.forEach(field => {
+      if (proposalInfo[field] !== undefined) {
+        proposal[field] = proposalInfo[field];
+      }
+    });
+  }
+
+  // Create minor version if requested
+  if (createMinorVersion) {
+    // Calculate new minor version
+    const currentVersion = parseFloat(proposal.currentVersion) || 1.0;
+    const baseVersion = Math.floor(currentVersion);
+    const currentMinor = Math.round((currentVersion - baseVersion) * 10);
+    const newMinorVersion = baseVersion + ((currentMinor + 1) / 10);
+    
+    proposal.currentVersion = newMinorVersion.toFixed(1);
+  }
+
+  proposal.updatedAt = new Date();
+  await proposal.save();
+
+  // Log activity
+  try {
+    await activityLogger.log({
+      user: req.user._id,
+      action: 'PROPOSAL_SYNCED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        newVersion: proposal.currentVersion,
+        createMinorVersion
+      },
+      ipAddress: req.ip
+    });
+  } catch (logError) {
+    console.error('Failed to log activity:', logError);
+  }
+
+  res.json({
+    success: true,
+    message: 'Proposal synced successfully',
+    data: {
+      currentVersion: proposal.currentVersion,
+      updatedAt: proposal.updatedAt
     }
   });
 });

@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import emailService from '../services/emailService.js';
 import activityLogger from '../utils/activityLogger.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import bcrypt from 'bcryptjs';
 
 /**
  * @route   GET /api/users
@@ -435,5 +436,132 @@ export const getUserProposalCount = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: counts
+  });
+});
+
+/**
+ * @route   PUT /api/users/profile
+ * @desc    Update current user's profile
+ * @access  Private
+ */
+export const updateProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+
+  // Fields that can be updated through profile
+  const {
+    fullName,
+    phone,
+    phoneNumber,
+    organization,
+    organisationName,
+    designation,
+    address,
+    bio,
+    preferredTheme
+  } = req.body;
+
+  // Update fields if provided
+  if (fullName) user.fullName = fullName;
+  if (phone || phoneNumber) user.phoneNumber = phone || phoneNumber;
+  if (organization || organisationName) user.organisationName = organization || organisationName;
+  if (designation) user.designation = designation;
+  if (address) user.address = address;
+  if (bio) user.bio = bio;
+  if (preferredTheme) user.preferredTheme = preferredTheme;
+
+  await user.save();
+
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'PROFILE_UPDATED',
+    details: { 
+      updatedFields: Object.keys(req.body).filter(k => req.body[k] !== undefined)
+    },
+    ipAddress: req.ip
+  });
+
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+    user: {
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phoneNumber,
+      organization: user.organisationName,
+      designation: user.designation,
+      address: user.address,
+      bio: user.bio,
+      roles: user.roles,
+      preferredTheme: user.preferredTheme
+    }
+  });
+});
+
+/**
+ * @route   PUT /api/users/change-password
+ * @desc    Change current user's password
+ * @access  Private
+ */
+export const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: 'Current password and new password are required'
+    });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({
+      success: false,
+      message: 'New password must be at least 6 characters'
+    });
+  }
+
+  const user = await User.findById(req.user._id).select('+passwordHash');
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+
+  // Verify current password
+  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!isMatch) {
+    return res.status(400).json({
+      success: false,
+      message: 'Current password is incorrect'
+    });
+  }
+
+  // Hash new password and save
+  const salt = await bcrypt.genSalt(10);
+  user.passwordHash = await bcrypt.hash(newPassword, salt);
+  user.passwordChangedAt = new Date();
+  await user.save();
+
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'PASSWORD_CHANGED',
+    details: {},
+    ipAddress: req.ip
+  });
+
+  res.json({
+    success: true,
+    message: 'Password changed successfully'
   });
 });
