@@ -9,6 +9,20 @@ from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 from supabase import create_client, Client
 from io import BytesIO
+from PIL import Image
+import numpy as np
+
+try:
+    from pdf2image import convert_from_bytes
+except ImportError:
+    convert_from_bytes = None
+
+try:
+    from paddleocr import PaddleOCR
+    _paddle_ocr = None
+except ImportError:
+    PaddleOCR = None
+    _paddle_ocr = None
 
 router = APIRouter()
 
@@ -26,16 +40,70 @@ model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
 
 # ----------------------------------------------------
+# OCR INITIALIZATION (Lazy Loading)
+# ----------------------------------------------------
+def get_paddle_ocr():
+    """Lazy initialize PaddleOCR to avoid loading unless needed."""
+    global _paddle_ocr
+    if _paddle_ocr is None and PaddleOCR is not None:
+        try:
+            _paddle_ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
+        except Exception as e:
+            print(f"Failed to initialize PaddleOCR: {e}")
+            _paddle_ocr = False
+    return _paddle_ocr if _paddle_ocr is not False else None
+
+
+def run_ocr_on_image(image: Image.Image) -> str:
+    """Run OCR on a PIL Image using PaddleOCR.
+    
+    Returns the extracted text as a string.
+    """
+    ocr = get_paddle_ocr()
+    if ocr is None:
+        raise RuntimeError("PaddleOCR is not available. Install with: pip install paddlepaddle paddleocr")
+    
+    # Convert PIL Image to numpy array
+    img_array = np.array(image)
+    
+    # Run OCR
+    result = ocr.ocr(img_array, cls=True)
+    
+    # Extract text from result
+    text_lines = []
+    if result and result[0]:
+        for line in result[0]:
+            if line and len(line) > 1:
+                text_lines.append(line[1][0])
+    
+    return "\n".join(text_lines)
+
+
+# ----------------------------------------------------
 # TEXT EXTRACTION
 # ----------------------------------------------------
 def extract_text(filename, file_bytes):
     ext = filename.lower().split(".")[-1]
 
     if ext == "pdf":
+        # Try standard text extraction first
         reader = PyPDF2.PdfReader(BytesIO(file_bytes))
         text = ""
         for page in reader.pages:
-            text += page.extract_text() or ""
+            page_text = page.extract_text() or ""
+            text += page_text
+        
+        # Check if PDF has extractable text (non-OCR check)
+        # If text is empty or very short, it's likely a scanned/image-based PDF
+        if len(text.strip()) < 50:  # Threshold to determine if PDF is non-OCR
+            print(f"PDF appears to be non-OCR (scanned). Applying OCR...")
+            try:
+                text = extract_text_from_scanned_pdf(file_bytes)
+            except Exception as ocr_error:
+                print(f"OCR failed: {ocr_error}")
+                # Return whatever text we got, even if minimal
+                pass
+        
         return text
 
     elif ext == "docx":
@@ -45,9 +113,43 @@ def extract_text(filename, file_bytes):
     elif ext in ["txt", "csv"]:
         enc = chardet.detect(file_bytes)["encoding"] or "utf-8"
         return file_bytes.decode(enc, errors="ignore")
+    
+    elif ext in ["png", "jpg", "jpeg", "tiff", "bmp"]:
+        # Handle image files directly with OCR
+        print(f"Image file detected. Applying OCR...")
+        try:
+            image = Image.open(BytesIO(file_bytes))
+            return run_ocr_on_image(image)
+        except Exception as e:
+            print(f"Failed to process image: {e}")
+            return ""
 
     else:
         return ""
+
+
+def extract_text_from_scanned_pdf(file_bytes: bytes) -> str:
+    """Extract text from scanned/non-OCR PDF using OCR.
+    
+    Converts PDF pages to images and runs OCR on each page.
+    """
+    if convert_from_bytes is None:
+        raise RuntimeError("pdf2image is not installed. Install with: pip install pdf2image")
+    
+    # Convert PDF to images
+    images = convert_from_bytes(file_bytes, dpi=300)
+    
+    all_text = []
+    for i, image in enumerate(images):
+        print(f"Processing page {i+1}/{len(images)} with OCR...")
+        try:
+            page_text = run_ocr_on_image(image)
+            all_text.append(page_text)
+        except Exception as e:
+            print(f"OCR failed on page {i+1}: {e}")
+            continue
+    
+    return "\n\n".join(all_text)
 
 
 # ----------------------------------------------------
