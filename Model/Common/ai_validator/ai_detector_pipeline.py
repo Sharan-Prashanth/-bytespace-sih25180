@@ -3,16 +3,18 @@ import re
 import json
 import math
 import hashlib
+import uuid
 from io import BytesIO
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
+import time
 
 import PyPDF2
 import chardet
 import docx
 import google.generativeai as genai
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -52,25 +54,30 @@ REPORT_BUCKET = os.getenv("REPORT_BUCKET", "ai-detection-json")
 REPORT_TABLE = os.getenv("REPORT_TABLE", "ai_detection_reports")
 
 # Thresholds & workers
-SENTENCE_VALIDATE_THRESHOLD = float(os.getenv("SENTENCE_VALIDATE_THRESHOLD", "0.65"))  # detector score -> candidate
+FIELD_VALIDATE_THRESHOLD = float(os.getenv("FIELD_VALIDATE_THRESHOLD", "0.65"))  # detector score -> candidate
+SENTENCE_VALIDATE_THRESHOLD = float(os.getenv("SENTENCE_VALIDATE_THRESHOLD", "0.7"))  # sentence-level detector threshold for Gemini validation
 WORKER_COUNT = min(int(os.getenv("WORKER_COUNT", str(max(1, cpu_count() - 1)))), 8)
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash-lite")
-# Optional trained validator model (joblib file). If present, use it to score sentences.
+
+# Initialize Supabase and Gemini
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+router = APIRouter()
+
+# Optional trained validator model
 MODEL_JOBLIB_PATH = r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\Common\ai_validator\pre-trained\my_trained_model.joblib"
 AI_VALIDATOR_MODEL = None
 AI_VALIDATOR_AVAILABLE = False
+
 try:
     if os.path.exists(MODEL_JOBLIB_PATH):
         AI_VALIDATOR_MODEL = joblib.load(MODEL_JOBLIB_PATH)
         AI_VALIDATOR_AVAILABLE = True
     else:
-        # No joblib provided — create a simple heuristic validator and save it
+        # Simple heuristic validator fallback
         class _HeuristicValidator:
-            """Simple fallback validator with predict and predict_proba.
-
-            predict_proba returns [[1-prob, prob]] where prob is heuristic AI-probability.
-            """
+            """Simple fallback validator with predict and predict_proba."""
             def __init__(self):
                 pass
 
@@ -79,43 +86,826 @@ try:
                 if not words:
                     return 0.0
                 avg_word_len = sum(len(w) for w in words) / len(words)
-                # heuristic: shorter words and high punctuation increase AI-likeness
                 punct = sum(1 for ch in text if ch in ".,;:!?()'")
                 base = 0.18 if avg_word_len >= 4 else 0.45
                 prob = min(0.99, base * (len(text) / 800.0) + min(0.2, punct/50.0))
                 return float(max(0.0, min(0.999999, prob)))
 
             def predict_proba(self, X):
-                out = []
-                for x in X:
-                    p = self._score_text(x)
-                    out.append([1.0 - p, p])
-                return out
+                return [[1.0 - self._score_text(x), self._score_text(x)] for x in X]
 
             def predict(self, X):
-                out = []
-                for x in X:
-                    p = self._score_text(x)
-                    out.append(1 if p >= 0.5 else 0)
-                return out
+                return [1 if self._score_text(x) >= 0.5 else 0 for x in X]
 
-        # ensure directory exists
-        try:
-            os.makedirs(os.path.dirname(MODEL_JOBLIB_PATH), exist_ok=True)
-            fallback = _HeuristicValidator()
-            joblib.dump(fallback, MODEL_JOBLIB_PATH)
-            AI_VALIDATOR_MODEL = fallback
-            AI_VALIDATOR_AVAILABLE = True
-            print(f"No pretrained model found — created heuristic fallback at {MODEL_JOBLIB_PATH}")
-        except Exception:
-            AI_VALIDATOR_MODEL = None
-            AI_VALIDATOR_AVAILABLE = False
-            traceback.print_exc()
+        AI_VALIDATOR_MODEL = _HeuristicValidator()
+        AI_VALIDATOR_AVAILABLE = True
 except Exception:
-    AI_VALIDATOR_MODEL = None
     AI_VALIDATOR_AVAILABLE = False
-    # do not raise here; fallback to local heuristics
-    traceback.print_exc()
+
+# =============================================================================
+# AGENT STATE MANAGEMENT
+# =============================================================================
+
+class AgentState:
+    """Manages the state of the AI detection agent."""
+    
+    def __init__(self, structured_data: Dict[str, Any]):
+        self.structured_data = structured_data
+        self.project_details = structured_data.get("project_details", {})
+        self.field_results = {}  # field_name -> detection_result
+        self.suspicious_fields = []  # fields that need Gemini validation
+        self.validated_fields = {}  # field_name -> gemini_validation
+        self.action_log = []  # log of all agent actions
+        self.current_step = 0
+        self.max_steps = 50
+        self.finished = False
+        self.recent_reports = []  # loaded from database
+        
+    def add_action(self, action: str, details: Dict[str, Any]):
+        """Add an action to the agent's log."""
+        self.action_log.append({
+            "step": self.current_step,
+            "action": action,
+            "details": details,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        self.current_step += 1
+        
+    def get_unprocessed_fields(self) -> List[str]:
+        """Get list of fields that haven't been processed yet."""
+        return [field for field in self.project_details.keys() 
+                if field not in self.field_results]
+    
+    def get_unvalidated_suspicious_fields(self) -> List[str]:
+        """Get suspicious fields that haven't been validated by Gemini yet."""
+        return [field for field in self.suspicious_fields 
+                if field not in self.validated_fields]
+    
+    def is_complete(self) -> bool:
+        """Check if agent has completed its analysis."""
+        return (self.finished or 
+                self.current_step >= self.max_steps or 
+                len(self.get_unprocessed_fields()) == 0)
+
+# =============================================================================
+# FIELD-BASED DETECTION WRAPPER
+# =============================================================================
+
+def detect_field_ai_probability(field_name: str, field_content: str) -> Dict[str, Any]:
+    """Run local detector on a single field."""
+    if not field_content or not field_content.strip():
+        return {
+            "field_name": field_name,
+            "content_length": 0,
+            "ai_probability": 0.0,
+            "detector_method": "empty_content"
+        }
+    
+    try:
+        if AI_VALIDATOR_AVAILABLE and AI_VALIDATOR_MODEL:
+            proba = AI_VALIDATOR_MODEL.predict_proba([field_content])
+            ai_prob = float(proba[0][1]) if proba and len(proba[0]) > 1 else 0.0
+        else:
+            # Fallback heuristic
+            words = field_content.split()
+            avg_word_len = sum(len(w) for w in words) / len(words) if words else 0
+            ai_prob = 0.3 if avg_word_len > 5 else 0.7
+            
+        return {
+            "field_name": field_name,
+            "content_length": len(field_content),
+            "ai_probability": round(ai_prob, 6),
+            "detector_method": "ai_validator_model" if AI_VALIDATOR_AVAILABLE else "heuristic"
+        }
+    except Exception as e:
+        return {
+            "field_name": field_name,
+            "content_length": len(field_content),
+            "ai_probability": 0.5,
+            "detector_method": "error",
+            "error": str(e)
+        }
+
+def worker_detect_field(args: Tuple[str, str]) -> Dict[str, Any]:
+    """Worker function for multiprocessing field detection."""
+    field_name, field_content = args
+    return detect_field_ai_probability(field_name, field_content)
+
+# =============================================================================
+# GEMINI VALIDATOR FOR FIELDS
+# =============================================================================
+
+def call_gemini_validate_field(field_name: str, field_content: str, 
+                              detector_score: float, recent_reports: List[Dict]) -> Dict[str, Any]:
+    """Validate a field using Gemini AI."""
+    
+    # Build context from recent reports
+    context_summary = ""
+    if recent_reports:
+        context_summary = f"\nRecent analysis context: {len(recent_reports)} similar documents analyzed. "
+        ai_patterns = []
+        for report in recent_reports[:5]:  # Use top 5 for context
+            if isinstance(report.get("result"), dict):
+                agg = report["result"].get("aggregate", {})
+                verdict = agg.get("file_verdict", "unknown")
+                if verdict == "ai":
+                    ai_patterns.append("High AI likelihood found in similar documents.")
+        
+        if ai_patterns:
+            context_summary += "Common AI patterns: " + "; ".join(ai_patterns[:3])
+    
+    prompt = f"""You are an expert AI text detector analyzing a specific field from a FORM-I S&T Grant Proposal.
+
+FIELD ANALYSIS TASK:
+- Field Name: {field_name}
+- Local Detector Score: {detector_score:.3f} (0.0 = human, 1.0 = AI)
+- Content Length: {len(field_content)} characters
+
+CONTENT TO ANALYZE:
+{field_content}
+
+{context_summary}
+
+ANALYSIS REQUIREMENTS:
+1. Determine if this field content appears to be AI-generated or human-written
+2. Consider technical writing patterns typical in research proposals
+3. Look for AI-specific patterns: repetitive phrasing, generic language, lack of specific details
+4. Consider domain expertise indicators: specific technical terms, concrete examples, personal insights
+
+Respond with ONLY a JSON object:
+{{
+    "validated_ai_probability": <float 0.0-1.0>,
+    "decision": "<ai|human|uncertain>",
+    "confidence": <float 0.0-1.0>,
+    "reasoning": "<brief explanation>",
+    "ai_indicators": ["<list of AI-like patterns found>"],
+    "human_indicators": ["<list of human-like patterns found>"],
+    "recommendation": "<specific improvement advice if AI-like>"
+}}"""
+
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
+        
+        # Clean and parse JSON
+        if response_text.startswith('```json'):
+            response_text = response_text[7:]
+        if response_text.endswith('```'):
+            response_text = response_text[:-3]
+            
+        result = json.loads(response_text)
+        
+        # Validate and clean result
+        validated_prob = float(result.get("validated_ai_probability", detector_score))
+        decision = result.get("decision", "uncertain").lower()
+        
+        if decision not in ["ai", "human", "uncertain"]:
+            decision = "uncertain"
+            
+        return {
+            "validated_ai_probability": validated_prob,
+            "decision": decision,
+            "confidence": float(result.get("confidence", 0.5)),
+            "reasoning": result.get("reasoning", ""),
+            "ai_indicators": result.get("ai_indicators", []),
+            "human_indicators": result.get("human_indicators", []),
+            "recommendation": result.get("recommendation", ""),
+            "gemini_model": MODEL_NAME,
+            "validation_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        # Fallback validation based on detector score
+        if detector_score >= 0.8:
+            decision = "ai"
+        elif detector_score <= 0.3:
+            decision = "human"
+        else:
+            decision = "uncertain"
+            
+        return {
+            "validated_ai_probability": detector_score,
+            "decision": decision,
+            "confidence": 0.3,
+            "reasoning": f"Gemini validation failed, using detector score. Error: {str(e)}",
+            "ai_indicators": [],
+            "human_indicators": [],
+            "recommendation": "Unable to provide specific recommendations due to validation error.",
+            "gemini_model": MODEL_NAME,
+            "validation_timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
+
+# =============================================================================
+# AGENT PLANNING AND ACTION SYSTEM
+# =============================================================================
+
+class AIDetectionAgent:
+    """LLM-driven agent for AI detection analysis."""
+    
+    def __init__(self, state: AgentState):
+        self.state = state
+        
+    def plan_next_action(self) -> Dict[str, Any]:
+        """Use LLM to plan the next action based on current state."""
+        
+        # Prepare state summary for planning
+        total_fields = len(self.state.project_details)
+        processed_fields = len(self.state.field_results)
+        suspicious_count = len(self.state.suspicious_fields)
+        validated_count = len(self.state.validated_fields)
+        unprocessed = self.state.get_unprocessed_fields()
+        unvalidated = self.state.get_unvalidated_suspicious_fields()
+        
+        state_summary = f"""
+CURRENT ANALYSIS STATE:
+- Total fields in project_details: {total_fields}
+- Fields processed: {processed_fields}/{total_fields}
+- Suspicious fields identified: {suspicious_count}
+- Fields validated by Gemini: {validated_count}
+- Unprocessed fields: {len(unprocessed)}
+- Unvalidated suspicious fields: {len(unvalidated)}
+- Current step: {self.state.current_step}
+- Max steps: {self.state.max_steps}
+
+UNPROCESSED FIELDS: {unprocessed[:5]}
+UNVALIDATED SUSPICIOUS: {unvalidated[:3]}
+
+AVAILABLE ACTIONS:
+1. inspect_field: Run local detector on a specific field
+2. validate_field: Use Gemini to validate a suspicious field  
+3. load_context: Load recent reports for context
+4. summarize_progress: Summarize current findings
+5. finish: Complete analysis and generate final report
+
+FIELD RESULTS SO FAR:
+{json.dumps({k: v.get('ai_probability', 0) for k, v in self.state.field_results.items()}, indent=2)}
+"""
+
+        planning_prompt = f"""You are an AI detection agent planning your next action. 
+
+{state_summary}
+
+Choose the most logical next action. Prioritize:
+1. Loading context if not done yet
+2. Processing unprocessed fields first  
+3. Validating highly suspicious fields (>0.7 AI probability)
+4. Finishing when all important work is complete
+
+Respond with ONLY a JSON object:
+{{
+    "action": "<action_name>",
+    "target": "<field_name_or_other_target>",
+    "reasoning": "<why this action now>",
+    "priority": "<high|medium|low>"
+}}"""
+
+        try:
+            model = genai.GenerativeModel(MODEL_NAME)
+            response = model.generate_content(planning_prompt)
+            response_text = response.text.strip()
+            
+            if response_text.startswith('```json'):
+                response_text = response_text[7:]
+            if response_text.endswith('```'):
+                response_text = response_text[:-3]
+                
+            action_plan = json.loads(response_text)
+            
+            # Validate action
+            valid_actions = ["inspect_field", "validate_field", "load_context", "summarize_progress", "finish"]
+            if action_plan.get("action") not in valid_actions:
+                action_plan["action"] = "finish"
+                
+            return action_plan
+            
+        except Exception as e:
+            # Fallback planning logic
+            if not self.state.recent_reports:
+                return {"action": "load_context", "target": "recent_reports", "reasoning": "Need context first", "priority": "high"}
+            elif unprocessed:
+                return {"action": "inspect_field", "target": unprocessed[0], "reasoning": "Process remaining fields", "priority": "high"}
+            elif unvalidated:
+                return {"action": "validate_field", "target": unvalidated[0], "reasoning": "Validate suspicious field", "priority": "high"}
+            else:
+                return {"action": "finish", "target": "analysis", "reasoning": "All work complete", "priority": "high"}
+    
+    def execute_action(self, action_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute the planned action."""
+        action = action_plan.get("action")
+        target = action_plan.get("target")
+        
+        self.state.add_action(action, action_plan)
+        
+        if action == "inspect_field":
+            return self._inspect_field(target)
+        elif action == "validate_field":
+            return self._validate_field(target)
+        elif action == "load_context":
+            return self._load_context()
+        elif action == "summarize_progress":
+            return self._summarize_progress()
+        elif action == "finish":
+            return self._finish_analysis()
+        else:
+            return {"error": f"Unknown action: {action}"}
+    
+    def _inspect_field(self, field_name: str) -> Dict[str, Any]:
+        """Inspect a field using local detector."""
+        if field_name not in self.state.project_details:
+            return {"error": f"Field {field_name} not found in project_details"}
+            
+        field_content = self.state.project_details[field_name]
+        result = detect_field_ai_probability(field_name, field_content)
+        
+        self.state.field_results[field_name] = result
+        
+        # Add to suspicious list if probability is high
+        if result.get("ai_probability", 0) >= FIELD_VALIDATE_THRESHOLD:
+            if field_name not in self.state.suspicious_fields:
+                self.state.suspicious_fields.append(field_name)
+                
+        return {"success": True, "result": result}
+    
+    def _validate_field(self, field_name: str) -> Dict[str, Any]:
+        """Validate a field using Gemini."""
+        if field_name not in self.state.project_details:
+            return {"error": f"Field {field_name} not found in project_details"}
+            
+        if field_name not in self.state.field_results:
+            return {"error": f"Field {field_name} not yet inspected by local detector"}
+            
+        field_content = self.state.project_details[field_name]
+        detector_score = self.state.field_results[field_name].get("ai_probability", 0.5)
+        
+        validation = call_gemini_validate_field(field_name, field_content, detector_score, self.state.recent_reports)
+        self.state.validated_fields[field_name] = validation
+        
+        return {"success": True, "validation": validation}
+    
+    def _load_context(self) -> Dict[str, Any]:
+        """Load recent reports for context."""
+        try:
+            self.state.recent_reports = load_recent_reports(limit=20)
+            return {"success": True, "loaded_reports": len(self.state.recent_reports)}
+        except Exception as e:
+            return {"error": f"Failed to load context: {str(e)}"}
+    
+    def _summarize_progress(self) -> Dict[str, Any]:
+        """Summarize current progress."""
+        summary = {
+            "total_fields": len(self.state.project_details),
+            "processed_fields": len(self.state.field_results),
+            "suspicious_fields": len(self.state.suspicious_fields),
+            "validated_fields": len(self.state.validated_fields),
+            "completion_percentage": round((len(self.state.field_results) / len(self.state.project_details)) * 100, 1),
+            "actions_taken": self.state.current_step
+        }
+        return {"success": True, "summary": summary}
+    
+    def _finish_analysis(self) -> Dict[str, Any]:
+        """Mark analysis as finished."""
+        self.state.finished = True
+        return {"success": True, "message": "Analysis complete"}
+    
+    def run_analysis(self) -> Dict[str, Any]:
+        """Run the complete agent analysis loop."""
+        while not self.state.is_complete():
+            try:
+                # Plan next action
+                action_plan = self.plan_next_action()
+                
+                # Execute action
+                result = self.execute_action(action_plan)
+                
+                # Safety check to prevent infinite loops
+                if self.state.current_step >= self.state.max_steps:
+                    self.state.add_action("emergency_stop", {"reason": "Max steps reached"})
+                    break
+                    
+                # Small delay to prevent rate limiting
+                time.sleep(0.1)
+                
+            except Exception as e:
+                self.state.add_action("error", {"error": str(e)})
+                break
+        
+        return self.generate_final_report()
+    
+    def generate_final_report(self) -> Dict[str, Any]:
+        """Generate the final analysis report."""
+        # Calculate field-level analysis in the requested format
+        field_level_analysis = {}
+        for field_name, result in self.state.field_results.items():
+            detector_prob = result.get("ai_probability", 0.0)
+            
+            # Get validation if available
+            validation = self.state.validated_fields.get(field_name, {})
+            validated_prob = validation.get("validated_ai_probability", detector_prob)
+            gemini_decision = validation.get("decision", "uncertain")
+            gemini_reasoning = validation.get("reasoning", "")
+            
+            # Calculate combined score (60% detector, 40% validation)
+            combined_ai_prob = (0.6 * detector_prob) + (0.4 * validated_prob)
+            combined_human_prob = 1.0 - combined_ai_prob
+            
+            # Determine classification based on combined probability
+            if combined_ai_prob >= 0.6:
+                classification = "ai"
+            elif combined_ai_prob <= 0.4:
+                classification = "human" 
+            else:
+                classification = "mixed"
+            
+            # Generate reason based on available information
+            if gemini_reasoning:
+                reason = gemini_reasoning
+            elif validation.get("ai_indicators"):
+                reason = "AI patterns detected: " + ", ".join(validation["ai_indicators"][:2])
+            elif validation.get("human_indicators"):
+                reason = "Human patterns detected: " + ", ".join(validation["human_indicators"][:2])
+            elif combined_ai_prob >= 0.7:
+                reason = "Highly generic phrasing and lacks contextual grounding."
+            elif combined_ai_prob >= 0.6:
+                reason = "Shows template-like structure and formal language patterns."
+            elif combined_ai_prob <= 0.3:
+                reason = "Contains natural imperfections and human patterning."
+            elif combined_ai_prob <= 0.4:
+                reason = "Shows domain-specific knowledge and natural variation."
+            else:
+                reason = "Combination of structured and free-flow text."
+            
+            field_level_analysis[field_name] = {
+                "ai_probability": round(combined_ai_prob, 2),
+                "human_probability": round(combined_human_prob, 2),
+                "classification": classification,
+                "reason": reason
+            }
+        
+        # Calculate overall scores
+        if field_level_analysis:
+            avg_ai_prob = sum(f["ai_probability"] for f in field_level_analysis.values()) / len(field_level_analysis)
+            avg_human_prob = 1.0 - avg_ai_prob
+        else:
+            avg_ai_prob = 0.5
+            avg_human_prob = 0.5
+        
+        # Convert to percentages for overall scores
+        overall_ai_percentage = round(avg_ai_prob * 100)
+        overall_human_percentage = round(avg_human_prob * 100)
+        
+        # Determine overall classification
+        if avg_ai_prob >= 0.6:
+            summary_decision = "ai"
+            summary_reason = "Majority of fields show AI-generated patterns with templated language and generic phrasing."
+        elif avg_ai_prob <= 0.4:
+            summary_decision = "human"
+            summary_reason = "Document demonstrates natural human writing with domain expertise and authentic variation."
+        else:
+            summary_decision = "mixed"
+            summary_reason = "Some fields show templated AI-like phrasing while others show natural human variability and domain grounding."
+        
+        # Identify flagged fields (those classified as AI or with high AI probability)
+        flagged_fields = []
+        for field_name, analysis in field_level_analysis.items():
+            if (analysis["classification"] == "ai" or analysis["ai_probability"] >= 0.7):
+                validation = self.state.validated_fields.get(field_name, {})
+                flagged_fields.append({
+                    "field_name": field_name,
+                    "ai_probability": analysis["ai_probability"],
+                    "decision": analysis["classification"],
+                    "ai_indicators": validation.get("ai_indicators", []),
+                    "recommendation": validation.get("recommendation", "")
+                })
+        
+        # Generate explanation
+        explanation = self._generate_explanation(summary_decision, avg_ai_prob, flagged_fields)
+        
+        # Generate recommendations
+        recommendations = self._generate_recommendations(flagged_fields)
+        
+        return {
+            "field_level_analysis": field_level_analysis,
+            "overall_scores": {
+                "overall_ai_percentage": overall_ai_percentage,
+                "overall_human_percentage": overall_human_percentage,
+                "summary_decision": summary_decision,
+                "summary_reason": summary_reason,
+                # Keep legacy format for backward compatibility
+                "human_score": overall_human_percentage,
+                "ai_score": overall_ai_percentage,
+                "classification": summary_decision,
+                "confidence": round(abs(avg_ai_prob - 0.5) * 2, 3)
+            },
+            "flagged_fields": flagged_fields,
+            "explanation": explanation,
+            "recommendations": recommendations,
+            "agent_actions_log": self.state.action_log,
+            "analysis_metadata": {
+                "total_fields_analyzed": len(field_level_analysis),
+                "fields_requiring_validation": len(self.state.validated_fields),
+                "processing_time_seconds": self.state.current_step * 0.1,
+                "agent_steps": self.state.current_step
+            }
+        }
+    
+    def _generate_explanation(self, classification: str, ai_prob: float, flagged_fields: List[Dict]) -> str:
+        """Generate human-readable explanation."""
+        if classification == "human":
+            return f"Document appears to be human-authored with {round((1-ai_prob)*100, 1)}% confidence. Writing shows natural variation and domain expertise."
+        elif classification == "ai":
+            return f"Document shows strong indicators of AI generation with {round(ai_prob*100, 1)}% confidence. {len(flagged_fields)} fields show clear AI patterns."
+        else:
+            return f"Document shows mixed signals. Some sections appear AI-generated while others seem human-authored. {len(flagged_fields)} fields require attention."
+    
+    def _generate_recommendations(self, flagged_fields: List[Dict]) -> List[str]:
+        """Generate improvement recommendations."""
+        recommendations = []
+        
+        if not flagged_fields:
+            recommendations.append("Document quality is good. Consider adding more specific examples and citations to strengthen credibility.")
+        else:
+            recommendations.append(f"Review and revise {len(flagged_fields)} flagged fields to improve human-likeness.")
+            
+            for field in flagged_fields[:3]:  # Top 3 most problematic
+                if field.get("recommendation"):
+                    recommendations.append(f"{field['field_name']}: {field['recommendation']}")
+            
+            recommendations.append("Add personal insights, specific examples, and vary sentence structure to improve authenticity.")
+            recommendations.append("Include concrete citations and domain-specific terminology where appropriate.")
+        
+        return recommendations
+
+# =============================================================================
+# UTILITY FUNCTIONS (PRESERVED FROM ORIGINAL)
+# =============================================================================
+
+def load_recent_reports(limit: int = 20) -> List[Dict[str, Any]]:
+    """Load recent AI detection reports from database."""
+    try:
+        response = supabase.table(REPORT_TABLE).select("*").order("created_at", desc=True).limit(limit).execute()
+        return response.data or []
+    except Exception as e:
+        print(f"Warning: Could not load recent reports: {e}")
+        return []
+
+def upload_json_report_to_storage(filename: str, report_data: Dict[str, Any]) -> str:
+    """Upload JSON report to Supabase storage."""
+    json_bytes = json.dumps(report_data, indent=2).encode('utf-8')
+    supabase.storage.from_(REPORT_BUCKET).upload(filename, json_bytes, {"content-type": "application/json"})
+    return supabase.storage.from_(REPORT_BUCKET).get_public_url(filename)
+
+def insert_report_row_db(row_data: Dict[str, Any]):
+    """Insert report row into database."""
+    supabase.table(REPORT_TABLE).insert(row_data).execute()
+
+def extract_text_from_file(filename: str, file_bytes: bytes) -> str:
+    """Extract text from uploaded file."""
+    try:
+        ext = filename.lower().split(".")[-1]
+        
+        if ext == "pdf":
+            reader = PyPDF2.PdfReader(BytesIO(file_bytes))
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() or ""
+            return text
+        elif ext == "docx":
+            doc = docx.Document(BytesIO(file_bytes))
+            return "\n".join([p.text for p in doc.paragraphs])
+        elif ext in ["txt", "csv"]:
+            encoding = chardet.detect(file_bytes)["encoding"] or "utf-8"
+            return file_bytes.decode(encoding, errors="ignore")
+        else:
+            return ""
+    except Exception:
+        return ""
+
+def build_structured_json_from_text(text: str) -> Dict[str, Any]:
+    """Build structured JSON from extracted text - placeholder for integration with OCR extraction."""
+    # This is a simplified version - in production, integrate with your existing
+    # OCR extraction system to get the proper FORM-I structure
+    
+    # For now, create a basic structure with project details extracted from text
+    lines = text.split('\n')
+    content_lines = [line.strip() for line in lines if line.strip()]
+    
+    # Simple field extraction (this should be replaced with your actual OCR logic)
+    project_details = {
+        "definition_of_issue": "",
+        "objectives": "",
+        "justification_subject_area": "",
+        "project_benefits": "",
+        "work_plan": "",
+        "methodology": "",
+        "organization_of_work": "",
+        "time_schedule": "",
+        "foreign_exchange_details": ""
+    }
+    
+    # Basic text segmentation into fields (simplified approach)
+    current_field = None
+    current_content = []
+    
+    for line in content_lines[:50]:  # Process first 50 lines
+        line_lower = line.lower()
+        
+        if "definition" in line_lower and "issue" in line_lower:
+            current_field = "definition_of_issue"
+        elif "objective" in line_lower:
+            current_field = "objectives"
+        elif "justification" in line_lower:
+            current_field = "justification_subject_area"
+        elif "benefit" in line_lower:
+            current_field = "project_benefits"
+        elif "work plan" in line_lower or "methodology" in line_lower:
+            current_field = "methodology"
+        elif current_field and len(line) > 20:
+            current_content.append(line)
+            
+        if len(current_content) > 5 and current_field:
+            project_details[current_field] = " ".join(current_content)
+            current_content = []
+            current_field = None
+    
+    # Fill in remaining empty fields with portions of text
+    remaining_text = " ".join(content_lines)
+    for field in project_details:
+        if not project_details[field] and remaining_text:
+            # Take a chunk of text for each empty field
+            chunk_size = min(500, len(remaining_text) // len(project_details))
+            project_details[field] = remaining_text[:chunk_size]
+            remaining_text = remaining_text[chunk_size:]
+    
+    return {
+        "form_type": "FORM-I S&T Grant Proposal",
+        "basic_information": {},
+        "project_details": project_details,
+        "cost_breakdown": {},
+        "additional_information": {}
+    }
+
+def compute_file_hash(file_bytes: bytes) -> str:
+    """Compute SHA-256 hash of file."""
+    return hashlib.sha256(file_bytes).hexdigest()
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename for storage."""
+    return re.sub(r'[^\w\-_\.]', '_', filename)
+
+def make_unique_filename(filename: str, existing_names: List[str]) -> str:
+    """Make filename unique by adding suffix."""
+    base, ext = filename.rsplit('.', 1) if '.' in filename else (filename, '')
+    counter = 1
+    while filename in existing_names:
+        filename = f"{base}_{counter}.{ext}" if ext else f"{base}_{counter}"
+        counter += 1
+    return filename
+
+# =============================================================================
+# MAIN API ENDPOINT
+# =============================================================================
+
+@router.post("/detect-ai-only")
+async def detect_ai_only(file: UploadFile = File(...)):
+    """
+    AI Detection Agent Endpoint - analyzes FORM-I structured data using LLM-driven agent.
+    
+    Returns:
+    {
+        "classification": "ai|human|mixed",
+        "human_score": 0-100,
+        "ai_score": 0-100, 
+        "flagged_fields": [...],
+        "improvement_comment": "...",
+        "full_report_url": "..."
+    }
+    """
+    try:
+        # 1) Read and hash file
+        filename_raw = file.filename or "unknown.txt"
+        file_bytes = await file.read()
+        file_hash = compute_file_hash(file_bytes)
+        
+        # 2) Extract text from file
+        extracted_text = extract_text_from_file(filename_raw, file_bytes)
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="No text content could be extracted from file")
+        
+        # 3) Build structured JSON (integrate with your existing OCR system)
+        structured_data = build_structured_json_from_text(extracted_text)
+        
+        # Validate that we have project_details to analyze
+        if not structured_data.get("project_details"):
+            raise HTTPException(status_code=400, detail="No project details found in document")
+        
+        # 4) Initialize agent state and run analysis
+        agent_state = AgentState(structured_data)
+        agent = AIDetectionAgent(agent_state)
+        
+        # 5) Run the agent analysis loop
+        final_report = agent.run_analysis()
+        
+        # 6) Store file in raw bucket
+        uploaded_name = filename_raw
+        try:
+            existing_files = supabase.storage.from_(RAW_BUCKET).list() or []
+            existing_names = [o.get("name") for o in existing_files]
+            if uploaded_name in existing_names:
+                uploaded_name = make_unique_filename(uploaded_name, existing_names)
+            
+            supabase.storage.from_(RAW_BUCKET).upload(
+                uploaded_name, file_bytes, {"content-type": "application/octet-stream"}
+            )
+        except Exception:
+            pass  # Best effort
+        
+        # 7) Store full report JSON
+        report_data = {
+            "original_filename": filename_raw,
+            "file_hash": file_hash,
+            "created_at": datetime.utcnow().isoformat(),
+            "structured_data": structured_data,
+            "agent_analysis": final_report,
+            "raw_text_snippet": extracted_text[:5000]
+        }
+        
+        json_filename = f"{sanitize_filename(uploaded_name.rsplit('.', 1)[0])}_{uuid.uuid4().hex[:8]}.ai-detect.json"
+        try:
+            report_url = upload_json_report_to_storage(json_filename, report_data)
+            print(f"Successfully stored detect-ai-only JSON: {json_filename}")
+        except Exception as storage_error:
+            print(f"Failed to store detect-ai-only JSON: {str(storage_error)}")
+            report_url = ""
+        
+        # 8) Insert database record
+        db_row = {
+            "filename": uploaded_name,
+            "file_path": f"{RAW_BUCKET}/{uploaded_name}",
+            "file_hash": file_hash,
+            "ai_percentage": final_report["overall_scores"]["ai_score"],
+            "segments_count": len(final_report["field_level_analysis"]),
+            "result": report_data,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        try:
+            insert_report_row_db(db_row)
+        except Exception:
+            pass  # Best effort
+        
+        # 9) Build compact response with both formats
+        overall_scores = final_report["overall_scores"]
+        flagged_fields = final_report["flagged_fields"]
+        
+        # Generate improvement comment
+        if overall_scores["classification"] == "human":
+            improvement_comment = "Document appears human-authored. Consider adding more specific citations and examples to strengthen credibility."
+        elif overall_scores["classification"] == "ai":
+            improvement_comment = f"Document shows signs of AI generation in {len(flagged_fields)} fields. Add personal insights, specific examples, and vary writing style."
+        else:
+            improvement_comment = f"Mixed signals detected. {len(flagged_fields)} fields need attention to improve human authenticity."
+        
+        response = {
+            "classification": overall_scores["classification"],
+            "human_score": int(overall_scores["human_score"]),
+            "ai_score": int(overall_scores["ai_score"]),
+            "flagged_fields": [
+                {
+                    "field_name": field["field_name"],
+                    "ai_probability": field["ai_probability"],
+                    "reason": field.get("recommendation", "AI-like patterns detected")[:200]
+                }
+                for field in flagged_fields[:5]  # Top 5 most problematic fields
+            ],
+            "improvement_comment": improvement_comment,
+            "full_report_url": report_url,
+            "field_level_analysis": final_report["field_level_analysis"],
+            "overall_scores": {
+                "overall_ai_percentage": overall_scores["overall_ai_percentage"],
+                "overall_human_percentage": overall_scores["overall_human_percentage"],
+                "summary_decision": overall_scores["summary_decision"],
+                "summary_reason": overall_scores["summary_reason"]
+            },
+            "analysis_metadata": {
+                "fields_analyzed": len(final_report["field_level_analysis"]),
+                "processing_steps": final_report["analysis_metadata"]["agent_steps"],
+                "confidence": overall_scores["confidence"]
+            }
+        }
+        
+        return JSONResponse(content=response)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"AI Detection Agent Error: {traceback.format_exc()}")
+        return JSONResponse(
+            content={"error": f"Analysis failed: {str(e)}"}, 
+            status_code=500
+        )
+
 
 # --- clients & configure ---
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -738,12 +1528,40 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
             # best-effort silence
             stored_raw = False
 
-        # 12) store report JSON to storage
-        json_name = sanitize_filename(uploaded_name.rsplit(".", 1)[0]) + ".ai-detect.json"
+        # 12) store report JSON to storage with better error handling
+        json_name = f"{sanitize_filename(uploaded_name.rsplit('.', 1)[0])}_{uuid.uuid4().hex[:8]}.ai-detect.json"
+        report_url = ""
         try:
-            upload_json_report_to_storage(json_name, report)
-        except Exception:
-            pass
+            # Ensure unique filename
+            existing_files = supabase.storage.from_(REPORT_BUCKET).list() or []
+            existing_names = [o.get("name") for o in existing_files if o.get("name")]
+            if json_name in existing_names:
+                json_name = f"{sanitize_filename(uploaded_name.rsplit('.', 1)[0])}_{uuid.uuid4().hex[:8]}_report.json"
+            
+            # Upload JSON report
+            json_bytes = json.dumps(report, indent=2, ensure_ascii=False).encode("utf-8")
+            supabase.storage.from_(REPORT_BUCKET).upload(
+                json_name, 
+                json_bytes, 
+                {"content-type": "application/json"}
+            )
+            report_url = supabase.storage.from_(REPORT_BUCKET).get_public_url(json_name)
+            print(f"Successfully stored JSON report: {json_name}")
+        except Exception as e:
+            print(f"Failed to store JSON report: {str(e)}")
+            # Try fallback storage method
+            try:
+                fallback_name = f"fallback_{uuid.uuid4().hex[:12]}.json"
+                json_bytes = json.dumps(report, indent=2).encode("utf-8")
+                supabase.storage.from_(REPORT_BUCKET).upload(
+                    fallback_name, 
+                    json_bytes, 
+                    {"content-type": "application/json"}
+                )
+                report_url = supabase.storage.from_(REPORT_BUCKET).get_public_url(fallback_name)
+                print(f"Fallback storage successful: {fallback_name}")
+            except Exception as fallback_error:
+                print(f"Fallback storage also failed: {str(fallback_error)}")
 
         # 13) insert DB row with file_hash and result
         db_row = {
@@ -757,8 +1575,9 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         }
         try:
             insert_report_row_db(db_row)
-        except Exception:
-            pass
+            print(f"Successfully inserted DB row for: {uploaded_name}")
+        except Exception as db_error:
+            print(f"Failed to insert DB row: {str(db_error)}")
 
         # 14) return compact response suitable for PDF/UI rendering
         # Transform combined_score (AI-likeness 0..100) into display score where higher == more human.
@@ -812,7 +1631,13 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
             "model_score_pct": display_score,
             "improvement_comment": improvement_sentence,
             "flagged_lines": flagged,
-            "flagged_count": len(flagged)
+            "flagged_count": len(flagged),
+            "full_report_url": report_url,
+            "file_storage": {
+                "original_file": f"{RAW_BUCKET}/{uploaded_name}",
+                "json_report": json_name if report_url else None,
+                "report_url": report_url
+            }
         }
         # mark todo item complete for this change
         try:
