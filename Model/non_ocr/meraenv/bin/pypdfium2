@@ -1,8 +1,0 @@
-#!/home/aksshay88/Desktop/projects/sih/SIH25180/Model/non_ocr/meraenv/bin/python3
-# -*- coding: utf-8 -*-
-import re
-import sys
-from pypdfium2.__main__ import cli_main
-if __name__ == '__main__':
-    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
-    sys.exit(cli_main())
