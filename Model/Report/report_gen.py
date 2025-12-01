@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 import httpx
-from fastapi import APIRouter, FastAPI, UploadFile, File
+from fastapi import APIRouter, FastAPI, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 
@@ -23,6 +23,20 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 from supabase import create_client, Client
 import google.generativeai as genai
+
+# Import the template generator
+try:
+    from .template_generator import generate_html_template, generate_json_template_data
+except ImportError:
+    # If running standalone, try direct import
+    try:
+        from template_generator import generate_html_template, generate_json_template_data
+    except ImportError:
+        # Fallback - define minimal functions
+        def generate_html_template(proposal_data=None, scores=None):
+            return "<html><body><h1>Template generator not available</h1></body></html>"
+        def generate_json_template_data(proposal_data=None):
+            return {}
 
 
 # ============================================================
@@ -66,6 +80,42 @@ def sanitize_text(txt: Optional[str]) -> str:
     clean = "\n".join([ln for ln in lines if ln])
     clean = re.sub(r"[ \t]{2,}", " ", clean)
     return clean.strip()
+
+
+# ============================================================
+# ================ FETCH PROPOSAL DATA ======================
+# ============================================================
+async def fetch_proposal_data(proposal_id: str) -> Dict[str, Any]:
+    """Fetch proposal data from the server API"""
+    try:
+        # Try different possible server URLs
+        possible_bases = [
+            APP_BASE.replace(':8000', ':3000'),
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ]
+        
+        for base_url in possible_bases:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    url = f"{base_url}/api/proposals/{proposal_id}"
+                    print(f"Attempting to fetch proposal from: {url}")
+                    response = await client.get(url)
+                    if response.status_code == 200:
+                        data = response.json()
+                        print(f"Successfully fetched proposal data from: {url}")
+                        return data.get('data', {})
+                    else:
+                        print(f"Failed to fetch from {url}, status: {response.status_code}")
+            except Exception as e:
+                print(f"Error with URL {base_url}: {e}")
+                continue
+        
+        print("All proposal fetch attempts failed")
+        return {}
+    except Exception as e:
+        print(f"Error fetching proposal data: {e}")
+        return {}
 
 
 # ============================================================
@@ -199,9 +249,81 @@ def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ============================================================
+# ================== PROCESS PROPOSAL DATA ===================
+# ============================================================
+def process_proposal_data(proposal_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Process and extract relevant data from proposal for PDF generation"""
+    
+    # Extract form I data if available
+    form_i_data = proposal_data.get('forms', {}).get('formI', {})
+    
+    # If form_i_data is empty, try to get basic proposal data
+    if not form_i_data:
+        form_i_data = {
+            "form_type": "FORM-I S&T Grant Proposal",
+            "basic_information": {
+                "project_title": proposal_data.get('title', 'Untitled Project'),
+                "principal_implementing_agency": proposal_data.get('principalAgency'),
+                "project_leader_name": proposal_data.get('projectLeader'),
+                "sub_implementing_agency": ', '.join(proposal_data.get('subAgencies', [])),
+                "co_investigator_name": proposal_data.get('projectCoordinator'),
+                "submission_date": proposal_data.get('createdAt', ''),
+                "project_duration": proposal_data.get('durationMonths')
+            },
+            "project_details": {
+                "definition_of_issue": "",
+                "objectives": "",
+                "justification_subject_area": "",
+                "project_benefits": "",
+                "work_plan": "",
+                "methodology": "",
+                "organization_of_work": "",
+                "time_schedule": "",
+                "foreign_exchange_details": ""
+            },
+            "cost_breakdown": {
+                "total_project_cost": {
+                    "total": proposal_data.get('outlayLakhs'),
+                }
+            }
+        }
+    
+    # Calculate total costs if available
+    cost_breakdown = form_i_data.get('cost_breakdown', {})
+    total_cost = 0
+    
+    # Sum up capital expenditure
+    cap_exp = cost_breakdown.get('capital_expenditure', {})
+    for item in ['land_building', 'equipment']:
+        if item in cap_exp:
+            for year in ['year1', 'year2', 'year3']:
+                value = cap_exp[item].get(year)
+                if value and str(value).replace('.', '').isdigit():
+                    total_cost += float(value)
+    
+    # Sum up revenue expenditure
+    rev_exp = cost_breakdown.get('revenue_expenditure', {})
+    for item in ['salaries', 'consumables', 'travel', 'workshop_seminar']:
+        if item in rev_exp:
+            for year in ['year1', 'year2', 'year3']:
+                value = rev_exp[item].get(year)
+                if value and str(value).replace('.', '').isdigit():
+                    total_cost += float(value)
+    
+    return {
+        'form_data': form_i_data,
+        'proposal_basic': proposal_data,
+        'calculated_totals': {
+            'total_cost': total_cost,
+            'duration': form_i_data.get('basic_information', {}).get('project_duration') or proposal_data.get('durationMonths', 0)
+        }
+    }
+
+
+# ============================================================
 # ====================== GEMINI PROMPT ========================
 # ============================================================
-def build_gemini_scoring_prompt(all_module_json, computed_scores):
+def build_gemini_scoring_prompt(all_module_json, computed_scores, proposal_data=None):
 
     modules_str = json.dumps(all_module_json, ensure_ascii=False, indent=2)[:10000]
     scores_str = json.dumps(computed_scores, ensure_ascii=False, indent=2)
@@ -285,6 +407,9 @@ MODULE OUTPUTS:
 
 INITIAL SCORES:
 {scores_str}
+
+PROPOSAL DATA:
+{proposal_str}
 ===========================================================
 """
     return prompt
@@ -346,13 +471,29 @@ def draw_circular_seal(c, cx, cy, radius, score_text):
     c.drawCentredString(cx, cy - (radius * 0.15), score_text)
 
 
-def make_pdf_bytes(pages, overall_score, filename_short, header_bytes):
+def make_pdf_bytes(pages, overall_score, filename_short, header_bytes, proposal_data=None):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
     margin = 15 * mm
     padding = 6 * mm
+    
+    # Extract proposal information
+    project_title = "Unknown Project"
+    principal_agency = "Unknown Agency"
+    project_leader = "Unknown Leader"
+    duration = "Unknown"
+    total_cost = "Unknown"
+    
+    if proposal_data and 'form_data' in proposal_data:
+        form_data = proposal_data['form_data']
+        basic_info = form_data.get('basic_information', {})
+        project_title = basic_info.get('project_title', project_title)
+        principal_agency = basic_info.get('principal_implementing_agency', principal_agency)
+        project_leader = basic_info.get('project_leader_name', project_leader)
+        duration = str(basic_info.get('project_duration', duration)) + " months" if basic_info.get('project_duration') else duration
+        total_cost = f"₹{proposal_data.get('calculated_totals', {}).get('total_cost', 0):.2f} lakhs"
 
     # compute header drawing parameters (so we can reserve space)
     header_height = 0
@@ -463,6 +604,28 @@ def make_pdf_bytes(pages, overall_score, filename_short, header_bytes):
     p1 = pages.get("page1", {})
     title1 = p1.get("title", "Executive Summary")
     content1 = sanitize_text(p1.get("content", ""))
+    
+    # Add proposal information to page 1 content if available
+    if proposal_data and 'form_data' in proposal_data:
+        form_data = proposal_data['form_data']
+        basic_info = form_data.get('basic_information', {})
+        project_details = form_data.get('project_details', {})
+        
+        proposal_info = f"""
+        
+PROJECT INFORMATION:
+• Title: {project_title}
+• Principal Agency: {principal_agency or 'Not specified'}
+• Project Leader: {project_leader or 'Not specified'}
+• Duration: {duration}
+• Total Cost: {total_cost}
+
+PROJECT OVERVIEW:
+• Issue Definition: {project_details.get('definition_of_issue', 'Not provided')[:200]}...
+• Objectives: {project_details.get('objectives', 'Not provided')[:200]}...
+• Benefits: {project_details.get('project_benefits', 'Not provided')[:200]}...
+        """
+        content1 = content1 + proposal_info
 
     draw_header_footer(1)
     draw_page_border(c, width, height, margin)
@@ -522,11 +685,18 @@ def make_pdf_bytes(pages, overall_score, filename_short, header_bytes):
 # ======================== MAIN API ==========================
 # ============================================================
 @router.post("/report-gen")
-async def authenticator_endpoint(file: UploadFile = File(...)):
+async def authenticator_endpoint(file: UploadFile = File(...), proposal_id: Optional[str] = Query(None)):
 
     try:
         filename = file.filename or f"paper_{datetime.utcnow().isoformat()}"
         file_bytes = await file.read()
+        
+        # Fetch proposal data if proposal_id is provided
+        proposal_data = None
+        if proposal_id:
+            proposal_raw = await fetch_proposal_data(proposal_id)
+            if proposal_raw:
+                proposal_data = process_proposal_data(proposal_raw)
 
         routes = [
             "/timeline",
@@ -550,7 +720,7 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
         computed = compute_scores(modules_out)
 
         # gemini prompt + response (with retry on quota / 429)
-        prompt = build_gemini_scoring_prompt(modules_out, computed)
+        prompt = build_gemini_scoring_prompt(modules_out, computed, proposal_data)
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
         # Automatic retry on quota exceeded / 429 responses
@@ -623,7 +793,8 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
             pages,
             float(overall_score),
             filename.rsplit(".", 1)[0],
-            header_bytes
+            header_bytes,
+            proposal_data
         )
 
         # upload to supabase storage
@@ -656,6 +827,61 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
         disposition_name = safe_name
         return StreamingResponse(pdf_stream, media_type="application/pdf", headers={**headers, "Content-Disposition": f'attachment; filename="{disposition_name}"'})
 
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/test-proposal/{proposal_id}")
+async def test_proposal_data(proposal_id: str):
+    """Test endpoint to check proposal data fetching"""
+    try:
+        proposal_data = await fetch_proposal_data(proposal_id)
+        if proposal_data:
+            processed_data = process_proposal_data(proposal_data)
+            return JSONResponse({
+                "ok": True, 
+                "proposal_id": proposal_id,
+                "raw_data": proposal_data,
+                "processed_data": processed_data,
+                "template_data": generate_json_template_data(processed_data)
+            })
+        else:
+            return JSONResponse({
+                "ok": False, 
+                "error": "No proposal data found",
+                "proposal_id": proposal_id
+            })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/preview-template")
+async def preview_template(proposal_id: Optional[str] = Query(None)):
+    """Preview the HTML template with proposal data"""
+    try:
+        proposal_data = None
+        scores = {
+            "overall_score": 75,
+            "subscores": {
+                "novelty_subscore": 80,
+                "ai_subscore": 85,
+                "plagiarism_subscore": 90,
+                "cost_subscore": 70,
+                "timeline_subscore": 65
+            }
+        }
+        
+        if proposal_id:
+            proposal_raw = await fetch_proposal_data(proposal_id)
+            if proposal_raw:
+                proposal_data = process_proposal_data(proposal_raw)
+        
+        html_content = generate_html_template(proposal_data, scores)
+        return JSONResponse({
+            "ok": True,
+            "html": html_content,
+            "has_proposal_data": proposal_data is not None
+        })
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 

@@ -18,6 +18,7 @@ except Exception:
 # from live_checker import online_checker
 
 from Json_extraction import extractor
+from Json_extraction import ocr_extraction
 import uvicorn
 from data_files import file_storage
 from Common.ai_validator import ai_detector_pipeline
@@ -44,6 +45,7 @@ app.include_router(validation.router)
 app.include_router(rag_chat_guidlines.router)
 app.include_router(rag_chat_specialist.router)
 app.include_router(extractor.router)
+app.include_router(ocr_extraction.router)
 app.include_router(novelty.router)
 app.include_router(cost_estimator.router)
 app.include_router(plag.router)
