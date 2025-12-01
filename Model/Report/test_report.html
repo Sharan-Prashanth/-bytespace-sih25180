@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MOC Project Evaluation Report</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 15mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #333;
+    }
+
+    .page {
+      width: 214mm;
+      min-height: 297mm;
+      margin: 8px auto;
+      background: linear-gradient(180deg, #fff3e6 0%, #ffffff 48%, #eef8f0 100%);
+      padding: 12mm;
+      position: relative;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.12);
+      page-break-after: always;
+      border-left: 3px solid rgba(255,153,51,0.12);
+      border-right: 3px solid rgba(19,136,8,0.07);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: linear-gradient(90deg, #ff9933, #ffffff, #138808);
+      border-radius: 8px;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #002855;
+    }
+
+    .project-info {
+      background: white;
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .project-info table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .project-info th,
+    .project-info td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      text-align: left;
+    }
+
+    .project-info th {
+      background: #f7f7f7;
+      font-weight: bold;
+      color: #002855;
+    }
+
+    .scores-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .score-card {
+      background: white;
+      border: 2px solid #e6e6e6;
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .score-value {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .score-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+    }
+
+    .overall-score {
+      grid-column: span 3;
+      background: linear-gradient(135deg, #ff9933, #138808);
+      color: white;
+      border: none;
+    }
+
+    .overall-score .score-value {
+      font-size: 36px;
+    }
+
+    .details-section {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-left: 4px solid #ff9933;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #002855;
+      margin-bottom: 10px;
+    }
+
+    .section-content {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #333;
+    }
+
+    .footer {
+      position: absolute;
+      bottom: 15mm;
+      left: 15mm;
+      right: 15mm;
+      text-align: center;
+      font-size: 10px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Page 1: Executive Summary -->
+<div class="page">
+  <div class="header">
+    <div class="header-title">Ministry of Coal - Project Evaluation Report</div>
+    <div style="font-size: 12px;">Generated: 28-11-2025</div>
+  </div>
+
+  <div class="project-info">
+    <table>
+      <tr>
+        <th>Project Title</th>
+        <td>Advanced Coal Processing Technology</td>
+      </tr>
+      <tr>
+        <th>Principal Agency</th>
+        <td>Central Institute of Mining and Fuel Research</td>
+      </tr>
+      <tr>
+        <th>Project Leader</th>
+        <td>Dr. John Doe</td>
+      </tr>
+      <tr>
+        <th>Duration</th>
+        <td>36 months</td>
+      </tr>
+      <tr>
+        <th>Total Cost</th>
+        <td>₹251.00 lakhs</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="scores-grid">
+    <div class="score-card overall-score">
+      <div class="score-value">82%</div>
+      <div class="score-label">Overall Score</div>
+    </div>
+    
+    <div class="score-card">
+      <div class="score-value" style="color: #ff9933;">85%</div>
+      <div class="score-label">Novelty</div>
+    </div>
+    
+    <div class="score-card">
+      <div class="score-value" style="color: #138808;">70%</div>
+      <div class="score-label">Feasibility</div>
+    </div>
+    
+    <div class="score-card">
+      <div class="score-value" style="color: #2b8fd6;">75%</div>
+      <div class="score-label">Cost Efficiency</div>
+    </div>
+    
+    <div class="score-card">
+      <div class="score-value" style="color: #7e57c2;">88%</div>
+      <div class="score-label">AI Score</div>
+    </div>
+    
+    <div class="score-card">
+      <div class="score-value" style="color: #d81b60;">92%</div>
+      <div class="score-label">Plagiarism</div>
+    </div>
+    
+    <div class="score-card">
+      <div class="score-value" style="color: #ff5722;">78%</div>
+      <div class="score-label">Timeline</div>
+    </div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Problem Definition</div>
+    <div class="section-content">Current coal processing methods are inefficient and environmentally harmful. There is a need for adv...</div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Project Objectives</div>
+    <div class="section-content">1. Develop advanced coal cleaning technology
+2. Reduce environmental impact of coal processing
+3. Im...</div>
+  </div>
+
+  <div class="footer">
+    Generated by Bytespace Evaluator — Page 1 of 3
+  </div>
+</div>
+
+<!-- Page 2: Detailed Analysis -->
+<div class="page">
+  <div class="header">
+    <div class="header-title">Detailed Analysis & Recommendations</div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Project Benefits</div>
+    <div class="section-content">The project will result in cleaner coal, reduced environmental impact, improved efficiency, and pote...</div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Methodology</div>
+    <div class="section-content">The project will use advanced flotation techniques, magnetic separation, and chemical treatment meth...</div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">AI Analysis Results</div>
+    <div class="section-content">
+      The AI analysis indicates a score of 88% based on automated content evaluation.
+      This includes checks for originality, technical feasibility, and alignment with coal industry objectives.
+    </div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Plagiarism Check Results</div>
+    <div class="section-content">
+      Plagiarism check completed with a score of 92%.
+      This indicates the level of original content in the proposal documentation.
+    </div>
+  </div>
+
+  <div class="footer">
+    Generated by Bytespace Evaluator — Page 2 of 3
+  </div>
+</div>
+
+<!-- Page 3: Financial Summary -->
+<div class="page">
+  <div class="header">
+    <div class="header-title">Financial Summary & Recommendations</div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Cost Analysis</div>
+    <div class="section-content">
+      Total Project Cost: ₹251.00 lakhs<br>
+      Cost Efficiency Score: 75%<br>
+      This score reflects the appropriateness of the proposed budget for the project scope and expected deliverables.
+    </div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Timeline Assessment</div>
+    <div class="section-content">
+      Project Duration: 36 months<br>
+      Timeline Feasibility Score: 78%<br>
+      The timeline has been evaluated for realistic milestones and deliverable schedules.
+    </div>
+  </div>
+
+  <div class="details-section">
+    <div class="section-title">Overall Recommendation</div>
+    <div class="section-content">
+      Based on the comprehensive analysis, this project has received an overall score of 82%.
+      This project is recommended for approval.
+    </div>
+  </div>
+
+  <div class="footer">
+    Generated by Bytespace Evaluator — Page 3 of 3
+  </div>
+</div>
+
+</body>
+</html>

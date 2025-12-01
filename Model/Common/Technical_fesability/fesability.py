@@ -482,3 +482,518 @@ if __name__ == '__main__':
     with open(out, 'w', encoding='utf-8') as fh:
         json.dump(rpt, fh, indent=2)
     print('Feasibility report written to', out)
+
+
+# ================================================================================
+# TECHNICAL FEASIBILITY ASSESSMENT AGENT
+# ================================================================================
+
+def convert_json_to_text(data, parent_key: str = "", separator: str = "\n") -> str:
+    """
+    Recursively convert a JSON structure to plain text representation.
+    
+    Args:
+        data: The JSON data structure (dict, list, or primitive)
+        parent_key: Parent key for nested structures
+        separator: String to separate key-value pairs
+        
+    Returns:
+        Plain text representation of the JSON structure
+    """
+    text_parts = []
+    
+    if isinstance(data, dict):
+        for key, value in data.items():
+            full_key = f"{parent_key}.{key}" if parent_key else key
+            if isinstance(value, (dict, list)):
+                # Recursively process nested structures
+                nested_text = convert_json_to_text(value, full_key, separator)
+                if nested_text:
+                    text_parts.append(f"{full_key}:")
+                    text_parts.append(nested_text)
+            else:
+                # Handle primitive values
+                if value is not None and str(value).strip():
+                    text_parts.append(f"{full_key}: {value}")
+    
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            item_key = f"{parent_key}[{i}]" if parent_key else f"item_{i}"
+            if isinstance(item, (dict, list)):
+                nested_text = convert_json_to_text(item, item_key, separator)
+                if nested_text:
+                    text_parts.append(f"{item_key}:")
+                    text_parts.append(nested_text)
+            else:
+                if item is not None and str(item).strip():
+                    text_parts.append(f"{item_key}: {item}")
+    
+    else:
+        # Handle primitive types at root level
+        if data is not None and str(data).strip():
+            key = parent_key if parent_key else "value"
+            text_parts.append(f"{key}: {data}")
+    
+    return separator.join(text_parts)
+
+
+def build_summary_comment(feasibility: str, score: int) -> str:
+    """
+    Build a summary comment based on feasibility assessment and score.
+    
+    Args:
+        feasibility: Feasibility decision string
+        score: Numerical feasibility score (0-100)
+        
+    Returns:
+        Formatted summary comment
+    """
+    header = f"Score: {score}/100"
+    
+    if "Feasible" in feasibility and "Not" not in feasibility:
+        if score >= 70:
+            para = (
+                "Engineering plans and team experience indicate feasibility at pilot scale. "
+                "Critical items include feedstock logistics, emissions control testing, and availability of pilot facilities for commissioning. "
+                "The project demonstrates strong technical foundation with well-defined objectives and deliverables."
+            )
+        else:
+            para = (
+                "The project shows feasibility potential but requires strengthening in key areas. "
+                "While the core concept is technically sound, additional detail is needed in "
+                "budget planning, milestone definition, and risk mitigation strategies to ensure successful completion."
+            )
+    elif "Not Feasible" in feasibility:
+        para = (
+            "The proposed timeline and resource plan indicate the project is unlikely to be completed within the requested horizon without scope reduction or additional resources. "
+            "Consider re-scoping or adding manpower/equipment to reduce the critical path. "
+            "Technical challenges may require extended development phases or alternative approaches."
+        )
+    else:
+        para = (
+            "Unable to determine feasibility conclusively. The submission lacks clear milestones, budget breakdowns, or acceptance criteria. "
+            "Provide a Gantt chart, detailed budget and KPIs to enable a definitive technical feasibility judgement. "
+            "Additional documentation is required for comprehensive assessment."
+        )
+    
+    return f"{header}\n{para}"
+
+
+def analyze_pdf_proposal_feasibility(pdf_text: str) -> Dict:
+    """
+    Enhanced analysis of proposal feasibility from PDF content
+    Returns detailed analysis with score prediction
+    """
+    import re
+    
+    # Extract key sections from the PDF
+    issue_match = re.search(r'Definition of the issue.*?:(.+?)(?=\d+|$)', pdf_text, re.DOTALL)
+    issue = issue_match.group(1).strip() if issue_match else ""
+    
+    methodology_match = re.search(r'Methodology.*?:(.+?)(?=\d+|$)', pdf_text, re.DOTALL)
+    methodology = methodology_match.group(1).strip() if methodology_match else ""
+    
+    objectives_match = re.search(r'Objectives.*?:(.+?)(?=\d+|$)', pdf_text, re.DOTALL)
+    objectives = objectives_match.group(1).strip() if objectives_match else ""
+    
+    work_plan_match = re.search(r'Work Plan.*?:(.+?)(?=\d+|$)', pdf_text, re.DOTALL)
+    work_plan = work_plan_match.group(1).strip() if work_plan_match else ""
+    
+    # Check for placeholder text vs actual content
+    placeholder_phrases = [
+        "will come here", "comes here", "section", "beneficial",
+        "chart will come here", "elements will come here", "title comes here"
+    ]
+    
+    # Analyze completeness
+    completeness_score = 0
+    analysis = {
+        "issue": issue,+
+        "methodology": methodology,
+        "objectives": objectives,
+        "work_plan": work_plan,
+        "issue_analysis": "",
+        "methodology_analysis": "", 
+        "feasibility_prediction": "",
+        "score": 0,
+        "recommendations": []
+    }
+    
+    # Issue Analysis
+    if any(phrase in issue.lower() for phrase in placeholder_phrases) or len(issue.strip()) < 10:
+        analysis["issue_analysis"] = "Issue definition contains placeholder text or insufficient detail"
+        completeness_score += 0
+    else:
+        analysis["issue_analysis"] = "Issue definition appears to contain actual content"
+        completeness_score += 25
+    
+    # Methodology Analysis  
+    if any(phrase in methodology.lower() for phrase in placeholder_phrases) or len(methodology.strip()) < 10:
+        analysis["methodology_analysis"] = "Methodology contains placeholder text or insufficient detail"
+        completeness_score += 0
+    else:
+        analysis["methodology_analysis"] = "Methodology appears to contain actual content"
+        completeness_score += 25
+        
+    # Technical feasibility keywords
+    technical_keywords = [
+        "equipment", "technology", "software", "hardware", "infrastructure",
+        "expertise", "skills", "resources", "timeline", "implementation",
+        "testing", "validation", "deployment", "scalability", "algorithm",
+        "analysis", "research", "development", "mining", "coal", "safety"
+    ]
+    
+    methodology_keywords_found = [kw for kw in technical_keywords if kw in methodology.lower()]
+    if methodology_keywords_found:
+        completeness_score += 15
+        analysis["methodology_analysis"] += f" (Found technical terms: {', '.join(methodology_keywords_found)})"
+    
+    # Budget analysis
+    budget_pattern = r'(\d+)'
+    budget_numbers = re.findall(budget_pattern, pdf_text)
+    if len(budget_numbers) > 5:  # Multiple budget entries
+        completeness_score += 20
+        analysis["budget_analysis"] = f"Budget details provided with {len(budget_numbers)} cost items"
+    else:
+        analysis["budget_analysis"] = "Limited budget information available"
+        completeness_score += 10
+    
+    # Timeline analysis
+    timeline_keywords = ["year", "month", "schedule", "milestone", "chart", "phase"]
+    timeline_found = any(kw in pdf_text.lower() for kw in timeline_keywords)
+    if timeline_found:
+        completeness_score += 15
+        analysis["timeline_analysis"] = "Timeline/scheduling information present"
+    else:
+        analysis["timeline_analysis"] = "No clear timeline information found"
+    
+    # Final score calculation (0-100)
+    final_score = min(100, completeness_score)
+    analysis["score"] = final_score
+    
+    # Feasibility prediction based on score
+    if final_score >= 80:
+        analysis["feasibility_prediction"] = "Yes"
+        analysis["feasibility_comment"] = "HIGH FEASIBILITY - Well-defined proposal with clear methodology and planning"
+    elif final_score >= 60:
+        analysis["feasibility_prediction"] = "Maybe"
+        analysis["feasibility_comment"] = "MODERATE FEASIBILITY - Proposal has some structure but lacks detail in key areas"
+    elif final_score >= 40:
+        analysis["feasibility_prediction"] = "Maybe"
+        analysis["feasibility_comment"] = "LOW FEASIBILITY - Proposal appears incomplete with placeholder content"
+    else:
+        analysis["feasibility_prediction"] = "No"
+        analysis["feasibility_comment"] = "VERY LOW FEASIBILITY - Proposal is mostly placeholder text without concrete details"
+    
+    # Recommendations
+    if final_score < 80:
+        analysis["recommendations"] = [
+            "Replace all placeholder text with actual content",
+            "Provide detailed technical methodology",
+            "Include specific timeline with milestones", 
+            "Add comprehensive budget breakdown",
+            "Define clear technical requirements and resources"
+        ]
+    
+    return analysis
+
+
+def build_recommended_actions(checklist: list, feasibility: str) -> list:
+    """
+    Build recommended actions based on checklist results and feasibility assessment.
+    
+    Args:
+        checklist: List of checklist items with their status
+        feasibility: Feasibility decision string
+        
+    Returns:
+        List of recommended action strings
+    """
+    recommendations = []
+    
+    # Check for missing critical components
+    missing_items = [item for item in checklist if item.get('status') == 'Missing']
+    
+    # Budget-related recommendations
+    budget_item = next((item for item in checklist if item.get('id') == 'budget'), None)
+    if budget_item and budget_item.get('status') != 'Satisfied':
+        recommendations.append(
+            'Provide a clear budget breakdown (manpower and capital equipment at minimum).'
+        )
+    
+    # Timeline-related recommendations
+    timeline_item = next((item for item in checklist if item.get('id') == 'timeline'), None)
+    if timeline_item and timeline_item.get('status') != 'Satisfied':
+        recommendations.append(
+            'Attach a Gantt chart with milestones and specific, testable acceptance criteria for each deliverable.'
+        )
+    
+    # KPI recommendations
+    kpi_item = next((item for item in checklist if item.get('id') == 'kpi'), None)
+    if kpi_item and kpi_item.get('status') != 'Satisfied':
+        recommendations.append(
+            'Define measurable KPIs (e.g., pilot throughput, emissions targets, energy recovery rates) per milestone.'
+        )
+    
+    # Standard recommendations based on feasibility outcome
+    if "Not Feasible" in feasibility:
+        recommendations.append(
+            'Re-scope the project or provide parallelisation/additional resources to meet horizon.'
+        )
+    
+    # Generic recommendations from _format_comment_and_recs pattern
+    recommendations.extend([
+        'Supply detailed feedstock supply agreements and contingency plans for variable feedstock quality.',
+        'Include third-party testing schedules for emissions and demonstrate access to pilot facilities.',
+        'Provide a commissioning plan with acceptance criteria and responsible parties for each milestone.'
+    ])
+    
+    # Fill missing sections recommendation
+    if missing_items:
+        missing_labels = [item.get('label', item.get('id', 'unknown')) for item in missing_items]
+        recommendations.insert(0, 
+            f'Fill missing sections: {", ".join(missing_labels[:5])}{"..." if len(missing_labels) > 5 else ""}.'
+        )
+    
+    return recommendations
+
+
+def evaluate_project_feasibility(proposal_json: dict) -> dict:
+    """
+    Evaluate technical feasibility of a project based on grant proposal JSON.
+    
+    This function converts structured JSON proposal data into plain text,
+    then applies the complete feasibility analysis pipeline to generate 
+    a comprehensive assessment report.
+    
+    Args:
+        proposal_json: Dictionary containing structured grant proposal data
+        
+    Returns:
+        Dictionary containing complete feasibility assessment with the structure:
+        {
+            "score": int (0-100),
+            "timeline_decision": {
+                "decision": str,
+                "total_months": float,
+                "rationale": str
+            },
+            "feasibility": str,
+            "checklist": List[Dict],
+            "budget": Dict,
+            "durations": List[Tuple],
+            "flagged_lines": List[Dict],
+            "recommended_actions": List[str],
+            "summary_comment": str
+        }
+    """
+    try:
+        # Step 1: Convert JSON to plain text representation
+        full_text = convert_json_to_text(proposal_json)
+        
+        if not full_text or len(full_text.strip()) < 20:
+            raise ValueError("Insufficient text content in proposal JSON")
+        
+        # Step 2: Apply feasibility analysis pipeline using existing functions
+        
+        # Checklist analysis
+        checklist = match_checklist(full_text)
+        
+        # Duration and timeline analysis
+        durations = find_durations(full_text)
+        decision, total_months, rationale = decide_within_months(durations, 24)
+        
+        # Budget analysis
+        budget = extract_budget_items(full_text)
+        
+        # Calculate overall score
+        score = heuristic_score_from_components(checklist, total_months, budget)
+        
+        # Extract relevant lines for detailed analysis
+        try:
+            flagged_lines = extract_feasibility_lines(full_text)
+        except Exception:
+            flagged_lines = []
+        
+        # Step 3: Determine overall feasibility assessment (same logic as FastAPI route)
+        if decision == 'No':
+            feasibility = 'Not Feasible within horizon; likely requires re-scoping or more resources.'
+        elif decision == 'Yes' and score >= 60:
+            feasibility = 'Feasible: project appears deliverable within horizon with minor clarifications.'
+        elif decision == 'Yes' and score < 60:
+            feasibility = 'Potentially Feasible but needs stronger budget/milestones/KPIs.'
+        else:
+            feasibility = 'Uncertain: insufficient information to determine feasibility.'
+        
+        # Step 4: Generate recommendations and summary using helper functions
+        recommended_actions = build_recommended_actions(checklist, feasibility)
+        summary_comment = build_summary_comment(feasibility, score)
+        
+        # Step 5: Compile final assessment report in exact specified format
+        assessment_result = {
+            "score": score,
+            "timeline_decision": {
+                "decision": decision,
+                "total_months": total_months,
+                "rationale": rationale
+            },
+            "feasibility": feasibility,
+            "checklist": checklist,
+            "budget": budget,
+            "durations": durations,
+            "flagged_lines": flagged_lines,
+            "recommended_actions": recommended_actions,
+            "summary_comment": summary_comment
+        }
+        
+        return assessment_result
+        
+    except Exception as e:
+        # Return error state with diagnostic information
+        return {
+            "score": 0,
+            "timeline_decision": {
+                "decision": "Error",
+                "total_months": 0.0,
+                "rationale": f"Assessment failed: {str(e)}"
+            },
+            "feasibility": f"Assessment Error: {str(e)}",
+            "checklist": [],
+            "budget": {"manpower": 0.0, "capital_equipment": 0.0, "currency_unit": "unknown"},
+            "durations": [],
+            "flagged_lines": [],
+            "recommended_actions": [
+                "Fix proposal JSON structure and content",
+                "Ensure all required fields are properly populated",
+                "Validate JSON format and data types"
+            ],
+            "summary_comment": f"Technical feasibility assessment could not be completed due to: {str(e)}"
+        }
+
+
+def create_sample_proposal_json():
+    """
+    Create a sample proposal JSON for testing the agent.
+    
+    Returns:
+        Dictionary containing sample proposal data
+    """
+    return {
+        "basic_information": {
+            "project_title": "Development of Advanced Coal Gasification Technology for Clean Energy Production",
+            "organization": "Indian Institute of Technology Delhi",
+            "principal_investigator": "Dr. Rajesh Kumar",
+            "contact_email": "rajesh.kumar@iitd.ac.in"
+        },
+        "project_details": {
+            "objectives": [
+                "Develop novel coal gasification technology with improved efficiency",
+                "Design and test pilot-scale gasification reactor",
+                "Evaluate environmental impact and emission control",
+                "Assess commercial viability and scalability"
+            ],
+            "methodology": {
+                "approach": "Integrated gasification combined cycle with advanced emission control",
+                "techniques": [
+                    "High-temperature gasification with oxygen enrichment",
+                    "Advanced syngas cleaning and conditioning"
+                ],
+                "innovation": "Novel catalyst system for improved carbon conversion efficiency"
+            },
+            "expected_outcomes": [
+                "20% improvement in gasification efficiency",
+                "90% reduction in particulate emissions",
+                "Pilot plant demonstration with 100 kg/hr capacity"
+            ],
+            "deliverables": [
+                "Detailed engineering design of gasification system",
+                "Pilot plant construction and commissioning",
+                "Performance testing and validation reports",
+                "Environmental impact assessment"
+            ]
+        },
+        "timeline": {
+            "total_duration": "18 months",
+            "phases": [
+                {
+                    "phase": "Design and Engineering",
+                    "duration": "6 months", 
+                    "milestones": ["Conceptual design completion", "Detailed engineering drawings"]
+                },
+                {
+                    "phase": "Pilot Plant Construction", 
+                    "duration": "8 months",
+                    "milestones": ["Equipment procurement", "Installation and commissioning"]
+                },
+                {
+                    "phase": "Testing and Validation",
+                    "duration": "4 months",
+                    "milestones": ["Performance testing", "Environmental testing"]
+                }
+            ],
+            "key_milestones": [
+                "Month 6: Design review and approval",
+                "Month 14: Pilot plant commissioning",
+                "Month 18: Project completion and final report"
+            ]
+        },
+        "cost_breakdown": {
+            "total_budget": "120 lakhs",
+            "manpower": {
+                "principal_investigator": "12 lakhs",
+                "research_associates": "24 lakhs", 
+                "technical_staff": "18 lakhs",
+                "total": "54 lakhs"
+            },
+            "capital_equipment": {
+                "gasification_reactor": "35 lakhs",
+                "gas_analysis_equipment": "15 lakhs",
+                "control_systems": "10 lakhs",
+                "total": "60 lakhs"
+            },
+            "operational": {
+                "consumables": "4 lakhs",
+                "utilities": "2 lakhs",
+                "total": "6 lakhs"
+            },
+            "currency_unit": "INR lakhs"
+        },
+        "risk_assessment": {
+            "technical_risks": [
+                "Catalyst deactivation under high-ash conditions",
+                "Reactor refractory degradation"
+            ],
+            "mitigation_strategies": [
+                "Parallel development of multiple catalyst formulations",
+                "Early procurement of long-lead items"
+            ]
+        },
+        "environmental_compliance": {
+            "clearances_required": ["State Pollution Control Board"],
+            "emission_monitoring": "Continuous monitoring of CO, CO2, NOx, SOx, particulates"
+        }
+    }
+
+
+# Example usage and test function
+def test_feasibility_agent():
+    """Test the feasibility agent with sample data."""
+    print("Testing Technical Feasibility Assessment Agent")
+    print("=" * 50)
+    
+    # Create sample proposal
+    sample_proposal = create_sample_proposal_json()
+    
+    # Run assessment
+    result = evaluate_project_feasibility(sample_proposal)
+    
+    # Print formatted results
+    print(f"Assessment Score: {result['score']}/100")
+    print(f"Feasibility: {result['feasibility']}")
+    print(f"Timeline Decision: {result['timeline_decision']['decision']}")
+    print(f"Total Duration: {result['timeline_decision']['total_months']} months")
+    print(f"Budget Summary: Manpower={result['budget']['manpower']}, Equipment={result['budget']['capital_equipment']}")
+    print(f"Recommendations: {len(result['recommended_actions'])} actions")
+    print(f"Flagged Lines: {len(result['flagged_lines'])} relevant segments")
+    
+    return result
