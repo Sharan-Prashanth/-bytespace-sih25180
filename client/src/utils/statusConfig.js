@@ -14,21 +14,18 @@ import {
 // Proposal Status Constants - Match backend enum values exactly
 export const PROPOSAL_STATUS = {
   DRAFT: 'DRAFT',
-  SUBMITTED: 'SUBMITTED',
-  AI_EVALUATION: 'AI_EVALUATION',
+  AI_EVALUATION_PENDING: 'AI_EVALUATION_PENDING',
+  AI_REJECTED: 'AI_REJECTED',
   CMPDI_REVIEW: 'CMPDI_REVIEW',
   CMPDI_EXPERT_REVIEW: 'CMPDI_EXPERT_REVIEW',
-  CMPDI_APPROVED: 'CMPDI_APPROVED',
+  CMPDI_ACCEPTED: 'CMPDI_ACCEPTED',
   CMPDI_REJECTED: 'CMPDI_REJECTED',
   TSSRC_REVIEW: 'TSSRC_REVIEW',
-  TSSRC_APPROVED: 'TSSRC_APPROVED',
+  TSSRC_ACCEPTED: 'TSSRC_ACCEPTED',
   TSSRC_REJECTED: 'TSSRC_REJECTED',
   SSRC_REVIEW: 'SSRC_REVIEW',
-  SSRC_APPROVED: 'SSRC_APPROVED',
-  SSRC_REJECTED: 'SSRC_REJECTED',
-  ACCEPTED: 'ACCEPTED',
-  ONGOING: 'ONGOING',
-  COMPLETED: 'COMPLETED'
+  SSRC_ACCEPTED: 'SSRC_ACCEPTED',
+  SSRC_REJECTED: 'SSRC_REJECTED'
 };
 
 // Status Display Configuration with professional icons
@@ -39,17 +36,17 @@ export const STATUS_CONFIG = {
     Icon: FileText,
     description: 'Proposal is being prepared'
   },
-  [PROPOSAL_STATUS.SUBMITTED]: {
-    label: 'Submitted',
-    color: 'bg-blue-100 text-black border-blue-300',
-    Icon: TrendingUp,
-    description: 'Submitted for evaluation'
-  },
-  [PROPOSAL_STATUS.AI_EVALUATION]: {
-    label: 'AI Evaluation',
+  [PROPOSAL_STATUS.AI_EVALUATION_PENDING]: {
+    label: 'AI Evaluation Pending',
     color: 'bg-purple-100 text-black border-purple-300',
     Icon: BarChart,
-    description: 'Being evaluated by AI'
+    description: 'Submitted, waiting for AI evaluation'
+  },
+  [PROPOSAL_STATUS.AI_REJECTED]: {
+    label: 'AI Rejected',
+    color: 'bg-orange-100 text-black border-orange-300',
+    Icon: AlertCircle,
+    description: 'AI evaluation rejected - can be modified and resubmitted'
   },
   [PROPOSAL_STATUS.CMPDI_REVIEW]: {
     label: 'CMPDI Review',
@@ -63,17 +60,17 @@ export const STATUS_CONFIG = {
     Icon: Users,
     description: 'Being reviewed by domain experts'
   },
-  [PROPOSAL_STATUS.CMPDI_APPROVED]: {
-    label: 'CMPDI Approved',
+  [PROPOSAL_STATUS.CMPDI_ACCEPTED]: {
+    label: 'CMPDI Accepted',
     color: 'bg-green-100 text-black border-green-300',
     Icon: CheckCircle,
-    description: 'Approved by CMPDI'
+    description: 'Approved by CMPDI, forwarded to TSSRC'
   },
   [PROPOSAL_STATUS.CMPDI_REJECTED]: {
     label: 'CMPDI Rejected',
     color: 'bg-red-100 text-black border-red-300',
     Icon: XCircle,
-    description: 'Rejected by CMPDI'
+    description: 'Rejected by CMPDI - final decision'
   },
   [PROPOSAL_STATUS.TSSRC_REVIEW]: {
     label: 'TSSRC Review',
@@ -81,17 +78,17 @@ export const STATUS_CONFIG = {
     Icon: Search,
     description: 'Under Technical Sub-Committee review'
   },
-  [PROPOSAL_STATUS.TSSRC_APPROVED]: {
-    label: 'TSSRC Approved',
+  [PROPOSAL_STATUS.TSSRC_ACCEPTED]: {
+    label: 'TSSRC Accepted',
     color: 'bg-emerald-100 text-black border-emerald-300',
     Icon: CheckCircle,
-    description: 'Approved by TSSRC'
+    description: 'Approved by TSSRC, forwarded to SSRC'
   },
   [PROPOSAL_STATUS.TSSRC_REJECTED]: {
     label: 'TSSRC Rejected',
     color: 'bg-rose-100 text-black border-rose-300',
     Icon: XCircle,
-    description: 'Rejected by TSSRC'
+    description: 'Rejected by TSSRC - final decision'
   },
   [PROPOSAL_STATUS.SSRC_REVIEW]: {
     label: 'SSRC Review',
@@ -99,36 +96,42 @@ export const STATUS_CONFIG = {
     Icon: Search,
     description: 'Under SSRC final review'
   },
-  [PROPOSAL_STATUS.SSRC_APPROVED]: {
-    label: 'SSRC Approved',
+  [PROPOSAL_STATUS.SSRC_ACCEPTED]: {
+    label: 'SSRC Accepted',
     color: 'bg-teal-100 text-black border-teal-300',
     Icon: Award,
-    description: 'Final approval granted'
+    description: 'Final approval granted - process complete'
   },
   [PROPOSAL_STATUS.SSRC_REJECTED]: {
     label: 'SSRC Rejected',
     color: 'bg-red-200 text-black border-red-400',
     Icon: XCircle,
-    description: 'Final rejection'
-  },
-  [PROPOSAL_STATUS.ACCEPTED]: {
-    label: 'Accepted',
-    color: 'bg-green-200 text-black border-green-400',
-    Icon: Award,
-    description: 'Project accepted for implementation'
-  },
-  [PROPOSAL_STATUS.ONGOING]: {
-    label: 'Ongoing',
-    color: 'bg-blue-200 text-black border-blue-400',
-    Icon: Clock,
-    description: 'Project is in progress'
-  },
-  [PROPOSAL_STATUS.COMPLETED]: {
-    label: 'Completed',
-    color: 'bg-green-200 text-black border-green-400',
-    Icon: CheckCircle,
-    description: 'Project successfully completed'
+    description: 'Final rejection by SSRC'
   }
+};
+
+// Helper to check if a status is a rejection that cannot be modified
+export const isRejectedFinal = (status) => {
+  return [
+    PROPOSAL_STATUS.CMPDI_REJECTED,
+    PROPOSAL_STATUS.TSSRC_REJECTED,
+    PROPOSAL_STATUS.SSRC_REJECTED
+  ].includes(status);
+};
+
+// Helper to check if a proposal can be modified (AI rejected proposals can be modified)
+export const canModifyProposal = (status) => {
+  return status === PROPOSAL_STATUS.DRAFT || status === PROPOSAL_STATUS.AI_REJECTED;
+};
+
+// Helper to check if status is any kind of rejection
+export const isRejected = (status) => {
+  return [
+    PROPOSAL_STATUS.AI_REJECTED,
+    PROPOSAL_STATUS.CMPDI_REJECTED,
+    PROPOSAL_STATUS.TSSRC_REJECTED,
+    PROPOSAL_STATUS.SSRC_REJECTED
+  ].includes(status);
 };
 
 // Helper function to get status configuration

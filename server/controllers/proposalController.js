@@ -466,16 +466,16 @@ export const submitProposal = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update status to AI_EVALUATION and set version to 1.0
+  // Update status to AI_EVALUATION and set version to 1 (integer)
   proposal.status = 'AI_EVALUATION';
-  proposal.currentVersion = 1.0;
+  proposal.currentVersion = 1;
   await proposal.save();
 
-  // Create version 1.0
+  // Create version 1 - Initial Submission
   const version = await ProposalVersion.create({
     proposalId: proposal._id,
-    versionNumber: 1.0,
-    commitMessage: req.body.commitMessage || 'Initial submission',
+    versionNumber: 1,
+    commitMessage: 'Initial Submission',
     forms: proposal.forms,
     proposalInfo: {
       title: proposal.title,
@@ -512,7 +512,7 @@ export const submitProposal = asyncHandler(async (req, res) => {
       };
       
       // Mock S3 upload for AI report
-      const mockReportUrl = `https://s3.bucket.com/ai-reports/${proposal.proposalCode}-v1.0-ai-report.pdf`;
+      const mockReportUrl = `https://s3.bucket.com/ai-reports/${proposal.proposalCode}-v1-ai-report.pdf`;
       
       // Update version with AI report URL
       version.aiReportUrl = mockReportUrl;
@@ -520,7 +520,7 @@ export const submitProposal = asyncHandler(async (req, res) => {
       
       // Add to proposal's AI reports array
       proposal.aiReports.push({
-        version: 1.0,
+        version: 1,
         reportUrl: mockReportUrl,
         generatedAt: new Date()
       });

@@ -1,0 +1,114 @@
+════════════════════════════════════════════════════════════════════
+              NON-OCR PDF CONVERTER - START HERE
+════════════════════════════════════════════════════════════════════
+
+🎯 GOAL: Convert scanned PDFs → searchable PDFs (with invisible text)
+
+════════════════════════════════════════════════════════════════════
+📋 STEP-BY-STEP COMMANDS (COPY & PASTE):
+════════════════════════════════════════════════════════════════════
+
+1️⃣  GO TO FOLDER:
+
+    cd /home/aksshay88/Desktop/projects/sih/SIH25180/Model/non_ocr
+
+
+2️⃣  INSTALL (3-5 minutes):
+
+    pip install -r requirements.txt
+    sudo apt-get install -y poppler-utils
+
+
+3️⃣  TEST IT WORKS:
+
+    python test_converter.py
+
+    ✅ You should see: "ALL TESTS PASSED!"
+
+
+4️⃣  TEST WITH YOUR PDF:
+
+    python cli.py /path/to/your/scanned.pdf
+
+    📄 Output: /path/to/your/scanned_ocr.pdf
+
+
+5️⃣  VERIFY IT WORKED:
+
+    - Open the _ocr.pdf file
+    - Try Ctrl+F (search)
+    - Try copying text
+    - ✅ If you can search/copy, it worked!
+
+════════════════════════════════════════════════════════════════════
+📚 DOCUMENTATION:
+════════════════════════════════════════════════════════════════════
+
+• TEST_GUIDE.md          → Complete testing guide
+• GETTING_STARTED.md     → Quick start & examples
+• README.md              → Full documentation
+• requirements.txt       → All dependencies
+
+════════════════════════════════════════════════════════════════════
+🚀 API SERVER (For Web App):
+════════════════════════════════════════════════════════════════════
+
+    cd /home/aksshay88/Desktop/projects/sih/SIH25180/Model
+    python main.py
+
+Then:
+• Go to: http://localhost:8000/docs
+• Find: POST /non-ocr/convert-to-ocr
+• Upload your PDF
+• Download searchable result
+
+════════════════════════════════════════════════════════════════════
+💡 QUICK EXAMPLES:
+════════════════════════════════════════════════════════════════════
+
+Convert PDF:
+  python cli.py document.pdf
+
+Check if PDF has OCR:
+  python cli.py document.pdf --check-only
+
+High quality (400 DPI):
+  python cli.py document.pdf --dpi 400
+
+Convert image to PDF:
+  python cli.py scanned_page.png
+
+════════════════════════════════════════════════════════════════════
+🐛 TROUBLESHOOTING:
+════════════════════════════════════════════════════════════════════
+
+Error: "No module named 'reportlab'"
+→ pip install reportlab
+
+Error: "No module named 'paddleocr'"
+→ pip install paddlepaddle paddleocr
+
+Error: "poppler not found"
+→ sudo apt-get install poppler-utils
+
+Tests fail:
+→ Read TEST_GUIDE.md
+
+════════════════════════════════════════════════════════════════════
+✅ SUCCESS CHECKLIST:
+════════════════════════════════════════════════════════════════════
+
+□ Installed dependencies
+□ Tests passed
+□ Converted a PDF
+□ Output file created
+□ Can search text in output (Ctrl+F)
+□ Can copy text from output
+
+════════════════════════════════════════════════════════════════════
+
+🎉 THAT'S IT! Now you can convert scanned PDFs!
+
+For detailed help, read: TEST_GUIDE.md
+
+════════════════════════════════════════════════════════════════════

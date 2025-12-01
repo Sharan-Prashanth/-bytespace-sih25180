@@ -17,6 +17,7 @@ import commentRoutes from "./routes/commentRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import workflowRoutes from "./routes/workflowRoutes.js";
+import calendarRoutes from "./routes/calendarRoutes.js";
 
 // Import collaboration service and socket handlers
 import collaborationService from "./services/collaborationService.js";
@@ -87,17 +88,18 @@ app.get('/api/test-email', async (req, res) => {
   }
 });
 
-// API Routes
+// API Routes - Order matters! More specific routes first
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/proposals', proposalRoutes);
 app.use('/api/proposals/:proposalId/versions', versionRoutes);
-app.use('/api/collaboration', collaborationRoutes);
-app.use('/api/collaboration-api', collaborationApiRoutes);
 app.use('/api/proposals/:proposalId/comments', commentRoutes);
 app.use('/api/proposals/:proposalId/chat', chatRoutes);
 app.use('/api/proposals/:proposalId/reports', reportRoutes);
+app.use('/api/proposals', proposalRoutes);
+app.use('/api/collaboration', collaborationRoutes);
+app.use('/api/collaboration-api', collaborationApiRoutes);
 app.use('/api/workflow', workflowRoutes);
+app.use('/api/calendar', calendarRoutes);
 
 // Error handling middleware
 app.use(notFound);

@@ -49,28 +49,26 @@ const proposalSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: [
-      'DRAFT',
-      'SUBMITTED',
-      'AI_EVALUATION',
-      'CMPDI_REVIEW',
-      'CMPDI_EXPERT_REVIEW',
-      'CMPDI_APPROVED',
-      'CMPDI_REJECTED',
-      'TSSRC_REVIEW',
-      'TSSRC_APPROVED',
-      'TSSRC_REJECTED',
-      'SSRC_REVIEW',
-      'SSRC_APPROVED',
-      'SSRC_REJECTED',
-      'ACCEPTED',
-      'ONGOING',
-      'COMPLETED'
+      'DRAFT',                    // Unsubmitted draft
+      'AI_EVALUATION_PENDING',    // Submitted, waiting for AI evaluation
+      'AI_REJECTED',              // AI evaluation rejected - can be modified and resubmitted
+      'CMPDI_REVIEW',             // AI passed, under CMPDI review
+      'CMPDI_EXPERT_REVIEW',      // Assigned to expert reviewers
+      'CMPDI_ACCEPTED',           // CMPDI approved, moves to TSSRC
+      'CMPDI_REJECTED',           // CMPDI rejected - final, cannot be modified
+      'TSSRC_REVIEW',             // Under TSSRC review
+      'TSSRC_ACCEPTED',           // TSSRC approved, moves to SSRC
+      'TSSRC_REJECTED',           // TSSRC rejected - final, cannot be modified
+      'SSRC_REVIEW',              // Under SSRC final review
+      'SSRC_ACCEPTED',            // SSRC approved - final approval, process ends here
+      'SSRC_REJECTED'             // SSRC rejected - final, cannot be modified
     ],
     default: 'DRAFT'
   },
+  // Version tracking (integer versions: 0=draft, 1=initial submission, 2+=revisions)
   currentVersion: {
     type: Number,
-    default: 0.1
+    default: 0
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
