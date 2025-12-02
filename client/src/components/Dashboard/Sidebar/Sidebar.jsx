@@ -3,6 +3,7 @@
 import {
     Briefcase,
     DollarSign,
+    Globe,
     HelpCircle,
     Home,
     LogOut,
@@ -17,6 +18,7 @@ const MENU_ITEMS = [
     { id: 'staff', label: 'Staff', icon: Users, path: '/admin/staff', section: 'staff' },
     { id: 'proposals', label: 'Proposals', icon: Briefcase, path: '/admin/proposals', section: 'proposals' },
     { id: 'finance', label: 'Finance', icon: DollarSign, path: '/admin/finance', section: 'finance' },
+    { id: 'gismap', label: 'GIS Map', icon: Globe, path: '/admin/gismap', section: 'gismap' },
     { id: 'roles', label: 'Roles', icon: Shield, path: '/admin/roles', section: 'roles' },
 ];
 

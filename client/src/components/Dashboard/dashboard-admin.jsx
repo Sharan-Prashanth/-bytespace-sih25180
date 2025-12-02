@@ -9,6 +9,7 @@ import DashboardLayout from "./Layout/DashboardLayout";
 
 // Import Section Components
 import FinanceSection from "./Sections/FinanceSection";
+import GISMapSection from "./Sections/GISMapSection";
 import OverviewSection from "./Sections/OverviewSection";
 import ProposalsSection from "./Sections/ProposalsSection";
 import RolesSection from "./Sections/RolesSection";
@@ -146,6 +147,8 @@ function AdminDashboardContent() {
         return <ProposalsSection theme={theme} />;
       case 'finance':
         return <FinanceSection theme={theme} />;
+      case 'gismap':
+        return <GISMapSection theme={theme} />;
       case 'roles':
         return <RolesSection theme={theme} />;
       default:
