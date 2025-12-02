@@ -18,6 +18,7 @@ import chatRoutes from "./routes/chatRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import workflowRoutes from "./routes/workflowRoutes.js";
 import calendarRoutes from "./routes/calendarRoutes.js";
+import expertOpinionRoutes from "./routes/expertOpinionRoutes.js";
 
 // Import collaboration service and socket handlers
 import collaborationService from "./services/collaborationService.js";
@@ -95,9 +96,12 @@ app.use('/api/proposals/:proposalId/versions', versionRoutes);
 app.use('/api/proposals/:proposalId/comments', commentRoutes);
 app.use('/api/proposals/:proposalId/chat', chatRoutes);
 app.use('/api/proposals/:proposalId/reports', reportRoutes);
+app.use('/api/proposals/:proposalId/opinions', expertOpinionRoutes);
+app.use('/api/reports', reportRoutes); // Direct report routes (for submit, get by id, etc.)
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/collaboration', collaborationRoutes);
 app.use('/api/collaboration-api', collaborationApiRoutes);
+app.use('/api/comments', commentRoutes); // Direct comment routes
 app.use('/api/workflow', workflowRoutes);
 app.use('/api/calendar', calendarRoutes);
 

@@ -1,24 +1,42 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { FiUpload, FiFile, FiX, FiRefreshCw } from 'react-icons/fi';
 import AdvancedProposalEditor from '../ProposalEditor/editor (our files)/AdvancedProposalEditor';
 import { uploadFormI, deleteFormI } from '../../utils/proposalApi';
 
-const FormIEditor = ({ 
+const FormIEditor = forwardRef(({ 
   editorContent,
   uploadedPdf,
   onContentChange, 
   onPdfUpload,
   onPdfRemove,
-  onSave,
+  onManualSave,
+  onAutoSave,
   lastSavedTime,
   isAutoSaving,
-  proposalCode
-}) => {
+  proposalCode,
+  isNewProposal = true
+}, ref) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [extractionError, setExtractionError] = useState(null);
   const editorRef = useRef(null);
+  
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    getEditorContent: () => {
+      if (editorRef.current && editorRef.current.getEditorContent) {
+        return editorRef.current.getEditorContent();
+      }
+      return null;
+    },
+    getFormData: () => {
+      if (editorRef.current && editorRef.current.getFormData) {
+        return editorRef.current.getFormData();
+      }
+      return null;
+    }
+  }));
 
   const handleFormUpload = async (event) => {
     const file = event.target.files[0];
@@ -321,11 +339,14 @@ const FormIEditor = ({
             ref={editorRef}
             mode="create"
             initialContent={editorContent}
+            isNewProposal={isNewProposal}
             onContentChange={(data) => {
               if (onContentChange) {
                 onContentChange(data);
               }
             }}
+            onManualSave={onManualSave}
+            onAutoSave={onAutoSave}
             proposalTitle="Form I - Project Proposal"
             showStats={true}
             readOnly={isExtracting}
@@ -334,6 +355,8 @@ const FormIEditor = ({
       </div>
     </div>
   );
-};
+});
+
+FormIEditor.displayName = 'FormIEditor';
 
 export default FormIEditor;

@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from 'react';
 
+// This component now only shows the Saarthi AI toggle button
+// Version History and Team Chat are now in CollaborateQuickLinks
 const TogglePanelButtons = ({ 
-  showVersionHistory, 
-  setShowVersionHistory,
-  showTeamChat,
-  setShowTeamChat,
   showSaarthi,
   setShowSaarthi
 }) => {
@@ -126,52 +124,6 @@ const TogglePanelButtons = ({
 
   return (
     <div className="fixed bottom-8 right-8 flex items-center gap-3 z-40">
-      {/* Version History Button */}
-      <div className="relative group">
-        <button
-          onClick={() => setShowVersionHistory(!showVersionHistory)}
-          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg ${
-            showVersionHistory 
-              ? 'bg-black text-white scale-110' 
-              : 'bg-white text-black border border-black/20 hover:bg-black/5 hover:scale-105 hover:shadow-xl'
-          }`}
-          title="Version History"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </button>
-        {/* Tooltip */}
-        <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none">
-          <div className="bg-black text-white px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap">
-            Version History
-          </div>
-        </div>
-      </div>
-
-      {/* Team Chat Button */}
-      <div className="relative group">
-        <button
-          onClick={() => setShowTeamChat(!showTeamChat)}
-          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg ${
-            showTeamChat 
-              ? 'bg-black text-white scale-110' 
-              : 'bg-white text-black border border-black/20 hover:bg-black/5 hover:scale-105 hover:shadow-xl'
-          }`}
-          title="Team Chat"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-        </button>
-        {/* Tooltip */}
-        <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none">
-          <div className="bg-black text-white px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap">
-            Team Chat
-          </div>
-        </div>
-      </div>
-
       {/* Saarthi AI Button - with animations */}
       {!showSaarthi && (
         <div className={`relative group ${shouldBounce ? 'animate-delayed-bounce' : ''}`}>

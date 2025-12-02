@@ -134,6 +134,11 @@ export const isRejected = (status) => {
   ].includes(status);
 };
 
+// Helper to check if proposal is SSRC accepted (final approval - complete)
+export const isSSRCAccepted = (status) => {
+  return status === PROPOSAL_STATUS.SSRC_ACCEPTED;
+};
+
 // Helper function to get status configuration
 export const getStatusConfig = (status) => {
   return STATUS_CONFIG[status] || STATUS_CONFIG[PROPOSAL_STATUS.DRAFT];

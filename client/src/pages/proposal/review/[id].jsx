@@ -1,997 +1,483 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
-import Chatbot from '../../../components/Saarthi';
-import jsPDF from 'jspdf';
-import { createPortal } from 'react-dom';
-import { Moon, Sun } from 'lucide-react';
 import apiClient from '../../../utils/api';
-import {
-  createReport,
-  updateReport,
-  submitReport,
-  getReports,
-  addComment
-} from '../../../utils/proposalApi';
-import {
-  updateProposalStatus,
-  requestClarification,
-  assignReviewer
-} from '../../../utils/workflowApi';
+import jsPDF from 'jspdf';
 
-// Custom CSS animations matching other pages
-const reviewAnimationStyles = `
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  
-  @keyframes slideInUp {
-    from { 
-      opacity: 0;
-      transform: translateY(30px);
-    }
-    to { 
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  @keyframes scaleIn {
-    from { 
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to { 
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  
-  .animate-fadeIn {
-    animation: fadeIn 0.6s ease-out forwards;
-  }
-  
-  .animate-slideInUp {
-    animation: slideInUp 0.6s ease-out forwards;
-    animation-fill-mode: both;
-  }
-  
-  .animate-scaleIn {
-    animation: scaleIn 0.5s ease-out forwards;
-  }
-`;
+// Import modular components
+import {
+  ReviewHeader,
+  ReviewProposalInformation,
+  ReviewEditorSection,
+  ReviewActionsMenu,
+  SupportingDocuments,
+  CommunicationSection,
+  ReviewDecisionPanel,
+  ReportEditorModal,
+  DecisionSuccessModal,
+  ExpertOpinionSection
+} from '../../../components/review-page';
+
+// Lazy load heavy components
+const VersionHistory = lazy(() => import('../../../components/VersionHistory'));
+const Chatbot = lazy(() => import('../../../components/Saarthi'));
 
 function ReviewProposalContent() {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
+  
+  // State
   const [proposal, setProposal] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [reports, setReports] = useState({ user: [], ai: [], reviewer: [] });
   const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState('');
-  const [reviewStatus, setReviewStatus] = useState('under_review');
+  const [error, setError] = useState(null);
+  const [hasUserMadeDecision, setHasUserMadeDecision] = useState(false);
+  
+  // UI State
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showSaarthi, setShowSaarthi] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showDecisionConfirm, setShowDecisionConfirm] = useState(false);
-  const [showCommitModal, setShowCommitModal] = useState(false);
-  const [committing, setCommitting] = useState(false);
-  const [commitMessage, setCommitMessage] = useState('');
-  const [showDecisionSuccess, setShowDecisionSuccess] = useState(false);
+  const [pendingDecision, setPendingDecision] = useState('');
   const [submittedDecision, setSubmittedDecision] = useState('');
-  const [isExporting, setIsExporting] = useState(false);
-  const [showChatbot, setShowChatbot] = useState(true);
-  const [showClarificationModal, setShowClarificationModal] = useState(false);
-  const [clarificationMessage, setClarificationMessage] = useState('');
-  const [theme, setTheme] = useState('dark');
+  const [submittedReportTitle, setSubmittedReportTitle] = useState('');
+  const [submittedReportPdfUrl, setSubmittedReportPdfUrl] = useState('');
+  const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
 
-  const isDark = theme === 'dark';
+  // Role checks
+  const userRoles = user?.roles || [];
+  const isExpert = userRoles.includes('EXPERT_REVIEWER');
+  const isCMPDI = userRoles.includes('CMPDI_MEMBER');
+  const isTSSRC = userRoles.includes('TSSRC_MEMBER');
+  const isSSRC = userRoles.includes('SSRC_MEMBER');
+  const isAdmin = userRoles.includes('SUPER_ADMIN');
+  const isCommitteeMember = isCMPDI || isTSSRC || isSSRC || isAdmin;
 
-  // Theme classes
-  const bgClass = isDark ? 'bg-slate-950' : 'bg-white';
-  const cardBgClass = isDark ? 'bg-slate-900/50 border-slate-800 backdrop-blur-sm' : 'bg-white border-orange-200 shadow-lg';
-  const textClass = isDark ? 'text-white' : 'text-black';
-  const subTextClass = isDark ? 'text-slate-400' : 'text-gray-500';
-  const borderClass = isDark ? 'border-slate-800' : 'border-orange-200';
-  const inputBgClass = isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-black';
+  // Can resolve comments - committee members and admins
+  const canResolveComments = isCommitteeMember;
 
+  // Load proposal data
   useEffect(() => {
-    const loadProposal = async () => {
+    const loadProposalData = async () => {
+      if (!id) return;
+      
       try {
-        if (id) {
-          console.log('📖 Loading proposal for review:', id);
-          setLoading(true);
-          
-          const response = await apiClient.get(`/api/proposals/${id}`);
-          const proposalData = response.data.data.proposal;
-          setProposal(proposalData);
-          setReviewStatus(proposalData.status || 'CMPDI_REVIEW');
-          console.log('✅ Proposal loaded for review');
+        setLoading(true);
+        setError(null);
+        
+        // Fetch proposal
+        const proposalResponse = await apiClient.get(`/api/proposals/${id}`);
+        const proposalData = proposalResponse.data.data;
+        setProposal(proposalData);
+        
+        // Fetch comments
+        try {
+          const commentsResponse = await apiClient.get(`/api/proposals/${id}/comments`);
+          setComments(commentsResponse.data.data || []);
+        } catch (err) {
+          console.warn('Could not load comments:', err);
+          setComments([]);
         }
-      } catch (error) {
-        console.error('❌ Error loading proposal for review:', error);
-        alert('Failed to load proposal: ' + error.message);
+        
+        // Fetch reports
+        try {
+          const reportsResponse = await apiClient.get(`/api/proposals/${id}/reports`);
+          const allReports = reportsResponse.data.data || [];
+          
+          // Categorize reports
+          const categorizedReports = {
+            user: proposalData.supportingDocs || [],
+            ai: proposalData.aiReports || [],
+            reviewer: allReports.filter(r => r.reportType !== 'AI_REVIEW')
+          };
+          setReports(categorizedReports);
+          
+          // Check if user has already made a decision for current status
+          // Get the report type that corresponds to current status
+          const currentStatus = proposalData.status;
+          let relevantReportType = null;
+          if (currentStatus === 'CMPDI_REVIEW' || currentStatus === 'CMPDI_EXPERT_REVIEW') {
+            relevantReportType = 'CMPDI_REVIEW';
+          } else if (currentStatus === 'TSSRC_REVIEW') {
+            relevantReportType = 'TSSRC_REVIEW';
+          } else if (currentStatus === 'SSRC_REVIEW') {
+            relevantReportType = 'SSRC_REVIEW';
+          }
+          
+          // Find if user has submitted a report for this status
+          if (relevantReportType && user?._id) {
+            const userDecisionReport = allReports.find(r => 
+              r.reportType === relevantReportType && 
+              r.createdBy?._id === user._id &&
+              r.status === 'SUBMITTED'
+            );
+            setHasUserMadeDecision(!!userDecisionReport);
+          }
+        } catch (err) {
+          console.warn('Could not load reports:', err);
+          setReports({
+            user: proposalData?.supportingDocs || [],
+            ai: proposalData?.aiReports || [],
+            reviewer: []
+          });
+        }
+        
+      } catch (err) {
+        console.error('Error loading proposal:', err);
+        setError(err.message || 'Failed to load proposal');
       } finally {
         setLoading(false);
       }
     };
 
-    loadProposal();
+    loadProposalData();
+  }, [id, user?._id]);
+
+  // Add comment handler
+  const handleAddComment = useCallback(async (content) => {
+    try {
+      const response = await apiClient.post(`/api/proposals/${id}/comments`, {
+        content,
+        type: 'COMMENT'
+      });
+      
+      // Refresh comments
+      const commentsResponse = await apiClient.get(`/api/proposals/${id}/comments`);
+      setComments(commentsResponse.data.data || []);
+      
+      return response.data;
+    } catch (err) {
+      console.error('Error adding comment:', err);
+      throw err;
+    }
   }, [id]);
 
-  const handleSubmitFeedback = async () => {
-    if (!feedback.trim()) {
-      console.log('⚠️  Feedback submission blocked: empty feedback');
-      alert("Please enter feedback before submitting.");
-      return;
-    }
-
+  // Reply to comment handler
+  const handleReplyComment = useCallback(async (commentId, content) => {
     try {
-      console.log('💬 Submitting feedback for proposal:', id);
+      await apiClient.post(`/api/comments/${commentId}/reply`, { content });
       
-      // Add feedback as a comment
-      await addComment(id, {
-        text: feedback,
-        category: 'GENERAL'
+      // Refresh comments
+      const commentsResponse = await apiClient.get(`/api/proposals/${id}/comments`);
+      setComments(commentsResponse.data.data || []);
+    } catch (err) {
+      console.error('Error replying to comment:', err);
+      throw err;
+    }
+  }, [id]);
+
+  // Resolve comment handler
+  const handleResolveComment = useCallback(async (commentId) => {
+    try {
+      await apiClient.put(`/api/comments/${commentId}/resolve`);
+      
+      // Refresh comments
+      const commentsResponse = await apiClient.get(`/api/proposals/${id}/comments`);
+      setComments(commentsResponse.data.data || []);
+    } catch (err) {
+      console.error('Error resolving comment:', err);
+      throw err;
+    }
+  }, [id]);
+
+  // Handle decision submission
+  const handleSubmitDecision = useCallback((decision) => {
+    setPendingDecision(decision);
+    setShowReportModal(true);
+  }, []);
+
+  // Handle final decision with report
+  const handleFinalDecision = useCallback(async (reportData) => {
+    if (!pendingDecision || !reportData) return;
+    
+    setIsSubmittingDecision(true);
+    
+    try {
+      // 1. Create the report with HTML content
+      const reportResponse = await apiClient.post(`/api/proposals/${id}/reports`, {
+        title: reportData.title,
+        content: reportData.content, // HTML content
+        htmlContent: reportData.content,
+        textContent: reportData.textContent,
+        wordCount: reportData.wordCount,
+        characterCount: reportData.characterCount,
+        decision: pendingDecision,
+        reportType: pendingDecision.includes('CMPDI') ? 'CMPDI_REVIEW' 
+                   : pendingDecision.includes('TSSRC') ? 'TSSRC_REVIEW'
+                   : pendingDecision.includes('SSRC') ? 'SSRC_REVIEW'
+                   : 'COMMITTEE_REVIEW'
       });
       
-      setFeedback('');
+      const reportId = reportResponse.data.data._id;
+      
+      // 2. Submit the report (generates PDF and uploads to S3)
+      const submitResponse = await apiClient.post(`/api/reports/${reportId}/submit`);
+      const pdfUrl = submitResponse.data.data?.fileUrl || '';
+      
+      // 3. Update proposal status
+      await apiClient.put(`/api/workflow/${id}/status`, {
+        status: pendingDecision,
+        notes: `Decision made with report: ${reportData.title}`
+      });
+      
+      // 4. Refresh proposal data
+      const proposalResponse = await apiClient.get(`/api/proposals/${id}`);
+      setProposal(proposalResponse.data.data);
+      
+      // 5. Refresh reports
+      const reportsResponse = await apiClient.get(`/api/proposals/${id}/reports`);
+      const allReports = reportsResponse.data.data || [];
+      setReports(prev => ({
+        ...prev,
+        reviewer: allReports.filter(r => r.reportType !== 'AI_REVIEW')
+      }));
+      
+      // Close report modal and reset pending decision
+      setShowReportModal(false);
+      
+      // Store submitted info for success modal
+      setSubmittedDecision(pendingDecision);
+      setSubmittedReportTitle(reportData.title);
+      setSubmittedReportPdfUrl(pdfUrl);
+      setPendingDecision('');
+      
+      // Mark that user has made a decision
+      setHasUserMadeDecision(true);
+      
+      // Show success modal
       setShowSuccessModal(true);
       
-      console.log('✅ Feedback submitted successfully');
-      
-      // Auto-hide success modal after 3 seconds
-      setTimeout(() => {
-        setShowSuccessModal(false);
-      }, 3000);
-      
-    } catch (error) {
-      console.error('❌ Error submitting feedback:', error);
-      alert("Failed to submit feedback: " + error.message);
-    }
-  };
-
-  // PDF Export Function with Government Logos
-  const handleExportReview = async () => {
-    setIsExporting(true);
-    
-    try {
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      let yPosition = 10;
-
-      // Helper function to load and add image to PDF
-      const addImageToPDF = (imagePath, x, y, width, height) => {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => {
-            try {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx.drawImage(img, 0, 0);
-              const imgData = canvas.toDataURL('image/png');
-              pdf.addImage(imgData, 'PNG', x, y, width, height);
-              resolve();
-            } catch (error) {
-              console.warn('Error adding image:', imagePath, error);
-              resolve();
-            }
-          };
-          img.onerror = () => {
-            console.warn('Could not load image:', imagePath);
-            resolve();
-          };
-          img.src = imagePath;
-        });
-      };
-
-      // Official Government Logos Header
-      try {
-        await addImageToPDF('/images/GOI logo.png', 15, yPosition, 25, 15);
-        await addImageToPDF('/images/coal india logo.webp', 45, yPosition, 25, 15);
-        await addImageToPDF('/images/prism brand logo.png', 85, yPosition, 20, 15);
-        await addImageToPDF('/images/cmpdi logo.jpg', 115, yPosition, 25, 15);
-        await addImageToPDF('/images/AI assistant logo.png', 150, yPosition, 20, 15);
-      } catch (logoError) {
-        console.warn('Some logos could not be loaded:', logoError);
-      }
-
-      yPosition += 20;
-
-      // Header
-      pdf.setFontSize(20);
-      pdf.setTextColor(234, 88, 12);
-      pdf.text('PRISM - Expert Review Report', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 8;
-
-      pdf.setFontSize(12);
-      pdf.setTextColor(102, 102, 102);
-      pdf.text('Proposal Review & Innovation Support Mechanism', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 5;
-      pdf.text('Department of Coal - Advanced Research Platform', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 3;
-      pdf.text('Government of India', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 15;
-
-      // Line separator
-      pdf.setDrawColor(234, 88, 12);
-      pdf.line(20, yPosition, pageWidth - 20, yPosition);
-      yPosition += 15;
-
-      // Proposal Information
-      pdf.setFontSize(16);
-      pdf.setTextColor(234, 88, 12);
-      pdf.text('Proposal Under Review', 20, yPosition);
-      yPosition += 10;
-
-      pdf.setFontSize(10);
-      pdf.setTextColor(51, 51, 51);
-      
-      const reviewInfo = [
-        [`Proposal ID:`, proposal.proposalCode || proposal._id],
-        [`Title:`, proposal.title],
-        [`Principal Investigator:`, proposal.researcher],
-        [`Institution:`, proposal.institution],
-        [`Domain:`, proposal.domain],
-        [`Budget:`, `₹${proposal.budget.toLocaleString()}`],
-        [`Current Status:`, reviewStatus.replace('_', ' ').toUpperCase()],
-        [`Review Phase:`, proposal.currentPhase],
-        [`Submitted Date:`, proposal.submittedDate],
-        [`Reviewer:`, user?.name || 'Expert Reviewer']
-      ];
-
-      reviewInfo.forEach(([label, value]) => {
-        if (yPosition > pageHeight - 30) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-        pdf.setFont(undefined, 'bold');
-        pdf.text(label, 20, yPosition);
-        pdf.setFont(undefined, 'normal');
-        
-        const splitValue = pdf.splitTextToSize(value, pageWidth - 70);
-        pdf.text(splitValue, 70, yPosition);
-        yPosition += splitValue.length * 5 + 2;
-      });
-
-      yPosition += 10;
-
-      // Expert Review Comments
-      if (proposal.existingFeedback.length > 0) {
-        if (yPosition > pageHeight - 30) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-
-        pdf.setFontSize(16);
-        pdf.setTextColor(234, 88, 12);
-        pdf.text('Expert Review Comments', 20, yPosition);
-        yPosition += 10;
-
-        pdf.setFontSize(10);
-        proposal.existingFeedback.forEach((feedback, index) => {
-          if (yPosition > pageHeight - 30) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-
-          pdf.setTextColor(51, 51, 51);
-          pdf.setFont(undefined, 'bold');
-          pdf.text(`${index + 1}. ${feedback.reviewer} (${feedback.date})`, 20, yPosition);
-          yPosition += 6;
-          
-          pdf.setFont(undefined, 'normal');
-          pdf.setTextColor(107, 114, 128);
-          const splitComment = pdf.splitTextToSize(feedback.comment, pageWidth - 40);
-          pdf.text(splitComment, 20, yPosition);
-          yPosition += splitComment.length * 4 + 8;
-        });
-      }
-
-      // Footer
-      const totalPages = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(8);
-        pdf.setTextColor(107, 114, 128);
-        pdf.text(`Generated: ${new Date().toLocaleDateString()} | Page ${i} of ${totalPages}`, 20, pageHeight - 10);
-        pdf.text('PRISM - Department of Coal, Government of India', pageWidth - 20, pageHeight - 10, { align: 'right' });
-      }
-
-      // Save PDF
-      const fileName = `PRISM_Review_Report_${proposal.proposalCode || proposal._id}_${new Date().toISOString().split('T')[0]}.pdf`;
-      pdf.save(fileName);
-      
-    } catch (error) {
-      console.error('PDF Export failed:', error);
-      alert('PDF export failed. Please try again.');
+    } catch (err) {
+      console.error('Error submitting decision:', err);
+      alert('Failed to submit decision: ' + (err.response?.data?.message || err.message));
     } finally {
-      setIsExporting(false);
+      setIsSubmittingDecision(false);
     }
-  };
+  }, [id, pendingDecision]);
 
-  const handleStatusChange = (newStatus) => {
-    setReviewStatus(newStatus);
-  };
-
-  const handleRequestClarification = async () => {
-    if (!clarificationMessage.trim()) {
-      alert("Please enter clarification message.");
-      return;
-    }
-
-    try {
-      console.log("Requesting clarification for proposal:", id);
-      
-      await requestClarification(id, {
-        message: clarificationMessage
-      });
-      
-      setClarificationMessage('');
-      setShowClarificationModal(false);
-      
-      alert('Clarification request sent successfully!');
-      
-      // Reload proposal to reflect updated status
-      const response = await apiClient.get(`/api/proposals/${id}`);
-      setProposal(response.data.data.proposal);
-      
-    } catch (error) {
-      console.error("Error requesting clarification:", error);
-      alert("Failed to request clarification. Please try again.");
-    }
-  };
-
-  const handleSubmitDecision = async () => {
-    // First show confirmation modal
-    setShowDecisionConfirm(true);
-  };
-
-  const handleConfirmDecision = () => {
-    // After confirmation, show commit modal
-    setShowDecisionConfirm(false);
-    setCommitMessage(`Review decision: ${reviewStatus.replace('_', ' ').toUpperCase()}`);
-    setShowCommitModal(true);
-  };
-
-  const handleCommitDecision = async () => {
-    if (!commitMessage.trim()) {
-      alert("Please enter a commit message.");
-      return;
-    }
-
-    setCommitting(true);
-    
-    try {
-      console.log("Submitting decision:", { proposalId: id, reviewStatus, commitMessage });
-      
-      // Update proposal status via backend API
-      const response = await updateProposalStatus(id, {
-        newStatus: reviewStatus,
-        comments: commitMessage
-      });
-      
-      // Update local state with the updated proposal
-      setProposal(response.proposal);
-      
-      setShowCommitModal(false);
-      setCommitting(false);
-      
-      // Show success popup
-      setSubmittedDecision(reviewStatus);
-      setShowDecisionSuccess(true);
-      
-      // Auto-hide success modal after 4 seconds
-      setTimeout(() => {
-        setShowDecisionSuccess(false);
-      }, 4000);
-      
-    } catch (error) {
-      console.error("Error submitting decision:", error);
-      alert("Failed to submit decision. Please try again.");
-      setCommitting(false);
-    }
-  };
-
+  // Loading state
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600 mx-auto"></div>
-          <p className={`${textClass} text-xl mt-4`}>Loading proposal for review...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
+          <p className="text-black">Loading proposal for review...</p>
         </div>
       </div>
     );
   }
 
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-black text-xl font-semibold mb-2">Error Loading Proposal</p>
+          <p className="text-black mb-4">{error}</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="px-6 py-2 border border-black text-black rounded-lg hover:bg-black/5 transition-colors"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Not found state
   if (!proposal) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${bgClass}`}>
-        <div className={`${textClass} text-xl`}>Proposal not found</div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <svg className="w-16 h-16 text-black/30 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p className="text-black text-xl font-semibold mb-2">Proposal Not Found</p>
+          <p className="text-black mb-4">The requested proposal could not be loaded.</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <>
-      <style jsx>{reviewAnimationStyles}</style>
-      <div className={`min-h-screen ${bgClass}`}>
-        {/* Header Section - Matching other pages */}
-        <div className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 min-h-[280px]" style={{ overflow: 'visible' }}>
-          {/* Animated geometric patterns */}
-          <div className="absolute inset-0" style={{ overflow: 'hidden' }}>
-            <div className="absolute top-6 left-10 w-12 h-12 border border-blue-400/30 rounded-full animate-pulse"></div>
-            <div className="absolute top-20 right-20 w-10 h-10 border border-indigo-400/20 rounded-lg rotate-45 animate-spin-slow"></div>
-            <div className="absolute bottom-12 left-32 w-8 h-8 bg-blue-500/10 rounded-full animate-bounce"></div>
-            <div className="absolute top-12 right-40 w-4 h-4 bg-indigo-400/20 rounded-full animate-ping"></div>
-          </div>
-          
-          <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
-          
-          {/* Header Content */}
-          <div className="relative z-10 max-w-7xl mx-auto px-6 py-10" style={{ overflow: 'visible' }}>
-            <div className="group animate-fadeIn">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center">
-                  <div className="relative">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl group-hover:shadow-orange-500/25 transition-all duration-500 group-hover:scale-110">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    </div>
-                  </div>
-                  
-                  <div className="ml-6">
-                    <div className="flex items-center mb-2">
-                      <h1 className="text-white text-4xl font-black tracking-tight bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent animate-slideInUp">
-                        Review Proposal
-                      </h1>
-                    </div>
-                    <div className="flex items-center space-x-3 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse mr-3"></div>
-                        <span className="text-blue-100 font-semibold text-lg">Expert Review Portal</span>
-                      </div>
-                      <div className="h-4 w-px bg-blue-300/50"></div>
-                      <span className="text-blue-200 font-medium text-sm">Proposal Assessment System</span>
-                    </div>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-blue-200 animate-slideInUp" style={{ animationDelay: '0.4s' }}>
-                      <span>Proposal ID: {proposal.proposalCode || proposal._id}</span>
-                      <span>•</span>
-                      <span>Reviewer: {user?.name || 'Expert Reviewer'}</span>
-                      <span>•</span>
-                      <span className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        {proposal.currentPhase}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <ReviewHeader
+        proposalCode={proposal.proposalCode}
+        projectLeader={proposal.projectLeader}
+        status={proposal.status}
+        version={proposal.currentVersion}
+        hasDraft={proposal.hasDraft}
+        draftVersionLabel={proposal.draftVersionLabel}
+        userRoles={userRoles}
+      />
 
-                {/* Theme Toggle */}
-                <button 
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="p-3 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-all"
-                >
-                  {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-                </button>
-              </div>
-              
-              {/* PRISM Banner */}
-              <div className="bg-orange-600 backdrop-blur-md rounded-2xl p-4 border border-orange-300/40 shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 animate-slideInUp" style={{ animationDelay: '0.6s' }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-gradient-to-br from-white to-orange-50 rounded-lg flex items-center justify-center shadow-lg overflow-hidden border border-orange-200/50">
-                        <img 
-                          src="/images/prism brand logo.png" 
-                          alt="PRISM Logo" 
-                          className="w-10 h-10 object-contain"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <h2 className="text-white font-bold text-xl mb-1 flex items-center">
-                        <span className="text-white drop-shadow-md tracking-wide">PRISM</span>
-                        <div className="ml-3 px-2 py-0.5 bg-gradient-to-r from-blue-400/30 to-purple-400/30 rounded-full flex items-center justify-center border border-blue-300/40 backdrop-blur-sm">
-                          <div className="w-1.5 h-1.5 bg-blue-300 rounded-full mr-1.5 animate-pulse"></div>
-                          <span className="text-white text-xs font-semibold drop-shadow-sm">REVIEW</span>
-                        </div>
-                      </h2>
-                      <p className="text-orange-50 text-sm leading-relaxed font-medium opacity-95 drop-shadow-sm">
-                        Proposal Review & Innovation Support Mechanism for Department of Coal's Advanced Research Platform
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Full Width Sections */}
+        <div className="space-y-6">
+          {/* Proposal Information - Full Width */}
+          <ReviewProposalInformation 
+            proposalInfo={proposal}
+            defaultOpen={true}
+          />
 
-        {/* Main Content Container */}
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          
-          {/* Navigation and Export Buttons */}
-          <div className="flex justify-between items-center mb-6">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className={`px-5 py-2.5 rounded-xl ${isDark ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-gradient-to-r from-green-50 to-green-100 hover:from-green-100 hover:to-green-200 text-green-800 border-green-300'} border transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer`}
-            >
-              <div className={`w-5 h-5 ${isDark ? 'bg-slate-700' : 'bg-green-200'} rounded-full flex items-center justify-center`}>
-                <svg className={`w-3 h-3 ${isDark ? 'text-slate-300' : 'text-green-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </div>
-              Back to Dashboard
-            </button>
+          {/* Editor Section - Full Width for Maximum Space */}
+          <ReviewEditorSection
+            proposalId={id}
+            proposal={proposal}
+            defaultOpen={false}
+          />
 
-            <button 
-              onClick={handleExportReview}
-              disabled={isExporting}
-              className={`px-5 py-2.5 rounded-xl ${isDark ? 'bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50' : 'bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-800 border-blue-300'} border transition-all duration-300 flex items-center gap-3 font-semibold shadow-lg hover:shadow-xl text-sm transform hover:scale-105 animate-fadeIn cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
-            >
-              <div className={`w-5 h-5 ${isDark ? 'bg-blue-800/50' : 'bg-blue-200'} rounded-full flex items-center justify-center`}>
-                {isExporting ? (
-                  <svg className="w-3 h-3 text-blue-700 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg className={`w-3 h-3 ${isDark ? 'text-blue-300' : 'text-blue-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                )}
-              </div>
-              {isExporting ? 'Generating...' : 'Export Review Report'}
-            </button>
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Main Content - Left 2 columns */}
+          {/* Two Column Grid for Documents, Communication, and Decision */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Left Side - Documents and Communication */}
             <div className="lg:col-span-2 space-y-6">
-              
-              {/* Proposal Overview */}
-              <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
-                <h2 className={`text-2xl font-bold ${textClass} mb-4 flex items-center`}>
-                  <div className={`w-10 h-10 ${isDark ? 'bg-orange-500/20' : 'bg-orange-100'} rounded-lg flex items-center justify-center mr-3`}>
-                    <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  Proposal Overview
-                </h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <h3 className={`text-xl font-bold ${textClass} mb-2`}>{proposal.title}</h3>
-                    <div className="grid md:grid-cols-3 gap-4 mb-4">
-                      <div className={`${isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-200'} rounded-lg p-4 border`}>
-                        <div className="text-orange-600 text-sm font-semibold mb-1">Principal Investigator</div>
-                        <div className={`${textClass} font-semibold text-sm`}>{proposal.researcher}</div>
-                      </div>
-                      <div className={`${isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'} rounded-lg p-4 border`}>
-                        <div className="text-blue-600 text-sm font-semibold mb-1">Institution</div>
-                        <div className={`${textClass} font-semibold text-sm`}>{proposal.institution}</div>
-                      </div>
-                      <div className={`${isDark ? 'bg-green-500/10 border-green-500/20' : 'bg-green-50 border-green-200'} rounded-lg p-4 border`}>
-                        <div className="text-green-600 text-sm font-semibold mb-1">Domain</div>
-                        <div className={`${textClass} font-semibold text-sm`}>{proposal.domain}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-orange-50/50 border-orange-100'} rounded-lg p-4 border`}>
-                      <div className={`${subTextClass} text-sm font-semibold mb-1`}>Budget</div>
-                      <div className={`${textClass} font-bold text-lg`}>₹{proposal.budget.toLocaleString()}</div>
-                    </div>
-                    <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-orange-50/50 border-orange-100'} rounded-lg p-4 border`}>
-                      <div className={`${subTextClass} text-sm font-semibold mb-1`}>Submitted Date</div>
-                      <div className={`${textClass} font-bold text-lg`}>{new Date(proposal.submittedDate).toLocaleDateString()}</div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className={`text-lg font-bold ${textClass} mb-2`}>Project Description</h4>
-                    <p className={`${subTextClass} leading-relaxed`}>{proposal.description}</p>
-                  </div>
-                </div>
-              </div>
-
               {/* Supporting Documents */}
-              <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.4s' }}>
-                <h3 className={`text-xl font-bold ${textClass} mb-6 flex items-center`}>
-                  <div className={`w-10 h-10 ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'} rounded-lg flex items-center justify-center mr-3`}>
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  Supporting Documents
-                </h3>
-                
-                <div className="grid md:grid-cols-2 gap-4">
-                  {proposal.documents.map((doc, index) => (
-                    <div key={index} className={`flex items-center justify-between p-4 ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-orange-50/50 border-orange-100 hover:bg-orange-50'} rounded-lg border transition-colors`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          doc.type === 'proposal' ? (isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600') :
-                          doc.type === 'technical' ? (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600') :
-                          doc.type === 'financial' ? (isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600') :
-                          doc.type === 'research' ? (isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600') :
-                          (isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-600')
-                        }`}>
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className={`${textClass} font-medium text-sm`}>{doc.name}</div>
-                          <div className={`${subTextClass} text-xs`}>{doc.size} • {doc.uploadDate}</div>
-                        </div>
-                      </div>
-                      <button className={`px-3 py-2 ${isDark ? 'bg-blue-900/30 text-blue-300 hover:bg-blue-900/50' : 'bg-blue-100 hover:bg-blue-200 text-blue-700'} rounded-lg text-sm transition-colors`}>
-                        View
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <SupportingDocuments
+                userDocuments={reports.user}
+                aiReports={reports.ai}
+                reviewerReports={reports.reviewer}
+              />
 
-              {/* Review History */}
-              <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.6s' }}>
-                <h3 className={`text-xl font-bold ${textClass} mb-6 flex items-center`}>
-                  <div className={`w-10 h-10 ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-lg flex items-center justify-center mr-3`}>
-                    <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                  </div>
-                  Review History
-                </h3>
-                
-                <div className="space-y-4">
-                  {proposal.existingFeedback.map((feedback) => (
-                    <div key={feedback.id} className={`p-4 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-orange-50/50 border-orange-100'} rounded-lg border`}>
-                      <div className="flex items-start gap-3 mb-3">
-                        <div className={`w-10 h-10 ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-full flex items-center justify-center`}>
-                          <span className="text-purple-600 text-sm font-bold">
-                            {feedback.reviewer.split(' ').map(n => n.charAt(0)).join('').substring(0, 2)}
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className={`font-semibold ${textClass}`}>{feedback.reviewer}</div>
-                            <div className={`text-xs ${subTextClass}`}>{feedback.date}</div>
-                          </div>
-                          <p className={`${subTextClass} text-sm leading-relaxed`}>{feedback.comment}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* Communication Section */}
+              <CommunicationSection
+                comments={comments}
+                currentUser={user}
+                onAddComment={handleAddComment}
+                onReply={handleReplyComment}
+                onResolve={handleResolveComment}
+                canResolve={canResolveComments}
+              />
             </div>
 
-            {/* Review Panel - Right column */}
+            {/* Right Side - Decision Panel */}
             <div className="lg:col-span-1">
               <div className="sticky top-8 space-y-6">
-                
-                {/* Review Decision */}
-                <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.8s' }}>
-                  <h3 className={`text-xl font-bold ${textClass} mb-4 flex items-center`}>
-                    <div className={`w-10 h-10 ${isDark ? 'bg-green-500/20' : 'bg-green-100'} rounded-lg flex items-center justify-center mr-3`}>
-                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    </div>
-                    Review Decision
-                  </h3>
-                  
-                  <div className="space-y-3">
-                    {[
-                      { value: 'APPROVED', label: 'Approve', color: 'green' },
-                      { value: 'REVISION_REQUESTED', label: 'Needs Revision', color: 'yellow' },
-                      { value: 'REJECTED', label: 'Reject', color: 'red' }
-                    ].map((option) => (
-                      <label key={option.value} className={`flex items-center cursor-pointer p-3 rounded-lg border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-orange-200 hover:bg-orange-50'} transition-colors`}>
-                        <input
-                          type="radio"
-                          name="reviewStatus"
-                          value={option.value}
-                          checked={reviewStatus === option.value}
-                          onChange={(e) => setReviewStatus(e.target.value)}
-                          className="sr-only"
-                        />
-                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center transition-colors ${
-                          reviewStatus === option.value
-                            ? `border-${option.color}-500 bg-${option.color}-500`
-                            : isDark ? 'border-slate-600' : 'border-gray-300'
-                        }`}>
-                          {reviewStatus === option.value && (
-                            <div className="w-2 h-2 bg-white rounded-full"></div>
-                          )}
-                        </div>
-                        <span className={`font-medium ${
-                          reviewStatus === option.value ? textClass : subTextClass
-                        }`}>
-                          {option.label}
-                        </span>
-                      </label>
-                    ))}
+                {/* Review Decision Panel - Hidden for experts */}
+                <ReviewDecisionPanel
+                  userRoles={userRoles}
+                  proposalStatus={proposal.status}
+                  onSubmitDecision={handleSubmitDecision}
+                  isSubmitting={isSubmittingDecision}
+                  hasUserMadeDecision={hasUserMadeDecision}
+                />
+
+                {/* Expert Opinion Section */}
+                <ExpertOpinionSection
+                  proposalId={id}
+                  currentUser={user}
+                  userRoles={userRoles}
+                />
+
+                {/* Expert Info Card - Show for experts */}
+                {isExpert && !isCommitteeMember && (
+                  <div className="bg-white border border-black/10 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-black mb-3">Expert Review</h3>
+                    <p className="text-sm text-black mb-4">
+                      As an expert reviewer, you can provide comments and feedback on this proposal. 
+                      Your comments will be visible to the committee members for their decision.
+                    </p>
+                    <p className="text-sm text-black">
+                      Use the Communication section to add your detailed assessment and recommendations.
+                    </p>
                   </div>
-
-                  {reviewStatus !== 'CMPDI_REVIEW' && reviewStatus !== 'AI_EVALUATION' && (
-                    <button
-                      onClick={handleSubmitDecision}
-                      className="w-full mt-4 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105"
-                    >
-                      Submit Decision
-                    </button>
-                  )}
-                  
-                  <button
-                    onClick={() => setShowClarificationModal(true)}
-                    className="w-full mt-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-yellow-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105"
-                  >
-                    Request Clarification
-                  </button>
-                </div>
-
-                {/* Feedback Section */}
-                <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '1.0s' }}>
-                  <h3 className={`text-xl font-bold ${textClass} mb-4 flex items-center`}>
-                    <div className={`w-10 h-10 ${isDark ? 'bg-orange-500/20' : 'bg-orange-100'} rounded-lg flex items-center justify-center mr-3`}>
-                      <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </div>
-                    Review Comments
-                  </h3>
-                  
-                  <textarea
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="Enter your detailed review comments, suggestions, and recommendations here..."
-                    className={`w-full h-32 p-4 border rounded-lg resize-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${inputBgClass} placeholder-gray-500`}
-                  />
-                  
-                  <button
-                    onClick={handleSubmitFeedback}
-                    disabled={!feedback.trim()}
-                    className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105"
-                  >
-                    Submit Review
-                  </button>
-                </div>
-
-
+                )}
               </div>
             </div>
           </div>
         </div>
-
-        {/* Success Modal */}
-        {showSuccessModal && createPortal(
-          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className={`text-xl font-bold ${textClass} mb-2`}>Review Submitted Successfully!</h3>
-                <p className={`${subTextClass} mb-6`}>Your expert review has been recorded and will be processed by the PRISM system.</p>
-                <button
-                  onClick={() => setShowSuccessModal(false)}
-                  className="bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-6 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* Decision Confirmation Modal */}
-        {showDecisionConfirm && createPortal(
-          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <h3 className={`text-xl font-bold ${textClass} mb-2`}>Confirm Review Decision</h3>
-                <p className={`${subTextClass} mb-2`}>Are you sure you want to submit this decision?</p>
-                <p className={`${textClass} font-semibold mb-6`}>
-                  Decision: {reviewStatus.replace('_', ' ').toUpperCase()}
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowDecisionConfirm(false)}
-                    className={`flex-1 px-4 py-2 border ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-300 text-gray-500 hover:bg-gray-50'} rounded-lg transition-colors`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleConfirmDecision}
-                    className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-2 px-6 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300"
-                  >
-                    Confirm
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* Commit Modal */}
-        {showCommitModal && createPortal(
-          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
-              {committing ? (
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </div>
-                  <h3 className={`text-xl font-bold ${textClass} mb-2`}>Submitting Decision...</h3>
-                  <p className={subTextClass}>Processing your review decision</p>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <h3 className={`text-xl font-bold ${textClass} mb-2`}>Add Commit Message</h3>
-                  <p className={`${subTextClass} mb-6`}>Describe your review decision for tracking purposes</p>
-                  
-                  <div className="mb-6">
-                    <textarea
-                      value={commitMessage}
-                      onChange={(e) => setCommitMessage(e.target.value)}
-                      placeholder="Enter commit message..."
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${inputBgClass} resize-none`}
-                      rows="3"
-                    />
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowCommitModal(false)}
-                      className={`flex-1 px-4 py-2 border ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-300 text-gray-500 hover:bg-gray-50'} rounded-lg transition-colors`}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleCommitDecision}
-                      disabled={!commitMessage.trim()}
-                      className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-6 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                    >
-                      Submit Decision
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* Decision Success Modal */}
-        {showDecisionSuccess && createPortal(
-          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
-              <div className="text-center">
-                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className={`text-2xl font-bold ${textClass} mb-3`}>Decision Submitted Successfully!</h3>
-                <div className="mb-4">
-                  <p className={`${subTextClass} mb-2`}>Your review decision has been recorded:</p>
-                  <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${
-                    submittedDecision === 'approved' ? 'bg-green-100 text-green-800' :
-                    submittedDecision === 'needs_revision' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {submittedDecision === 'approved' && (
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                    {submittedDecision === 'needs_revision' && (
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                    )}
-                    {submittedDecision === 'rejected' && (
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    )}
-                    {submittedDecision.replace('_', ' ').toUpperCase()}
-                  </div>
-                </div>
-                <p className={`${subTextClass} mb-6`}>The proposal status has been updated and all stakeholders have been notified through the PRISM system.</p>
-                <button
-                  onClick={() => setShowDecisionSuccess(false)}
-                  className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-8 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105"
-                >
-                  Continue Review
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* Clarification Request Modal */}
-        {showClarificationModal && createPortal(
-          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}>
-            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white'} rounded-2xl p-8 max-w-md mx-4 animate-scaleIn shadow-2xl border`}>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className={`text-xl font-bold ${textClass} mb-2`}>Request Clarification</h3>
-                <p className={`${subTextClass} mb-6`}>Ask the Principal Investigator for additional information or clarification</p>
-                
-                <textarea
-                  value={clarificationMessage}
-                  onChange={(e) => setClarificationMessage(e.target.value)}
-                  placeholder="Enter your clarification request here..."
-                  className={`w-full h-32 p-4 border rounded-lg resize-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 ${inputBgClass} placeholder-gray-500 mb-4`}
-                />
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowClarificationModal(false);
-                      setClarificationMessage('');
-                    }}
-                    className={`flex-1 px-4 py-2 border ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-300 text-gray-500 hover:bg-gray-50'} rounded-lg transition-colors`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleRequestClarification}
-                    disabled={!clarificationMessage.trim()}
-                    className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-2 px-6 rounded-lg font-semibold hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                  >
-                    Send Request
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* AI Chatbot - Always visible */}
-        <div className="fixed bottom-6 right-6 z-40">
-          <Chatbot 
-            context="reviewer"
-            proposalData={proposal}
-          />
-        </div>
       </div>
-    </>
+
+      {/* Floating Actions Menu */}
+      <ReviewActionsMenu
+        proposalId={id}
+        onShowVersionHistory={() => setShowVersionHistory(!showVersionHistory)}
+        showVersionHistory={showVersionHistory}
+      />
+
+      {/* Version History Panel */}
+      {showVersionHistory && (
+        <Suspense fallback={
+          <div className="fixed top-0 right-0 w-1/3 h-full bg-white border-l border-black/10 z-50 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+          </div>
+        }>
+          <div className="fixed top-0 right-0 w-1/3 h-full bg-white border-l border-black/10 shadow-2xl z-50 overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-black">Version History</h2>
+                <button
+                  onClick={() => setShowVersionHistory(false)}
+                  className="p-2 hover:bg-black/5 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <VersionHistory proposalId={id} />
+            </div>
+          </div>
+        </Suspense>
+      )}
+
+      {/* Report Editor Modal */}
+      <ReportEditorModal
+        show={showReportModal}
+        onClose={() => {
+          setShowReportModal(false);
+          setPendingDecision('');
+        }}
+        onConfirm={handleFinalDecision}
+        decision={pendingDecision}
+        proposalCode={proposal.proposalCode}
+        proposalTitle={proposal.title}
+        isSubmitting={isSubmittingDecision}
+      />
+
+      {/* Saarthi Chatbot */}
+      <Suspense fallback={null}>
+        <Chatbot 
+          showSaarthi={showSaarthi}
+          setShowSaarthi={setShowSaarthi}
+          context="reviewer"
+          proposalData={proposal}
+        />
+      </Suspense>
+
+      {/* Decision Success Modal */}
+      <DecisionSuccessModal
+        show={showSuccessModal}
+        decision={submittedDecision}
+        proposalCode={proposal.proposalCode}
+        reportTitle={submittedReportTitle}
+        pdfUrl={submittedReportPdfUrl}
+      />
+    </div>
   );
 }
 

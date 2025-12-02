@@ -12,6 +12,7 @@ export default function VersionHistory({
 }) {
   const router = useRouter();
   const [versions, setVersions] = useState([]);
+  const [draftVersion, setDraftVersion] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,8 +28,14 @@ export default function VersionHistory({
     setError(null);
 
     try {
-      const response = await apiClient.get(`/api/proposals/${proposalId}/versions`);
-      setVersions(response.data.data || []);
+      // Fetch both versions and draft in parallel
+      const [versionsRes, draftRes] = await Promise.all([
+        apiClient.get(`/api/proposals/${proposalId}/versions`),
+        apiClient.get(`/api/proposals/${proposalId}/versions/draft`).catch(() => ({ data: { data: null } }))
+      ]);
+      
+      setVersions(versionsRes.data.data || []);
+      setDraftVersion(draftRes.data.data || null);
     } catch (err) {
       console.error('[VersionHistory] Error fetching versions:', err);
       setError(err.response?.data?.message || err.message || 'Failed to load version history');
@@ -101,7 +108,14 @@ export default function VersionHistory({
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-semibold text-black uppercase tracking-wide">Current Version</div>
-              <div className="text-3xl font-bold text-black">v{currentVersion}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-bold text-black">v{currentVersion}</span>
+                {draftVersion && (
+                  <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 text-xs font-medium rounded">
+                    {draftVersion.versionLabel}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,7 +148,7 @@ export default function VersionHistory({
                 Retry
               </button>
             </div>
-          ) : versions.length === 0 ? (
+          ) : versions.length === 0 && !draftVersion ? (
             <div className="bg-black/5 border border-black/10 rounded-lg p-6 text-center">
               <svg className="w-16 h-16 text-black/30 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -144,6 +158,62 @@ export default function VersionHistory({
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Draft Version Card (if exists) */}
+              {draftVersion && (
+                <div className="group bg-amber-50 border border-amber-200 rounded-lg p-4 transition-all duration-200">
+                  {/* Draft Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center bg-amber-500 text-white font-bold text-sm">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-black">
+                          {draftVersion.versionLabel}
+                        </span>
+                        <span className="ml-2 px-2 py-0.5 bg-amber-200 text-amber-800 text-xs font-medium rounded">
+                          Working Draft
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Draft Message */}
+                  <div className="mb-3">
+                    <p className="text-sm text-black font-medium">
+                      Uncommitted changes
+                    </p>
+                  </div>
+
+                  {/* Metadata */}
+                  <div className="space-y-1 text-xs text-black/70">
+                    {/* Date & Time */}
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>Last modified: {formatDate(draftVersion.updatedAt || draftVersion.createdAt)} at {formatTime(draftVersion.updatedAt || draftVersion.createdAt)}</span>
+                    </div>
+
+                    {/* Author */}
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      <span>{draftVersion.createdBy?.fullName || draftVersion.createdBy?.email || 'Unknown'}</span>
+                    </div>
+                  </div>
+
+                  {/* Info Note */}
+                  <div className="mt-3 p-2 bg-amber-100 rounded text-xs text-amber-800">
+                    This draft will become v{draftVersion.versionNumber} when committed.
+                  </div>
+                </div>
+              )}
+
+              {/* Major Versions */}
               {versions.map((version, index) => (
                 <div
                   key={version._id}
@@ -163,7 +233,7 @@ export default function VersionHistory({
                       </div>
                       <div>
                         <span className="font-semibold text-black">
-                          Version {version.versionNumber}
+                          {version.versionLabel || `Version ${version.versionNumber}`}
                         </span>
                         {version.versionNumber === currentVersion && (
                           <span className="ml-2 px-2 py-0.5 bg-black text-white text-xs font-medium rounded">
@@ -221,14 +291,17 @@ export default function VersionHistory({
           )}
 
           {/* Info Note */}
-          {versions.length > 0 && (
+          {(versions.length > 0 || draftVersion) && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-start gap-2">
                 <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-xs text-blue-800">
-                  Click "View This Version" to open a previous version in read-only mode. The current version remains unchanged.
+                  {draftVersion 
+                    ? 'You have uncommitted draft changes. Use "Save Changes" to commit your draft as a new permanent version.'
+                    : 'Click "View This Version" to open a previous version in read-only mode. The current version remains unchanged.'
+                  }
                 </p>
               </div>
             </div>

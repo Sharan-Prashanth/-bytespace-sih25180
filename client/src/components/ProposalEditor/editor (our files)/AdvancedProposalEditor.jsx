@@ -25,6 +25,7 @@ const AdvancedProposalEditor = forwardRef(({
   proposalId = null, // MongoDB proposal ID (for collaboration mode only)
   mode = 'create', // 'create', 'edit', 'collaborate', or 'view'
   initialContent = null, // Initial content provided by parent
+  isNewProposal = true, // Whether this is a new proposal (load template) or continuing draft (load from DB)
   signatures = {}, // Signatures object from parent
   onContentChange = () => { },
   onWordCountChange = () => { },
@@ -75,14 +76,77 @@ const AdvancedProposalEditor = forwardRef(({
     }).join('');
   }, []);
 
-  // Get initial value from formDataStore or use default (only Form I)
+  // Get initial value - prioritize initialContent prop for create/edit mode
   const getInitialValue = useCallback(() => {
+    console.log('📝 getInitialValue called with:', {
+      hasInitialContent: !!initialContent,
+      initialContentType: typeof initialContent,
+      isArray: Array.isArray(initialContent),
+      isNewProposal,
+      mode
+    });
+    
+    // For existing drafts: initialContent comes from database
+    if (initialContent) {
+      // Check if initialContent has the formi structure (lowercase)
+      if (initialContent.formi && initialContent.formi.content && Array.isArray(initialContent.formi.content) && initialContent.formi.content.length > 0) {
+        console.log('📝 Using initialContent.formi.content for editor', initialContent.formi.content.length, 'nodes');
+        return initialContent.formi.content;
+      }
+      
+      // Check if initialContent is the content array directly
+      if (Array.isArray(initialContent) && initialContent.length > 0) {
+        console.log('📝 Using initialContent array directly for editor', initialContent.length, 'nodes');
+        return initialContent;
+      }
+      
+      // Check if initialContent has formI (uppercase I - from database format)
+      if (initialContent.formI) {
+        if (initialContent.formI.editorContent && Array.isArray(initialContent.formI.editorContent) && initialContent.formI.editorContent.length > 0) {
+          console.log('📝 Using initialContent.formI.editorContent for editor');
+          return initialContent.formI.editorContent;
+        }
+        if (initialContent.formI.content && Array.isArray(initialContent.formI.content) && initialContent.formI.content.length > 0) {
+          console.log('📝 Using initialContent.formI.content for editor');
+          return initialContent.formI.content;
+        }
+        // formI might be the content array directly
+        if (Array.isArray(initialContent.formI) && initialContent.formI.length > 0) {
+          console.log('📝 Using initialContent.formI array directly for editor');
+          return initialContent.formI;
+        }
+      }
+      
+      // Check for nested object structure - initialContent could be { formi: { content: [...] } } or { content: [...] }
+      if (initialContent.content && Array.isArray(initialContent.content) && initialContent.content.length > 0) {
+        console.log('📝 Using initialContent.content for editor');
+        return initialContent.content;
+      }
+      
+      // Check if initialContent is an object with editorContent (another possible format)
+      if (initialContent.editorContent && Array.isArray(initialContent.editorContent) && initialContent.editorContent.length > 0) {
+        console.log('📝 Using initialContent.editorContent for editor');
+        return initialContent.editorContent;
+      }
+    }
+    
+    // Fallback to formDataStore if available
     const storedData = formDataStore['formi'];
-    if (storedData && storedData.content && storedData.content.length > 0) {
+    if (storedData && storedData.content && Array.isArray(storedData.content) && storedData.content.length > 0) {
+      console.log('📝 Using formDataStore.formi.content for editor');
       return storedData.content;
     }
-    return TAB_DEFAULT_CONTENT['formi'] || [{ type: 'p', children: [{ text: '' }] }];
-  }, [formDataStore]);
+    
+    // Only use default template content for NEW proposals (isNewProposal === true)
+    if (isNewProposal) {
+      console.log('📝 Using TAB_DEFAULT_CONTENT for new proposal');
+      return TAB_DEFAULT_CONTENT['formi'] || [{ type: 'p', children: [{ text: '' }] }];
+    }
+    
+    // For existing drafts with no content, show empty editor (not template)
+    console.log('📝 Using empty content as fallback for existing draft');
+    return [{ type: 'p', children: [{ text: '' }] }];
+  }, [formDataStore, initialContent, isNewProposal, mode]);
 
   // Determine editor behavior based on mode
   const isViewMode = mode === 'view' || readOnly;
@@ -124,7 +188,7 @@ const AdvancedProposalEditor = forwardRef(({
   const editor = usePlateEditor({
     plugins: EditorKit,
     value: getInitialValue(),
-  }, [formDataStore]); // Recreate when data changes
+  }, [formDataStore, initialContent, isNewProposal]); // Recreate when data, initialContent, or isNewProposal changes
 
   // Save current form content to store
   const saveCurrentFormToStore = useCallback(() => {
@@ -452,7 +516,27 @@ const AdvancedProposalEditor = forwardRef(({
   // Expose methods to parent component
   // Image uploads now handled by parent via backend API
   useImperativeHandle(ref, () => ({
-    getFormData: () => formDataStore,
+    getFormData: () => {
+      // Always return the current editor content, not just formDataStore
+      // This ensures we capture unsaved changes
+      if (editor && editor.children) {
+        const currentContent = editor.children;
+        const text = extractPlainText(currentContent);
+        const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
+        const chars = text.length;
+        
+        return {
+          formi: {
+            content: currentContent,
+            wordCount: words,
+            characterCount: chars,
+            signature: headSignature,
+            seal: institutionSeal,
+          }
+        };
+      }
+      return formDataStore;
+    },
     getEditorContent: () => editor?.children || []
   }));
 
@@ -894,7 +978,7 @@ const AdvancedProposalEditor = forwardRef(({
               Advanced Proposal Editor
             </h2>
 
-            {/* Collaboration Status */}
+            {/* Collaboration Status - Connection indicator only (online count shown in parent component) */}
             {proposalId && enableCollaboration && (
               <div className="flex items-center gap-3">
                 {/* Connection Status */}
@@ -906,16 +990,6 @@ const AdvancedProposalEditor = forwardRef(({
                     }`} />
                   {socketConnected ? 'Connected' : 'Disconnected'}
                 </div>
-
-                {/* Connected Users Count */}
-                {socketConnected && collaborationUsers.length > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-sm font-medium text-blue-700">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                    {collaborationUsers.length} online
-                  </div>
-                )}
               </div>
             )}
           </div>

@@ -125,6 +125,38 @@ export const revertToVersion = async (proposalId, versionNumber) => {
   }
 };
 
+// Draft version management
+
+// Get current draft version (x.1)
+export const getDraftVersion = async (proposalId) => {
+  try {
+    const response = await apiClient.get(`/api/proposals/${proposalId}/versions/draft`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Save changes to draft (creates x.1 if not exists)
+export const saveDraftVersion = async (proposalId, draftData) => {
+  try {
+    const response = await apiClient.post(`/api/proposals/${proposalId}/versions/draft`, draftData);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Discard draft version
+export const discardDraftVersion = async (proposalId) => {
+  try {
+    const response = await apiClient.delete(`/api/proposals/${proposalId}/versions/draft`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
 // Collaboration APIs
 
 // Invite co-investigator
@@ -397,6 +429,9 @@ export default {
   getVersionContent,
   createVersion,
   revertToVersion,
+  getDraftVersion,
+  saveDraftVersion,
+  discardDraftVersion,
   inviteCoInvestigator,
   addCollaborator,
   uploadImage,

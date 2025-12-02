@@ -8,6 +8,7 @@ import LoadingScreen from '../../../components/LoadingScreen';
 import { useSocketCollaboration } from '../../../hooks/useSocketCollaboration';
 import { getCollaborateStorage } from '../../../utils/collaborateStorage';
 import apiClient from '../../../utils/api';
+import { Clock, MessageSquare, TrendingUp, ChevronDown, ChevronUp, FileCheck } from 'lucide-react';
 
 // Import modular collaborate page components
 import {
@@ -34,7 +35,6 @@ const Saarthi = lazy(() => import('../../../components/Saarthi'));
 const AUTO_SAVE_INTERVAL = 30000;
 // Debounce delay for socket updates (5 seconds)
 const SOCKET_UPDATE_DELAY = 5000;
-
 
 function CollaborateContent() {
   const router = useRouter();
@@ -77,6 +77,12 @@ function CollaborateContent() {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showTeamChat, setShowTeamChat] = useState(false);
   const [showSaarthi, setShowSaarthi] = useState(false);
+  const [fabExpanded, setFabExpanded] = useState(true);
+
+  // Draft version state
+  const [hasDraft, setHasDraft] = useState(false);
+  const [draftVersionLabel, setDraftVersionLabel] = useState('');
+
 
   // Initialize socket collaboration hook
   const {
@@ -191,20 +197,22 @@ function CollaborateContent() {
     };
   }, [id, proposal, isDirty, saveToLocalStorage]);
 
-  // Sync to DB on page unload/navigation
+  // Sync to DB on page unload/navigation - creates/updates x.1 draft version
   const syncToDatabase = useCallback(async () => {
     if (!id || !isDirty) return;
 
     try {
-      await apiClient.post(`/api/collaboration/${id}/sync`, {
+      // Use the new saveDraftVersion API to create/update x.1 draft
+      await apiClient.post(`/api/proposals/${id}/versions/draft`, {
+        formi: proposal?.formi || proposal?.forms?.formI,
         proposalInfo,
-        createMinorVersion: true
+        commitMessage: 'Auto-saved draft'
       });
-      console.log('[DB SYNC] Synced to database with new minor version');
+      console.log('[DB SYNC] Synced to database as draft version (x.1)');
     } catch (err) {
       console.error('[DB SYNC] Failed to sync:', err);
     }
-  }, [id, isDirty, proposalInfo]);
+  }, [id, isDirty, proposalInfo, proposal]);
 
   // Handle page unload
   useEffect(() => {
@@ -444,20 +452,22 @@ function CollaborateContent() {
 
   const handleSaveChanges = useCallback(async (versionData) => {
     try {
-      // Create new version via API
-      const response = await apiClient.post(`/api/proposals/${id}/versions`, {
-        commitMessage: versionData.commitMessage
-      });
-
-      console.log('[API] New version created:', response.data);
+      // The SaveChangesModal now handles the API call for promotion/creation
+      // We just need to update local state
 
       // Update proposal state with new version
       if (proposal) {
         setProposal(prev => ({
           ...prev,
-          currentVersion: versionData.version
+          currentVersion: versionData.version,
+          hasDraft: false,
+          draftVersionLabel: ''
         }));
       }
+
+      // Reset draft state
+      setHasDraft(false);
+      setDraftVersionLabel('');
 
       // Save to local storage as well
       saveToLocalStorage();
@@ -467,7 +477,7 @@ function CollaborateContent() {
       // Re-throw to let the modal handle the error
       throw new Error(err.response?.data?.message || 'Failed to create new version');
     }
-  }, [id, proposal, saveToLocalStorage]);
+  }, [proposal, saveToLocalStorage]);
 
   const handleSendChatMessage = useCallback((message) => {
     const newMessage = {
@@ -495,19 +505,33 @@ function CollaborateContent() {
         const storage = getCollaborateStorage(id);
         const cachedData = storage.getData();
 
-        // Fetch fresh data from API
-        const [proposalRes, collaboratorsRes, commentsRes] = await Promise.all([
+        // Fetch fresh data from API (including draft info)
+        const [proposalRes, collaboratorsRes, commentsRes, draftRes] = await Promise.all([
           apiClient.get(`/api/collaboration/proposals/${id}/collaborate`).catch(err => {
             console.warn('[API] Collaboration endpoint failed, trying proposals:', err);
             return apiClient.get(`/api/proposals/${id}`);
           }),
           apiClient.get(`/api/collaboration/${id}/collaborators`).catch(() => ({ data: { data: [] } })),
-          apiClient.get(`/api/proposals/${id}/comments`).catch(() => ({ data: { data: [] } }))
+          apiClient.get(`/api/proposals/${id}/comments`).catch(() => ({ data: { data: [] } })),
+          apiClient.get(`/api/proposals/${id}/versions/draft`).catch(() => ({ data: { data: null } }))
         ]);
 
         const proposalData = proposalRes.data.data || proposalRes.data;
         const collaboratorsData = collaboratorsRes.data.data || collaboratorsRes.data || [];
         const commentsData = commentsRes.data.data || commentsRes.data || [];
+        const draftData = draftRes.data.data || null;
+
+        // Set draft state - use decimal versioning (x.1 format)
+        if (draftData) {
+          setHasDraft(true);
+          // Use decimal version number (e.g., 1.1, 2.1)
+          const draftVersionNum = draftData.versionNumber || (proposalData.currentVersion + 0.1);
+          setDraftVersionLabel(`v${draftVersionNum}`);
+        } else if (proposalData.hasDraft) {
+          setHasDraft(true);
+          const draftVersionNum = proposalData.currentVersion + 0.1;
+          setDraftVersionLabel(proposalData.draftVersionLabel || `v${draftVersionNum}`);
+        }
 
         // Set proposal data
         setProposal(proposalData);
@@ -522,35 +546,43 @@ function CollaborateContent() {
           outlayLakhs: proposalData.outlayLakhs || ''
         });
 
-        // Build collaborators list from proposal data
-        const collabList = [];
+        // Build collaborators list from proposal data with deduplication
+        const collabMap = new Map(); // Use Map for O(1) lookup and deduplication
 
-        // Add PI (creator)
+        // Helper to add collaborator with deduplication
+        const addCollaborator = (userData, role) => {
+          if (!userData) return;
+          const userId = userData._id?.toString() || userData.toString();
+          // Only add if not already present (first occurrence wins)
+          if (!collabMap.has(userId)) {
+            const user = typeof userData === 'object' ? userData : { _id: userData };
+            collabMap.set(userId, { ...user, _id: userId, role });
+          }
+        };
+
+        // Add PI (creator) first - highest priority
         if (proposalData.createdBy) {
-          const pi = typeof proposalData.createdBy === 'object'
-            ? proposalData.createdBy
-            : { _id: proposalData.createdBy };
-          collabList.push({ ...pi, role: 'PI' });
+          addCollaborator(proposalData.createdBy, 'PI');
         }
 
         // Add CIs
         if (proposalData.coInvestigators) {
           proposalData.coInvestigators.forEach(ci => {
-            const ciData = typeof ci === 'object' ? ci : { _id: ci };
-            collabList.push({ ...ciData, role: 'CI' });
+            addCollaborator(ci, 'CI');
           });
         }
 
-        // Add collaborators from collaboration endpoint
+        // Add collaborators from collaboration endpoint (reviewers, committee members, etc.)
         if (collaboratorsData.length > 0) {
           collaboratorsData.forEach(collab => {
-            if (!collabList.find(c => c._id === collab._id)) {
-              collabList.push(collab);
-            }
+            // Extract user data from the collaborator object
+            const userData = collab.user || collab;
+            const role = collab.role || 'COLLABORATOR';
+            addCollaborator(userData, role);
           });
         }
 
-        setCollaborators(collabList);
+        setCollaborators(Array.from(collabMap.values()));
         setComments(commentsData);
 
         // Initialize with current user as online
@@ -657,6 +689,8 @@ function CollaborateContent() {
           proposalCode={proposal.proposalCode}
           status={proposal.status}
           version={proposal.currentVersion}
+          hasDraft={hasDraft || proposal.hasDraft}
+          draftVersionLabel={draftVersionLabel || proposal.draftVersionLabel}
         />
 
         {/* Proposal Information */}
@@ -694,19 +728,86 @@ function CollaborateContent() {
           }>
             <AdvancedProposalEditor
               proposalId={id}
+              mode="collaborate"
+              initialContent={proposal?.formi || proposal?.forms}
+              isNewProposal={false}
               canEdit={canEditEditor}
               canSuggest={isSuggestionMode}
+              readOnly={!canEditEditor && !isSuggestionMode}
             />
           </Suspense>
         </CollaborativeEditor>
       </div>
 
-      {/* Toggle Panel Buttons */}
+      {/* Floating Action Button Panel - Fixed position */}
+      <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40">
+        <div className={`bg-white rounded-2xl shadow-2xl border border-black/10 overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
+          {/* Toggle Button */}
+          <button
+            onClick={() => setFabExpanded(!fabExpanded)}
+            className="w-full flex items-center justify-between p-3 hover:bg-black/5 transition-colors border-b border-black/10"
+          >
+            {fabExpanded && <span className="text-sm font-semibold text-black">Actions</span>}
+            {fabExpanded ? (
+              <ChevronDown className="w-5 h-5 text-black" />
+            ) : (
+              <ChevronUp className="w-5 h-5 text-black mx-auto" />
+            )}
+          </button>
+
+          {/* Action Buttons */}
+          <div className="p-2 space-y-1">
+            {/* Version History Button - Available to all */}
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${
+                showVersionHistory ? 'bg-black/10' : 'hover:bg-black/5'
+              } text-black ${!fabExpanded && 'justify-center'}`}
+              title="Version History"
+            >
+              <Clock className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {fabExpanded && <span className="text-sm font-medium">Versions</span>}
+            </button>
+
+            {/* Team Chat Button - Available to all */}
+            <button
+              onClick={() => setShowTeamChat(true)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${
+                showTeamChat ? 'bg-black/10' : 'hover:bg-black/5'
+              } text-black ${!fabExpanded && 'justify-center'}`}
+              title="Team Chat"
+            >
+              <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {fabExpanded && <span className="text-sm font-medium">Team Chat</span>}
+            </button>
+
+            {/* Track Progress Button - Available to all */}
+            <button
+              onClick={() => router.push(`/proposal/track/${id}`)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+              title="Track Progress"
+            >
+              <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {fabExpanded && <span className="text-sm font-medium">Track</span>}
+            </button>
+
+            {/* Review Button - Only for Reviewers and Committee Members */}
+            {(isReviewer() || isCommitteeMember()) && (
+              <button
+                onClick={() => router.push(`/proposal/review/${id}`)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                title="Review Proposal"
+              >
+                <FileCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                {fabExpanded && <span className="text-sm font-medium">Review</span>}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Toggle Panel Button - Only Saarthi AI */}
       <TogglePanelButtons
-        showVersionHistory={showVersionHistory}
-        setShowVersionHistory={setShowVersionHistory}
-        showTeamChat={showTeamChat}
-        setShowTeamChat={setShowTeamChat}
         showSaarthi={showSaarthi}
         setShowSaarthi={setShowSaarthi}
       />

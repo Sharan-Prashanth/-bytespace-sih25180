@@ -15,7 +15,6 @@ const VersionHistory = lazy(() => import('../../../components/VersionHistory'));
 // Import view-specific components
 import ViewHeader from '../../../components/view-page/ViewHeader';
 import ViewProposalInformation from '../../../components/view-page/ViewProposalInformation';
-import QuickLinks from '../../../components/view-page/QuickLinks';
 
 function ViewProposalContent() {
   const router = useRouter();
@@ -134,16 +133,54 @@ function ViewProposalContent() {
         
         console.log('Proposal loaded:', proposalData.proposalCode);
         console.log('Forms available:', proposalData.forms ? Object.keys(proposalData.forms) : 'none');
-        console.log('Full forms structure:', JSON.stringify(proposalData.forms, null, 2));
+        console.log('FormI field available:', proposalData.formi ? 'yes' : 'no');
         
         // Process forms data to match AdvancedProposalEditor expectations
         // Editor expects EXACT format from create.jsx: { formi: { content: [...] } }
-        // NOT { formI: { editorContent: [...] } }
         let processedForms = null;
-        if (proposalData.forms && proposalData.forms.formI) {
+        
+        // First check for the new single formi field (new schema)
+        if (proposalData.formi) {
+          const formiData = proposalData.formi;
+          console.log('Using new formi field structure');
+          
+          let content = null;
+          
+          // Check for nested content
+          if (formiData.formi && formiData.formi.content) {
+            content = formiData.formi.content;
+            console.log('Found nested formi.formi.content structure');
+          }
+          // Check direct content
+          else if (formiData.content) {
+            content = formiData.content;
+            console.log('Found formi.content structure');
+          }
+          // Maybe it's already the content array
+          else if (Array.isArray(formiData)) {
+            content = formiData;
+            console.log('Found formi as direct content array');
+          }
+          
+          if (content && Array.isArray(content) && content.length > 0) {
+            processedForms = {
+              formi: {
+                content: content,
+                wordCount: formiData.wordCount || 0,
+                characterCount: formiData.characterCount || 0
+              }
+            };
+            console.log('Successfully processed formi:', {
+              contentLength: content.length,
+              firstNode: content[0]
+            });
+          }
+        }
+        // Fallback to legacy forms.formI structure (old schema)
+        else if (proposalData.forms && proposalData.forms.formI) {
           const formIData = proposalData.forms.formI;
           
-          console.log('FormI structure:', {
+          console.log('Using legacy forms.formI structure:', {
             keys: Object.keys(formIData),
             hasFormi: !!formIData.formi,
             hasContent: !!formIData.content,
@@ -189,7 +226,7 @@ function ViewProposalContent() {
             console.log('Form I data:', formIData);
           }
         } else {
-          console.error('No formI found in proposal.forms');
+          console.error('No formI found in proposal');
         }
         
         setProposal({ ...proposalData, processedForms });
@@ -209,7 +246,32 @@ function ViewProposalContent() {
     if (viewingVersion && versionData) {
       // Process version forms for editor
       let processedForms = null;
-      if (versionData.forms && versionData.forms.formI) {
+      
+      // First check for new formi field
+      if (versionData.formi) {
+        const formiData = versionData.formi;
+        let content = null;
+        
+        if (formiData.formi && formiData.formi.content) {
+          content = formiData.formi.content;
+        } else if (formiData.content) {
+          content = formiData.content;
+        } else if (Array.isArray(formiData)) {
+          content = formiData;
+        }
+        
+        if (content && Array.isArray(content) && content.length > 0) {
+          processedForms = {
+            formi: {
+              content: content,
+              wordCount: formiData.wordCount || 0,
+              characterCount: formiData.characterCount || 0
+            }
+          };
+        }
+      }
+      // Fallback to legacy forms.formI
+      else if (versionData.forms && versionData.forms.formI) {
         const formIData = versionData.forms.formI;
         let content = null;
         
@@ -458,6 +520,9 @@ function ViewProposalContent() {
         proposalCode={displayData?.proposalCode || proposal?.proposalCode}
         projectLeader={displayData?.proposalInfo?.projectLeader || proposal?.projectLeader}
         status={viewingVersion ? `VERSION ${viewingVersion}` : (displayData?.status || 'DRAFT').replace('_', ' ').toUpperCase()}
+        version={viewingVersion || proposal?.currentVersion || 1}
+        hasDraft={!viewingVersion && proposal?.hasDraft}
+        draftVersionLabel={!viewingVersion && proposal?.draftVersionLabel}
       />
 
       {/* Main Content */}
@@ -600,11 +665,6 @@ function ViewProposalContent() {
             )}
           </Suspense>
         </div>
-
-        {/* Quick Links Section - only show for current version */}
-        {!viewingVersion && (
-          <QuickLinks proposalId={id} status={proposal?.status} />
-        )}
       </div>
     </div>
   );

@@ -1,16 +1,21 @@
 import React from 'react';
 import { useRouter } from 'next/router';
 
-const QuickLinks = ({ proposalId, status }) => {
+const QuickLinks = ({ proposalId, status, currentVersion }) => {
   const router = useRouter();
   const isDraft = status === 'DRAFT';
   const isAIRejected = status === 'AI_REJECTED';
   const isFinallyRejected = ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(status);
   
-  // Can collaborate only if not a final rejection
-  const canCollaborate = !isFinallyRejected;
+  // Check if this is a draft version (x.1 format or version 0.1)
+  const isDraftVersion = currentVersion === 0.1 || (currentVersion && currentVersion % 1 !== 0);
+  
+  // Can collaborate only if not a final rejection and not a draft
+  const canCollaborate = !isFinallyRejected && !isDraft;
   // Can edit in create page only for DRAFT or AI_REJECTED
   const canEdit = isDraft || isAIRejected;
+  // Show versions only for submitted proposals (not drafts)
+  const showVersions = !isDraft && !isDraftVersion;
 
   return (
     <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
@@ -34,10 +39,10 @@ const QuickLinks = ({ proposalId, status }) => {
       )}
       
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Edit/Collaborate Link - based on status */}
-        {canEdit ? (
+        {/* Edit Link - for DRAFT or AI_REJECTED (goes to create page) */}
+        {canEdit && (
           <button
-            onClick={() => router.push('/proposal/create')}
+            onClick={() => router.push(`/proposal/create?draft=${proposalId}`)}
             className="flex items-center p-4 border border-black/20 rounded-lg hover:bg-black/5 transition-colors group"
           >
             <div className="w-12 h-12 bg-black/5 rounded-lg flex items-center justify-center mr-4 group-hover:bg-black/10 transition-colors">
@@ -54,7 +59,10 @@ const QuickLinks = ({ proposalId, status }) => {
               </div>
             </div>
           </button>
-        ) : canCollaborate ? (
+        )}
+        
+        {/* Collaborate Link - for submitted proposals (not drafts, not finally rejected) */}
+        {canCollaborate && (
           <button
             onClick={() => router.push(`/proposal/collaborate/${proposalId}`)}
             className="flex items-center p-4 border border-black/20 rounded-lg hover:bg-black/5 transition-colors group"
@@ -69,12 +77,12 @@ const QuickLinks = ({ proposalId, status }) => {
               <div className="text-sm text-black">Work with team members</div>
             </div>
           </button>
-        ) : null}
+        )}
 
         {/* Track Link */}
         <button
           onClick={() => router.push(`/proposal/track/${proposalId}`)}
-          className={`flex items-center p-4 border border-black/20 rounded-lg hover:bg-black/5 transition-colors group ${isFinallyRejected && !canCollaborate && !canEdit ? 'md:col-span-2' : ''}`}
+          className={`flex items-center p-4 border border-black/20 rounded-lg hover:bg-black/5 transition-colors group ${(isFinallyRejected && !canCollaborate && !canEdit) || (!canCollaborate && !canEdit && !showVersions) ? 'md:col-span-2' : ''}`}
         >
           <div className="w-12 h-12 bg-black/5 rounded-lg flex items-center justify-center mr-4 group-hover:bg-black/10 transition-colors">
             <svg className="w-6 h-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,6 +94,24 @@ const QuickLinks = ({ proposalId, status }) => {
             <div className="text-sm text-black">Monitor review status</div>
           </div>
         </button>
+
+        {/* Versions Link - only for submitted proposals (not drafts) */}
+        {showVersions && (
+          <button
+            onClick={() => router.push(`/proposal/versions/${proposalId}`)}
+            className="flex items-center p-4 border border-black/20 rounded-lg hover:bg-black/5 transition-colors group"
+          >
+            <div className="w-12 h-12 bg-black/5 rounded-lg flex items-center justify-center mr-4 group-hover:bg-black/10 transition-colors">
+              <svg className="w-6 h-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <div className="font-semibold text-black mb-1">Version History</div>
+              <div className="text-sm text-black">View previous versions</div>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );

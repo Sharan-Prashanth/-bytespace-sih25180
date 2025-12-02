@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Proposal from '../models/Proposal.js';
+import ProposalVersion from '../models/ProposalVersion.js';
 import User from '../models/User.js';
 import emailService from '../services/emailService.js';
 import storageService from '../services/storageService.js';
@@ -589,12 +590,12 @@ export const getProposalForCollaboration = asyncHandler(async (req, res) => {
 
 /**
  * @route   POST /api/collaboration/:proposalId/sync
- * @desc    Sync proposal data and optionally create minor version
+ * @desc    Sync proposal data - saves to draft version for submitted proposals
  * @access  Private (PI or CI only)
  */
 export const syncProposalData = asyncHandler(async (req, res) => {
   const { proposalId } = req.params;
-  const { proposalInfo, createMinorVersion } = req.body;
+  const { proposalInfo, forms } = req.body;
 
   const proposal = await findProposal(proposalId);
   
@@ -611,50 +612,111 @@ export const syncProposalData = asyncHandler(async (req, res) => {
   const userId = req.user._id.toString();
   const isPI = proposal.createdBy?._id?.toString() === userId;
   const isCI = proposal.coInvestigators?.some(ci => ci?.toString() === userId);
+  const isAdmin = req.user.roles?.includes('SUPER_ADMIN');
 
-  if (!isPI && !isCI) {
+  if (!isPI && !isCI && !isAdmin) {
     return res.status(403).json({
       success: false,
       message: 'Only PI or CI can sync proposal data'
     });
   }
 
-  // Update proposal info if provided
-  if (proposalInfo) {
-    const updateFields = ['title', 'fundingMethod', 'principalAgency', 'subAgencies', 
-      'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs'];
+  // Check if proposal is in a final rejected state
+  const finalStates = ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'];
+  if (finalStates.includes(proposal.status)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot update a rejected proposal'
+    });
+  }
+
+  // For DRAFT proposals, update directly on the proposal
+  if (proposal.status === 'DRAFT') {
+    if (proposalInfo) {
+      const updateFields = ['title', 'fundingMethod', 'principalAgency', 'subAgencies', 
+        'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs'];
+      
+      updateFields.forEach(field => {
+        if (proposalInfo[field] !== undefined) {
+          proposal[field] = proposalInfo[field];
+        }
+      });
+    }
     
-    updateFields.forEach(field => {
-      if (proposalInfo[field] !== undefined) {
-        proposal[field] = proposalInfo[field];
+    if (forms) {
+      proposal.forms = forms;
+    }
+
+    proposal.updatedAt = new Date();
+    await proposal.save();
+
+    return res.json({
+      success: true,
+      message: 'Proposal synced successfully',
+      data: {
+        currentVersion: proposal.currentVersion,
+        updatedAt: proposal.updatedAt,
+        hasDraft: false
       }
     });
   }
 
-  // Create minor version if requested
-  if (createMinorVersion) {
-    // Calculate new minor version
-    const currentVersion = parseFloat(proposal.currentVersion) || 1.0;
-    const baseVersion = Math.floor(currentVersion);
-    const currentMinor = Math.round((currentVersion - baseVersion) * 10);
-    const newMinorVersion = baseVersion + ((currentMinor + 1) / 10);
-    
-    proposal.currentVersion = newMinorVersion.toFixed(1);
+  // For submitted proposals, save to draft version
+  const draftProposalInfo = proposalInfo ? {
+    title: proposalInfo.title ?? proposal.title,
+    fundingMethod: proposalInfo.fundingMethod ?? proposal.fundingMethod,
+    principalAgency: proposalInfo.principalAgency ?? proposal.principalAgency,
+    subAgencies: proposalInfo.subAgencies ?? proposal.subAgencies,
+    projectLeader: proposalInfo.projectLeader ?? proposal.projectLeader,
+    projectCoordinator: proposalInfo.projectCoordinator ?? proposal.projectCoordinator,
+    durationMonths: proposalInfo.durationMonths ?? proposal.durationMonths,
+    outlayLakhs: proposalInfo.outlayLakhs ?? proposal.outlayLakhs
+  } : {
+    title: proposal.title,
+    fundingMethod: proposal.fundingMethod,
+    principalAgency: proposal.principalAgency,
+    subAgencies: proposal.subAgencies,
+    projectLeader: proposal.projectLeader,
+    projectCoordinator: proposal.projectCoordinator,
+    durationMonths: proposal.durationMonths,
+    outlayLakhs: proposal.outlayLakhs
+  };
+
+  // Get or create draft version
+  const { draft, created } = await ProposalVersion.getOrCreateDraft(
+    proposal._id,
+    req.user._id,
+    {
+      forms: forms || proposal.forms,
+      proposalInfo: draftProposalInfo,
+      supportingDocs: proposal.supportingDocs
+    }
+  );
+
+  // If draft already exists, update it
+  if (!created) {
+    if (forms) draft.forms = forms;
+    draft.proposalInfo = draftProposalInfo;
+    draft.lastModifiedBy = req.user._id;
+    await draft.save();
   }
 
-  proposal.updatedAt = new Date();
-  await proposal.save();
+  // Update proposal to indicate it has a draft
+  if (!proposal.hasDraft) {
+    proposal.hasDraft = true;
+    proposal.draftVersion = draft.versionNumber;
+    await proposal.save();
+  }
 
   // Log activity
   try {
     await activityLogger.log({
       user: req.user._id,
-      action: 'PROPOSAL_SYNCED',
+      action: created ? 'DRAFT_CREATED' : 'DRAFT_SYNCED',
       proposalId: proposal._id,
       details: { 
         proposalCode: proposal.proposalCode,
-        newVersion: proposal.currentVersion,
-        createMinorVersion
+        draftVersion: draft.versionNumber
       },
       ipAddress: req.ip
     });
@@ -664,10 +726,12 @@ export const syncProposalData = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: 'Proposal synced successfully',
+    message: created ? 'Draft created and synced' : 'Draft synced successfully',
     data: {
       currentVersion: proposal.currentVersion,
-      updatedAt: proposal.updatedAt
+      draftVersion: draft.versionNumber,
+      hasDraft: true,
+      updatedAt: draft.updatedAt
     }
   });
 });
