@@ -415,8 +415,7 @@ class ExplanationGenerator:
     def __init__(self):
         pass
     
-    def generate_explanation(self, novelty_score: float, node_contributions: Dict[str, float], 
-                           similar_count: int) -> str:
+    def generate_explanation(self, novelty_score: float, node_contributions: Dict[str, float], similar_count: int) -> str:
         """Generate explanation for the novelty score"""
         try:
             # Find most important nodes
@@ -645,8 +644,8 @@ class ResultFormatter:
     """Formats results for API response"""
     
     def format_result(self, novelty_score: float, node_contributions: Dict[str, float],
-                     similar_lines: List[SimilarLine], explanation: str, comment: str,
-                     metadata: Dict[str, Any]) -> NoveltyResult:
+                    similar_lines: List[SimilarLine], explanation: str, comment: str,
+                    metadata: Dict[str, Any]) -> NoveltyResult:
         """Format complete result structure"""
         try:
             # Convert similar_lines to dict format
