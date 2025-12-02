@@ -461,7 +461,7 @@ class DeliverableFeasibilityAgent:
         # Calculate totals
         budget["total_capital"] = budget["land_building"] + budget["capital_equipment"]
         budget["total_revenue"] = (budget["manpower"] + budget["consumables"] + 
-                                 budget["travel"] + budget["workshop_seminar"])
+        budget["travel"] + budget["workshop_seminar"])
         
         # Total project cost
         total_cost = cost_breakdown.get("total_project_cost", {})
@@ -625,8 +625,7 @@ class DeliverableFeasibilityAgent:
         except Exception:
             return None
     
-    def _calculate_heuristic_score(self, total_months: float, durations: List[Tuple[float, str]], 
-                                 budget: Dict[str, Any]) -> int:
+    def _calculate_heuristic_score(self, total_months: float, durations: List[Tuple[float, str]], budget: Dict[str, Any]) -> int:
         """Calculate heuristic score based on timeline and budget factors."""
         score = 50
         
@@ -859,48 +858,6 @@ async def deliverable_check(file: UploadFile = File(...)):
         result = agent.run(data, filename)
         
         # Enhanced response for FORM-I data
-        response_data = {
-            "score": result["score"],
-            "comment": result["comment"],
-            "analysis": {
-                "decision": result["decision"],
-                "total_months": result["total_months"],
-                "changeable_percentage": result["changeable"],
-                "form_analysis": result.get("form_analysis", {}),
-                "duration_breakdown": result["durations"],
-                "budget_summary": result["budget"]
-            }
-        }
-        
-        return JSONResponse(response_data)
-        
-    except ValueError as ve:
-        return JSONResponse({"error": str(ve)}, status_code=400)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-
-@router.post('/deliverable-check-json')
-async def deliverable_check_json(form_data: Dict[str, Any]):
-    """
-    Assess project deliverable feasibility from direct JSON FORM-I data.
-    
-    Args:
-        form_data: JSON data in FORM-I structure
-        
-    Returns:
-        JSON response with comprehensive feasibility assessment
-    """
-    try:
-        # Convert JSON data to bytes for agent processing
-        json_bytes = json.dumps(form_data).encode('utf-8')
-        filename = f"form_i_data_{datetime.utcnow().isoformat()}.json"
-        
-        # Initialize and run the agent
-        agent = DeliverableFeasibilityAgent(horizon_months=24.0)
-        result = agent.run(json_bytes, filename)
-        
-        # Enhanced response
         response_data = {
             "score": result["score"],
             "comment": result["comment"],

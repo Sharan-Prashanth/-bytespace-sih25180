@@ -8,6 +8,7 @@ from RAG import plag
 from RAG import rag_chat_guidlines
 from RAG import rag_chat_specialist
 from RAG import timeline
+from Common.Technical_fesability import fesability
 try:
     # Prefer relative import when running as a package (helps editors/linters)
     from . import non_ocr
@@ -47,6 +48,7 @@ app.include_router(rag_chat_specialist.router)
 app.include_router(extractor.router)
 app.include_router(ocr_extraction.router)
 app.include_router(novelty.router)
+app.include_router(fesability.router)
 app.include_router(cost_estimator.router)
 app.include_router(plag.router)
 app.include_router(file_storage.router)
