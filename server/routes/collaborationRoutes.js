@@ -8,6 +8,9 @@ import {
   uploadImage,
   uploadDocument,
   deleteImage,
+  deleteDocument,
+  trackEmbeddedImage,
+  deleteEmbeddedImage,
   getProposalForCollaboration,
   syncProposalData
 } from '../controllers/collaborationController.js';
@@ -43,5 +46,10 @@ router.get('/:proposalId/active-users', getActiveUsers);
 router.post('/upload/image', upload.single('image'), uploadImage);
 router.post('/upload/document', upload.single('document'), uploadDocument);
 router.delete('/delete/image', deleteImage);
+router.delete('/delete/document', deleteDocument);
+
+// Embedded image tracking routes
+router.post('/:proposalId/track-image', trackEmbeddedImage);
+router.delete('/:proposalId/embedded-image', deleteEmbeddedImage);
 
 export default router;

@@ -67,6 +67,12 @@ function InvestigatorDashboardContent() {
     }
   };
 
+  // Handle proposal deletion - refresh the list after deletion
+  const handleProposalDeleted = (deletedProposalId) => {
+    // Remove the deleted proposal from local state immediately for better UX
+    setProposals(prev => prev.filter(p => p._id !== deletedProposalId));
+  };
+
   // Filter out rejected proposals for the main view
   const activeProposals = proposals.filter(p => !isRejected(p.status));
   const rejectedProposals = proposals.filter(p => isRejected(p.status));
@@ -104,7 +110,7 @@ function InvestigatorDashboardContent() {
       case 'overview':
         return <UserOverviewSection stats={stats} theme={theme} proposals={proposals} lastDraft={lastDraft} />;
       case 'proposals':
-        return <UserProposalsSection proposals={proposals} theme={theme} />;
+        return <UserProposalsSection proposals={proposals} theme={theme} onProposalDeleted={handleProposalDeleted} />;
       case 'profile':
         return <UserProfileSection user={user} theme={theme} />;
       case 'settings':

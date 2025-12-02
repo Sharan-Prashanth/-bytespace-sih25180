@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Comment from '../models/Comment.js';
 import emailService from '../services/emailService.js';
 import activityLogger from '../utils/activityLogger.js';
+import { updateCollaboratorsForStatus, updateAssignedReviewersForExpertReview } from '../utils/roleBasedAssignment.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 /**
@@ -32,7 +33,7 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
 
   // Status transition validation
   if (isCMPDI) {
-    const validStatuses = ['CMPDI_APPROVED', 'CMPDI_REJECTED', 'CMPDI_EXPERT_REVIEW'];
+    const validStatuses = ['CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'CMPDI_EXPERT_REVIEW', 'TSSRC_REVIEW'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -40,7 +41,7 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
       });
     }
   } else if (isTSSRC) {
-    const validStatuses = ['TSSRC_APPROVED', 'TSSRC_REJECTED'];
+    const validStatuses = ['TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -48,7 +49,7 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
       });
     }
   } else if (isSSRC) {
-    const validStatuses = ['SSRC_APPROVED', 'SSRC_REJECTED', 'ACCEPTED', 'ONGOING'];
+    const validStatuses = ['SSRC_ACCEPTED', 'SSRC_REJECTED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -73,7 +74,27 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
     notes: notes || ''
   });
 
+  // Auto-assign collaborators based on new status
+  proposal.collaborators = await updateCollaboratorsForStatus(proposal, status);
+  
+  // If moving to expert review, auto-assign all expert reviewers
+  if (status === 'CMPDI_EXPERT_REVIEW') {
+    proposal.assignedReviewers = await updateAssignedReviewersForExpertReview(proposal, req.user._id);
+    console.log(`[AUTO-ASSIGN] Added ${proposal.assignedReviewers.length} expert reviewers`);
+  }
+
   await proposal.save();
+
+  // Log collaborator counts
+  const collaboratorCounts = {
+    PI: proposal.collaborators.filter(c => c.role === 'PI').length,
+    CI: proposal.collaborators.filter(c => c.role === 'CI').length,
+    CMPDI: proposal.collaborators.filter(c => c.role === 'CMPDI').length,
+    REVIEWER: proposal.collaborators.filter(c => c.role === 'REVIEWER').length,
+    TSSRC: proposal.collaborators.filter(c => c.role === 'TSSRC').length,
+    SSRC: proposal.collaborators.filter(c => c.role === 'SSRC').length
+  };
+  console.log(`[AUTO-ASSIGN] Collaborators for ${proposal.proposalCode}:`, collaboratorCounts);
 
   // Send notification email
   await emailService.sendStatusChangeEmail(
@@ -87,7 +108,7 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
   // Log activity
   await activityLogger.log({
     user: req.user._id,
-    action: status.includes('APPROVED') ? 'PROPOSAL_APPROVED' : 'PROPOSAL_REJECTED',
+    action: status.includes('ACCEPTED') ? 'PROPOSAL_APPROVED' : (status.includes('REJECTED') ? 'PROPOSAL_REJECTED' : 'STATUS_UPDATED'),
     proposalId: proposal._id,
     details: { 
       proposalCode: proposal.proposalCode,

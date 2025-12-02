@@ -8,6 +8,7 @@ import aiService from '../services/aiService.js';
 import storageService from '../services/storageService.js';
 import formExtractionService from '../services/formExtractionService.js';
 import activityLogger from '../utils/activityLogger.js';
+import { updateCollaboratorsForStatus, updateAssignedReviewersForExpertReview } from '../utils/roleBasedAssignment.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 /**
@@ -41,16 +42,24 @@ const checkProposalAccess = (proposal, user) => {
     return userId.toString() === user._id.toString();
   });
   
-  // Handle populated reviewers
-  const isReviewer = proposal.assignedReviewers?.some(rev => {
+  // Handle populated reviewers (assigned reviewers)
+  const isAssignedReviewer = proposal.assignedReviewers?.some(rev => {
     const reviewerId = rev.reviewer?._id || rev.reviewer;
     return reviewerId.toString() === user._id.toString();
   });
   
   const isAdmin = user.roles?.includes('SUPER_ADMIN');
   const isCommittee = user.roles?.some(role => ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER'].includes(role));
+  
+  // Expert reviewers have access to proposals in expert review stage or if they're assigned
+  const isExpertReviewer = user.roles?.includes('EXPERT_REVIEWER');
+  const expertCanAccess = isExpertReviewer && (
+    proposal.status === 'CMPDI_EXPERT_REVIEW' || 
+    proposal.status === 'CMPDI_ACCEPTED' ||
+    proposal.status === 'CMPDI_REJECTED'
+  );
 
-  return isPI || isCI || isCollaborator || isReviewer || isAdmin || isCommittee;
+  return isPI || isCI || isCollaborator || isAssignedReviewer || isAdmin || isCommittee || expertCanAccess;
 };
 
 /**
@@ -107,16 +116,19 @@ export const getProposals = asyncHandler(async (req, res) => {
     // Admin sees all proposals
   } else if (user.roles.includes('CMPDI_MEMBER')) {
     // CMPDI sees proposals in their review stages
-    query.status = { $in: ['SUBMITTED', 'AI_EVALUATION', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW'] };
+    query.status = { $in: ['SUBMITTED', 'AI_EVALUATION', 'AI_EVALUATION_PENDING', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED'] };
   } else if (user.roles.includes('TSSRC_MEMBER')) {
-    // TSSRC sees CMPDI approved proposals
-    query.status = { $in: ['CMPDI_APPROVED', 'TSSRC_REVIEW'] };
+    // TSSRC sees CMPDI approved proposals and their review stages
+    query.status = { $in: ['CMPDI_ACCEPTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED'] };
   } else if (user.roles.includes('SSRC_MEMBER')) {
-    // SSRC sees TSSRC approved proposals
-    query.status = { $in: ['TSSRC_APPROVED', 'SSRC_REVIEW'] };
+    // SSRC sees TSSRC approved proposals and their review stages
+    query.status = { $in: ['TSSRC_ACCEPTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
   } else if (user.roles.includes('EXPERT_REVIEWER')) {
-    // Reviewers see assigned proposals
-    query['assignedReviewers.reviewer'] = user._id;
+    // Expert reviewers see proposals in expert review stage or assigned to them
+    query.$or = [
+      { status: 'CMPDI_EXPERT_REVIEW' },
+      { 'assignedReviewers.reviewer': user._id }
+    ];
   } else {
     // Normal users see their own proposals
     query.$or = [
@@ -167,7 +179,7 @@ export const getProposals = asyncHandler(async (req, res) => {
 
 /**
  * @route   POST /api/proposals
- * @desc    Create a new proposal
+ * @desc    Create a new proposal (starts as version 0.1 draft)
  * @access  Private
  */
 export const createProposal = asyncHandler(async (req, res) => {
@@ -180,16 +192,18 @@ export const createProposal = asyncHandler(async (req, res) => {
     projectCoordinator,
     durationMonths,
     outlayLakhs,
-    forms
+    forms,
+    formi // Accept both forms and formi from frontend
   } = req.body;
 
   // Generate unique proposal code
   const proposalCode = await proposalIdGenerator.generateProposalCode();
 
-  // Process embedded images if any
-  const processedForms = forms ? await processFormImages(forms, proposalCode) : {};
+  // Process embedded images if any - accept either formi or forms
+  const formContent = formi || forms;
+  const processedForms = formContent ? await processFormImages(formContent, proposalCode) : null;
 
-  // Create proposal
+  // Create proposal with version 0.1 (initial draft)
   const proposal = await Proposal.create({
     proposalCode,
     title,
@@ -202,7 +216,7 @@ export const createProposal = asyncHandler(async (req, res) => {
     outlayLakhs,
     forms: processedForms,
     status: 'DRAFT',
-    currentVersion: 0.1,
+    currentVersion: 0.1, // Initial draft version
     createdBy: req.user._id,
     collaborators: [{
       userId: req.user._id,
@@ -216,7 +230,7 @@ export const createProposal = asyncHandler(async (req, res) => {
     user: req.user._id,
     action: 'PROPOSAL_CREATED',
     proposalId: proposal._id,
-    details: { proposalCode: proposal.proposalCode },
+    details: { proposalCode: proposal.proposalCode, version: 0.1 },
     ipAddress: req.ip
   });
 
@@ -281,6 +295,8 @@ export const getProposalById = asyncHandler(async (req, res) => {
 /**
  * @route   PUT /api/proposals/:proposalId
  * @desc    Update proposal (auto-save or manual save)
+ *          For DRAFT proposals (version 0.1): Updates directly on proposal
+ *          For submitted proposals: Creates/updates a draft version (x.1)
  * @access  Private
  */
 export const updateProposal = asyncHandler(async (req, res) => {
@@ -304,54 +320,120 @@ export const updateProposal = asyncHandler(async (req, res) => {
   // Check if user is PI or CI
   const isPI = proposal.createdBy.toString() === req.user._id.toString();
   const isCI = proposal.coInvestigators.some(ci => ci.toString() === req.user._id.toString());
+  const isAdmin = req.user.roles?.includes('SUPER_ADMIN');
 
-  if (!isPI && !isCI) {
+  if (!isPI && !isCI && !isAdmin) {
     return res.status(403).json({
       success: false,
       message: 'Only PI and CI can update the proposal'
     });
   }
 
-  // Can only update DRAFT proposals
-  if (proposal.status !== 'DRAFT' && !req.body.forms) {
+  // Check if proposal is in a final rejected state
+  const finalStates = ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'];
+  if (finalStates.includes(proposal.status)) {
     return res.status(400).json({
       success: false,
-      message: 'Cannot update proposal information after submission. Use version commit for content changes.'
+      message: 'Cannot update a rejected proposal'
     });
   }
 
-  // Update fields
+  // Update fields - accept both 'forms' and 'formi' from frontend
   const updateableFields = [
     'title', 'fundingMethod', 'principalAgency', 'subAgencies',
-    'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs', 'forms', 'supportingDocs'
+    'projectLeader', 'projectCoordinator', 'durationMonths', 'outlayLakhs', 'forms', 'formi', 'supportingDocs'
   ];
 
-  for (const field of updateableFields) {
-    if (req.body[field] !== undefined) {
-      if (field === 'forms') {
-        // Process embedded images
-        proposal[field] = await processFormImages(req.body[field], proposal.proposalCode);
-      } else {
-        proposal[field] = req.body[field];
+  // For DRAFT proposals (version 0.1, not yet submitted), update directly
+  if (proposal.status === 'DRAFT') {
+    for (const field of updateableFields) {
+      if (req.body[field] !== undefined) {
+        if (field === 'forms' || field === 'formi') {
+          // Process embedded images - store in forms field
+          proposal.forms = await processFormImages(req.body[field], proposal.proposalCode);
+        } else {
+          proposal[field] = req.body[field];
+        }
       }
     }
-  }
-  
-  // Increment version for drafts (0.1 -> 0.2 -> ... -> 0.9 -> 0.10)
-  if (proposal.status === 'DRAFT') {
-    const currentMinor = Math.round((proposal.currentVersion - Math.floor(proposal.currentVersion)) * 100);
-    proposal.currentVersion = parseFloat(`0.${currentMinor + 1}`);
+    
+    // Keep version at 0.1 for drafts
+    proposal.currentVersion = 0.1;
+    await proposal.save();
+
+    // Log activity
+    await activityLogger.log({
+      user: req.user._id,
+      action: 'PROPOSAL_UPDATED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        version: 0.1,
+        updates: Object.keys(req.body)
+      },
+      ipAddress: req.ip
+    });
+
+    return res.json({
+      success: true,
+      message: 'Draft updated successfully',
+      data: proposal
+    });
   }
 
+  // For submitted proposals, save to draft version (x.1) instead
+  // This prevents overwriting the current major version
+  const currentMajorVersion = Math.floor(proposal.currentVersion);
+  const draftVersion = currentMajorVersion + 0.1;
+  
+  const proposalInfo = {
+    title: req.body.title ?? proposal.title,
+    fundingMethod: req.body.fundingMethod ?? proposal.fundingMethod,
+    principalAgency: req.body.principalAgency ?? proposal.principalAgency,
+    subAgencies: req.body.subAgencies ?? proposal.subAgencies,
+    projectLeader: req.body.projectLeader ?? proposal.projectLeader,
+    projectCoordinator: req.body.projectCoordinator ?? proposal.projectCoordinator,
+    durationMonths: req.body.durationMonths ?? proposal.durationMonths,
+    outlayLakhs: req.body.outlayLakhs ?? proposal.outlayLakhs
+  };
+
+  let forms = proposal.forms;
+  if (req.body.forms || req.body.formi) {
+    const formContent = req.body.formi || req.body.forms;
+    forms = await processFormImages(formContent, proposal.proposalCode);
+  }
+
+  const supportingDocs = req.body.supportingDocs ?? proposal.supportingDocs;
+
+  // Get or create draft version (x.1)
+  const { draft, created } = await ProposalVersion.getOrCreateDraft(
+    proposal._id,
+    req.user._id,
+    { forms, proposalInfo, supportingDocs },
+    currentMajorVersion
+  );
+
+  // If draft already exists, update it
+  if (!created) {
+    draft.forms = forms;
+    draft.proposalInfo = proposalInfo;
+    draft.supportingDocs = supportingDocs;
+    draft.lastModifiedBy = req.user._id;
+    await draft.save();
+  }
+
+  // Update proposal's current version to reflect draft
+  proposal.currentVersion = draftVersion;
   await proposal.save();
 
   // Log activity
   await activityLogger.log({
     user: req.user._id,
-    action: 'PROPOSAL_UPDATED',
+    action: created ? 'DRAFT_CREATED' : 'DRAFT_UPDATED',
     proposalId: proposal._id,
     details: { 
       proposalCode: proposal.proposalCode,
+      draftVersion: draftVersion,
       updates: Object.keys(req.body)
     },
     ipAddress: req.ip
@@ -359,14 +441,18 @@ export const updateProposal = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: 'Proposal updated successfully',
-    data: proposal
+    message: created ? `Draft version ${draftVersion} created` : `Draft version ${draftVersion} updated`,
+    data: {
+      proposal: proposal,
+      currentVersion: draftVersion,
+      isDraft: true
+    }
   });
 });
 
 /**
  * @route   DELETE /api/proposals/:proposalId
- * @desc    Delete proposal (only drafts)
+ * @desc    Delete proposal (only drafts) - Hard delete for drafts
  * @access  Private
  */
 export const deleteProposal = asyncHandler(async (req, res) => {
@@ -394,36 +480,47 @@ export const deleteProposal = asyncHandler(async (req, res) => {
   if (proposal.status !== 'DRAFT') {
     return res.status(400).json({
       success: false,
-      message: 'Cannot delete submitted proposals'
+      message: 'Cannot delete submitted proposals. Only draft proposals can be deleted.'
     });
   }
 
-  // Soft delete
-  proposal.isDeleted = true;
-  await proposal.save();
+  // Store proposal info for logging before deletion
+  const proposalCode = proposal.proposalCode;
+  const proposalId = proposal._id;
+
+  // Hard delete - permanently remove from database
+  // Delete any associated versions first
+  await ProposalVersion.deleteMany({ proposalId: proposal._id });
+  
+  // Delete the proposal itself
+  await Proposal.deleteOne({ _id: proposal._id });
 
   // Log activity
   await activityLogger.log({
     user: req.user._id,
     action: 'PROPOSAL_DELETED',
-    proposalId: proposal._id,
-    details: { proposalCode: proposal.proposalCode },
+    proposalId: proposalId,
+    details: { proposalCode: proposalCode, deletionType: 'permanent' },
     ipAddress: req.ip
   });
 
   res.json({
     success: true,
-    message: 'Proposal deleted successfully'
+    message: 'Draft proposal deleted permanently'
   });
 });
 
 /**
  * @route   POST /api/proposals/:proposalId/submit
  * @desc    Submit proposal for review
+ *          For DRAFT (0.1): Creates version 1 and submits
+ *          For submitted proposals with draft (x.1): Promotes draft to new major version (x+1)
  * @access  Private (PI only)
  */
 export const submitProposal = asyncHandler(async (req, res) => {
   const { proposalId } = req.params;
+  const { commitMessage } = req.body;
+  
   let proposal;
   if (mongoose.Types.ObjectId.isValid(proposalId) && proposalId.length === 24) {
     proposal = await Proposal.findById(proposalId).populate('createdBy', 'fullName email');
@@ -440,34 +537,76 @@ export const submitProposal = asyncHandler(async (req, res) => {
 
   // Only PI can submit
   const isPI = proposal.createdBy._id.toString() === req.user._id.toString();
-  if (!isPI) {
+  const isAdmin = req.user.roles?.includes('SUPER_ADMIN');
+  
+  if (!isPI && !isAdmin) {
     return res.status(403).json({
       success: false,
       message: 'Only Principal Investigator can submit the proposal'
     });
   }
 
-  // Check if already submitted
-  if (proposal.status !== 'DRAFT') {
+  // Check if version is a draft (has decimal)
+  const isDraftVersion = proposal.currentVersion % 1 !== 0;
+
+  // Handle different submission scenarios
+  if (proposal.status === 'DRAFT' && proposal.currentVersion === 0.1) {
+    // Initial submission from create page - promote 0.1 to version 1
+    return handleInitialSubmission(proposal, req, res);
+  } else if (isDraftVersion) {
+    // Has a draft version (x.1) - promote to next major version
+    return handleDraftPromotion(proposal, commitMessage, req, res);
+  } else {
     return res.status(400).json({
       success: false,
-      message: 'Proposal has already been submitted'
+      message: 'No draft changes to submit. Make changes first to create a draft.'
     });
   }
+});
 
-  // Validate all forms are filled
-  const requiredForms = ['formI', 'formIA', 'formIX', 'formX', 'formXI', 'formXII'];
-  const missingForms = requiredForms.filter(form => !proposal.forms[form] || proposal.forms[form].length === 0);
+/**
+ * Handle initial submission of a DRAFT proposal (0.1 -> 1)
+ */
+const handleInitialSubmission = async (proposal, req, res) => {
+  // Validate required proposal information fields
+  const validationErrors = [];
   
-  if (missingForms.length > 0) {
+  if (!proposal.title || proposal.title.trim() === '') {
+    validationErrors.push('Project title is required');
+  }
+  if (!proposal.principalAgency || proposal.principalAgency.trim() === '') {
+    validationErrors.push('Principal implementing agency is required');
+  }
+  if (!proposal.projectLeader || proposal.projectLeader.trim() === '') {
+    validationErrors.push('Project leader is required');
+  }
+  if (!proposal.projectCoordinator || proposal.projectCoordinator.trim() === '') {
+    validationErrors.push('Project coordinator is required');
+  }
+  if (!proposal.durationMonths || proposal.durationMonths < 1) {
+    validationErrors.push('Project duration must be at least 1 month');
+  }
+  if (!proposal.outlayLakhs || proposal.outlayLakhs <= 0) {
+    validationErrors.push('Project outlay is required');
+  }
+  
+  if (validationErrors.length > 0) {
     return res.status(400).json({
       success: false,
-      message: `Please complete all forms. Missing: ${missingForms.join(', ')}`
+      message: `Please complete all required fields: ${validationErrors.join(', ')}`
+    });
+  }
+  
+  // Validate Form I is filled (forms should contain formi with content)
+  if (!proposal.forms || !proposal.forms.formi || !proposal.forms.formi.content || proposal.forms.formi.content.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Please complete Form I before submitting'
     });
   }
 
-  // Update status to AI_EVALUATION and set version to 1 (integer)
-  proposal.status = 'AI_EVALUATION';
+  // Update status to AI_EVALUATION and set version to 1 (submitted)
+  proposal.status = 'AI_EVALUATION_PENDING';
   proposal.currentVersion = 1;
   await proposal.save();
 
@@ -475,6 +614,8 @@ export const submitProposal = asyncHandler(async (req, res) => {
   const version = await ProposalVersion.create({
     proposalId: proposal._id,
     versionNumber: 1,
+    versionLabel: 'v1',
+    isDraft: false,
     commitMessage: 'Initial Submission',
     forms: proposal.forms,
     proposalInfo: {
@@ -487,6 +628,7 @@ export const submitProposal = asyncHandler(async (req, res) => {
       durationMonths: proposal.durationMonths,
       outlayLakhs: proposal.outlayLakhs
     },
+    supportingDocs: proposal.supportingDocs,
     createdBy: req.user._id
   });
 
@@ -527,11 +669,16 @@ export const submitProposal = asyncHandler(async (req, res) => {
       
       // Update status to CMPDI_REVIEW after AI evaluation
       proposal.status = 'CMPDI_REVIEW';
+      
+      // Auto-assign all CMPDI members as collaborators
+      proposal.collaborators = await updateCollaboratorsForStatus(proposal, 'CMPDI_REVIEW');
+      
       await proposal.save();
       
-      console.log(`AI evaluation completed for proposal ${proposal.proposalCode}`);
+      console.log(`[AI] Evaluation completed for proposal ${proposal.proposalCode}`);
+      console.log(`[AUTO-ASSIGN] Added ${proposal.collaborators.filter(c => c.role === 'CMPDI').length} CMPDI members as collaborators`);
     } catch (error) {
-      console.error('AI evaluation error:', error);
+      console.error('[AI] Evaluation error:', error);
     }
   }, 3000); // 3 seconds delay to simulate AI processing
 
@@ -540,7 +687,7 @@ export const submitProposal = asyncHandler(async (req, res) => {
     user: req.user._id,
     action: 'PROPOSAL_SUBMITTED',
     proposalId: proposal._id,
-    details: { proposalCode: proposal.proposalCode },
+    details: { proposalCode: proposal.proposalCode, version: 1 },
     ipAddress: req.ip
   });
 
@@ -550,10 +697,83 @@ export const submitProposal = asyncHandler(async (req, res) => {
     data: {
       proposalCode: proposal.proposalCode,
       status: proposal.status,
-      version: version.versionNumber
+      version: 1
     }
   });
-});
+};
+
+/**
+ * Handle promotion of draft to new major version (x.1 -> x+1)
+ * E.g., 1.1 -> 2, 2.1 -> 3
+ */
+const handleDraftPromotion = async (proposal, commitMessage, req, res) => {
+  // Calculate the new major version
+  const currentDraftVersion = proposal.currentVersion;
+  const newMajorVersion = Math.floor(currentDraftVersion) + 1;
+
+  // Get the draft version from ProposalVersion collection
+  const draft = await ProposalVersion.getDraft(proposal._id);
+  
+  if (!draft) {
+    // If no draft in ProposalVersion, create version from proposal data
+    await ProposalVersion.create({
+      proposalId: proposal._id,
+      versionNumber: newMajorVersion,
+      versionLabel: `v${newMajorVersion}`,
+      isDraft: false,
+      commitMessage: commitMessage || `Version ${newMajorVersion}`,
+      forms: proposal.forms,
+      proposalInfo: {
+        title: proposal.title,
+        fundingMethod: proposal.fundingMethod,
+        principalAgency: proposal.principalAgency,
+        subAgencies: proposal.subAgencies,
+        projectLeader: proposal.projectLeader,
+        projectCoordinator: proposal.projectCoordinator,
+        durationMonths: proposal.durationMonths,
+        outlayLakhs: proposal.outlayLakhs
+      },
+      supportingDocs: proposal.supportingDocs,
+      createdBy: req.user._id
+    });
+  } else {
+    // Promote the draft version
+    await ProposalVersion.promoteDraftToMajor(
+      proposal._id,
+      commitMessage || `Version ${newMajorVersion}`,
+      req.user._id
+    );
+  }
+
+  // Update proposal with new current version (major version)
+  proposal.currentVersion = newMajorVersion;
+  await proposal.save();
+
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'VERSION_SUBMITTED',
+    proposalId: proposal._id,
+    details: { 
+      proposalCode: proposal.proposalCode,
+      previousVersion: currentDraftVersion,
+      newVersion: newMajorVersion,
+      commitMessage: commitMessage || `Version ${newMajorVersion}`
+    },
+    ipAddress: req.ip
+  });
+
+  res.json({
+    success: true,
+    message: `Version ${newMajorVersion} submitted successfully`,
+    data: {
+      proposalCode: proposal.proposalCode,
+      status: proposal.status,
+      version: newMajorVersion,
+      commitMessage: commitMessage || `Version ${newMajorVersion}`
+    }
+  });
+};
 
 /**
  * @route   GET /api/proposals/:proposalId/track
@@ -931,3 +1151,68 @@ export const deleteFormI = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * @route   POST /api/proposals/:proposalId/beacon-save
+ * @desc    Save proposal data via sendBeacon (for page close scenarios)
+ *          Saves directly to proposal.forms for DRAFT proposals
+ * @access  Private (via query token)
+ */
+export const beaconSave = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  
+  console.log('[BEACON SAVE] Received save request for proposal:', proposalId);
+  
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+  
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+  
+  try {
+    const { forms, formi, title, fundingMethod, principalAgency, projectLeader, projectCoordinator, durationMonths, outlayLakhs } = req.body;
+    
+    // Update forms if provided - accept both forms and formi
+    const formContent = formi || forms;
+    if (formContent) {
+      proposal.forms = formContent;
+      console.log('[BEACON SAVE] Updated forms');
+    }
+    
+    // Update other fields if provided
+    if (title) proposal.title = title;
+    if (fundingMethod) proposal.fundingMethod = fundingMethod;
+    if (principalAgency) proposal.principalAgency = principalAgency;
+    if (projectLeader) proposal.projectLeader = projectLeader;
+    if (projectCoordinator) proposal.projectCoordinator = projectCoordinator;
+    if (durationMonths !== undefined) proposal.durationMonths = durationMonths;
+    if (outlayLakhs !== undefined) proposal.outlayLakhs = outlayLakhs;
+    
+    await proposal.save({ validateModifiedOnly: true });
+    
+    console.log('[BEACON SAVE] Successfully saved proposal:', proposalId, 'version:', proposal.currentVersion);
+    
+    res.json({
+      success: true,
+      message: 'Proposal saved via beacon',
+      version: proposal.currentVersion
+    });
+  } catch (error) {
+    console.error('[BEACON SAVE] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save proposal',
+      error: error.message
+    });
+  }
+});

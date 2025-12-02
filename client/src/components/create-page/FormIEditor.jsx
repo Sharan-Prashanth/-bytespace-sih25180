@@ -1,24 +1,56 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { FiUpload, FiFile, FiX, FiRefreshCw } from 'react-icons/fi';
 import AdvancedProposalEditor from '../ProposalEditor/editor (our files)/AdvancedProposalEditor';
 import { uploadFormI, deleteFormI } from '../../utils/proposalApi';
 
-const FormIEditor = ({ 
+const FormIEditor = forwardRef(({ 
   editorContent,
   uploadedPdf,
   onContentChange, 
   onPdfUpload,
   onPdfRemove,
-  onSave,
+  onManualSave,
+  onAutoSave,
   lastSavedTime,
   isAutoSaving,
-  proposalCode
-}) => {
+  proposalCode,
+  isNewProposal = true,
+  theme = 'light'
+}, ref) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [extractionError, setExtractionError] = useState(null);
   const editorRef = useRef(null);
+
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const mutedText = isDark ? 'text-slate-400' : 'text-black';
+  const innerCardBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-slate-50 border-slate-200';
+  const uploadedFileBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-200';
+  const hoverBg = isDark ? 'hover:bg-white/5 hover:border-slate-500' : 'hover:bg-slate-100 hover:border-slate-400';
+  const spinnerBorder = isDark ? 'border-blue-400/30 border-t-blue-400' : 'border-blue-200 border-t-blue-600';
+  const editorHeaderBg = isDarkest ? 'bg-neutral-800' : isDark ? 'bg-slate-700' : 'bg-slate-100';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-slate-200';
+  
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    getEditorContent: () => {
+      if (editorRef.current && editorRef.current.getEditorContent) {
+        return editorRef.current.getEditorContent();
+      }
+      return null;
+    },
+    getFormData: () => {
+      if (editorRef.current && editorRef.current.getFormData) {
+        return editorRef.current.getFormData();
+      }
+      return null;
+    }
+  }));
 
   const handleFormUpload = async (event) => {
     const file = event.target.files[0];
@@ -175,19 +207,19 @@ const FormIEditor = ({
   };
 
   return (
-    <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+    <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
       <div className="mb-4">
-        <h2 className="text-xl font-semibold text-black mb-2">Form I - Project Proposal</h2>
-        <p className="text-black/70 text-sm mb-4">
+        <h2 className={`text-xl font-semibold ${textColor} mb-2`}>Form I - Project Proposal</h2>
+        <p className={`${mutedText} text-sm mb-4`}>
           You can upload a pre-filled PDF form (the content will be extracted and loaded into the editor) or fill the form directly in the editor below. 
           If you upload a document, you can make minor corrections afterward. 
           <span className="font-medium"> Note: Please upload any images in your document separately and directly into the editor.</span>
         </p>
 
         {/* Upload Section */}
-        <div className="bg-black/5 border border-black/10 rounded-lg p-4 mb-4">
+        <div className={`${innerCardBg} border rounded-lg p-4 mb-4`}>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-black">Upload Pre-filled Form (Optional)</h3>
+            <h3 className={`text-sm font-semibold ${textColor}`}>Upload Pre-filled Form (Optional)</h3>
             <button
               onClick={() => {
                 const link = document.createElement('a');
@@ -197,7 +229,7 @@ const FormIEditor = ({
                 link.click();
                 document.body.removeChild(link);
               }}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-black text-black rounded-lg hover:bg-white transition-colors"
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg transition-colors ${isDark ? 'border-slate-600 text-white hover:bg-white/5' : 'border-black text-black hover:bg-black/5'}`}
             >
               <FiFile className="w-3.5 h-3.5" />
               Download Template
@@ -205,19 +237,19 @@ const FormIEditor = ({
           </div>
           
           {uploadedPdf ? (
-            <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-black/10">
+            <div className={`flex items-center justify-between ${uploadedFileBg} p-3 rounded-lg border`}>
               <div className="flex items-center gap-3">
-                <FiFile className="w-5 h-5 text-black" />
+                <FiFile className={`w-5 h-5 ${textColor}`} />
                 <div>
-                  <p className="text-sm font-medium text-black">{uploadedPdf.name}</p>
-                  <p className="text-xs text-black/60">
-                    {formatFileSize(uploadedPdf.size)} • Uploaded
+                  <p className={`text-sm font-medium ${textColor}`}>{uploadedPdf.name}</p>
+                  <p className={`text-xs ${mutedText}`}>
+                    {formatFileSize(uploadedPdf.size)} - Uploaded
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <label className="cursor-pointer">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors">
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}>
                     <FiRefreshCw className="w-4 h-4" />
                     <span className="text-sm">Re-upload</span>
                   </div>
@@ -231,24 +263,24 @@ const FormIEditor = ({
                 </label>
                 <button
                   onClick={handleRemoveForm}
-                  className="p-2 hover:bg-black/10 rounded-lg transition-colors"
+                  className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/10'}`}
                   title="Remove form"
                 >
-                  <FiX className="w-4 h-4 text-black" />
+                  <FiX className={`w-4 h-4 ${textColor}`} />
                 </button>
               </div>
             </div>
           ) : (
-            <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-black/20 rounded-lg cursor-pointer hover:border-black/40 hover:bg-white transition-all">
+            <label className={`flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isDark ? 'border-slate-600' : 'border-slate-300'} ${hoverBg}`}>
               {isUploading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
-                  <span className="text-sm text-black">Uploading...</span>
+                  <div className={`w-4 h-4 border-2 ${spinnerBorder} rounded-full animate-spin`}></div>
+                  <span className={`text-sm ${textColor}`}>Uploading...</span>
                 </>
               ) : (
                 <>
-                  <FiUpload className="w-4 h-4 text-black" />
-                  <span className="text-sm text-black">Click to upload PDF (max 20 MB)</span>
+                  <FiUpload className={`w-4 h-4 ${textColor}`} />
+                  <span className={`text-sm ${textColor}`}>Click to upload PDF (max 20 MB)</span>
                 </>
               )}
               <input
@@ -263,20 +295,20 @@ const FormIEditor = ({
 
           {/* Extraction Progress */}
           {isExtracting && (
-            <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className={`mt-3 rounded-lg p-3 ${isDark ? 'bg-blue-900/30 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-blue-900">
+                <span className={`text-sm font-medium ${isDark ? 'text-blue-300' : 'text-blue-900'}`}>
                   Extracting content from PDF...
                 </span>
-                <span className="text-sm text-blue-700">{extractionProgress}%</span>
+                <span className={`text-sm ${isDark ? 'text-blue-400' : 'text-blue-700'}`}>{extractionProgress}%</span>
               </div>
-              <div className="w-full bg-blue-200 rounded-full h-2">
+              <div className={`w-full rounded-full h-2 ${isDark ? 'bg-blue-900/50' : 'bg-blue-200'}`}>
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${extractionProgress}%` }}
                 ></div>
               </div>
-              <p className="text-xs text-blue-700 mt-2">
+              <p className={`text-xs mt-2 ${isDark ? 'text-blue-400' : 'text-blue-700'}`}>
                 Please wait while we process your document using AI...
               </p>
             </div>
@@ -284,23 +316,23 @@ const FormIEditor = ({
 
           {/* Extraction Error */}
           {extractionError && (
-            <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className={`mt-3 rounded-lg p-3 ${isDark ? 'bg-red-900/30 border border-red-800' : 'bg-red-50 border border-red-200'}`}>
               <div className="flex items-start gap-2">
-                <FiX className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <FiX className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-red-900 mb-1">
+                  <p className={`text-sm font-medium mb-1 ${isDark ? 'text-red-300' : 'text-red-900'}`}>
                     Extraction Failed
                   </p>
-                  <p className="text-xs text-red-700">
+                  <p className={`text-xs ${isDark ? 'text-red-400' : 'text-red-700'}`}>
                     {extractionError}
                   </p>
-                  <p className="text-xs text-red-600 mt-2">
+                  <p className={`text-xs mt-2 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
                     The PDF was uploaded successfully. You can manually fill the form below or try uploading again.
                   </p>
                 </div>
                 <button
                   onClick={() => setExtractionError(null)}
-                  className="text-red-600 hover:text-red-800"
+                  className={`${isDark ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-800'}`}
                 >
                   <FiX className="w-4 h-4" />
                 </button>
@@ -311,29 +343,35 @@ const FormIEditor = ({
       </div>
 
       {/* Editor Section */}
-      <div className="border border-black/10 rounded-lg overflow-hidden">
-        <div className="bg-black/5 px-4 py-2 border-b border-black/10">
-          <span className="text-sm font-medium text-black">Editor</span>
+      <div className={`border ${borderColor} rounded-lg overflow-hidden`}>
+        <div className={`${editorHeaderBg} px-4 py-2 border-b ${borderColor}`}>
+          <span className={`text-sm font-medium ${textColor}`}>Editor</span>
         </div>
 
-        <div className="bg-white" style={{ minHeight: '500px' }}>
+        <div style={{ minHeight: '500px' }}>
           <AdvancedProposalEditor
             ref={editorRef}
             mode="create"
             initialContent={editorContent}
+            isNewProposal={isNewProposal}
             onContentChange={(data) => {
               if (onContentChange) {
                 onContentChange(data);
               }
             }}
+            onManualSave={onManualSave}
+            onAutoSave={onAutoSave}
             proposalTitle="Form I - Project Proposal"
             showStats={true}
             readOnly={isExtracting}
+            theme={theme}
           />
         </div>
       </div>
     </div>
   );
-};
+});
+
+FormIEditor.displayName = 'FormIEditor';
 
 export default FormIEditor;

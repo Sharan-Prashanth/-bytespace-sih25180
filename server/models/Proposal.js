@@ -8,18 +8,18 @@ const proposalSchema = new mongoose.Schema({
   },
   title: {
     type: String,
-    required: [true, 'Project title is required'],
+    default: '',
     maxlength: [150, 'Title cannot exceed 150 characters'],
     trim: true
   },
   fundingMethod: {
     type: String,
-    required: [true, 'Funding method is required'],
+    default: 'S&T of MoC',
     enum: ['S&T of MoC', 'R&D of CIL']
   },
   principalAgency: {
     type: String,
-    required: [true, 'Principal implementing agency is required'],
+    default: '',
     trim: true
   },
   subAgencies: [{
@@ -28,23 +28,23 @@ const proposalSchema = new mongoose.Schema({
   }],
   projectLeader: {
     type: String,
-    required: [true, 'Project leader is required'],
+    default: '',
     trim: true
   },
   projectCoordinator: {
     type: String,
-    required: [true, 'Project coordinator is required'],
+    default: '',
     trim: true
   },
   durationMonths: {
     type: Number,
-    required: [true, 'Project duration is required'],
-    min: [1, 'Duration must be at least 1 month']
+    default: 0,
+    min: [0, 'Duration cannot be negative']
   },
   outlayLakhs: {
     type: Number,
-    required: [true, 'Project outlay is required'],
-    min: [0, 'Outlay must be a positive number']
+    default: 0,
+    min: [0, 'Outlay cannot be negative']
   },
   status: {
     type: String,
@@ -65,10 +65,16 @@ const proposalSchema = new mongoose.Schema({
     ],
     default: 'DRAFT'
   },
-  // Version tracking (integer versions: 0=draft, 1=initial submission, 2+=revisions)
+  // Version tracking using decimal notation:
+  // - 0.1: Initial draft (not submitted yet)
+  // - 1: First submission (after initial submit)
+  // - 1.1: Working draft on collaborate page (not submitted)
+  // - 2: Second submission (after resubmit from collaborate)
+  // - 2.1: Another working draft, etc.
+  // Minor versions (x.1) are always drafts, major versions (1, 2, 3) are submitted
   currentVersion: {
     type: Number,
-    default: 0
+    default: 0.1
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -113,31 +119,11 @@ const proposalSchema = new mongoose.Schema({
       default: 'PENDING'
     }
   }],
+  // Store only Form I content (single form) using Plate.js structure
+  // Format: { formi: { content: [...], wordCount: number, characterCount: number } }
   forms: {
-    formI: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null
-    },
-    formIA: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null
-    },
-    formIX: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null
-    },
-    formX: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null
-    },
-    formXI: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null
-    },
-    formXII: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null
-    }
+    type: mongoose.Schema.Types.Mixed,
+    default: null
   },
   supportingDocs: [{
     formName: String,
@@ -146,6 +132,15 @@ const proposalSchema = new mongoose.Schema({
     s3Key: String,
     fileSize: Number,
     uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  // Track embedded images in editor content for cleanup on deletion
+  embeddedImages: [{
+    url: String,
+    s3Key: String,
+    addedAt: {
       type: Date,
       default: Date.now
     }
@@ -183,6 +178,19 @@ proposalSchema.index({ createdBy: 1, status: 1 });
 proposalSchema.index({ proposalCode: 1 });
 proposalSchema.index({ 'assignedReviewers.reviewer': 1 });
 proposalSchema.index({ 'collaborators.userId': 1 });
+
+// Virtual field 'formi' that maps to 'forms' for frontend compatibility
+proposalSchema.virtual('formi')
+  .get(function() {
+    return this.forms;
+  })
+  .set(function(value) {
+    this.forms = value;
+  });
+
+// Ensure virtuals are included in JSON output
+proposalSchema.set('toJSON', { virtuals: true });
+proposalSchema.set('toObject', { virtuals: true });
 
 // Add timeline entry before status change
 proposalSchema.pre('save', function(next) {

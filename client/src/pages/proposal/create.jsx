@@ -9,6 +9,7 @@ import { useToast, ToastContainer } from '../../components/ui (plate files)/toas
 import ProposalStorage from '../../utils/proposalStorage';
 import { createProposal, updateProposal, submitProposal, getProposalById, getProposals } from '../../utils/proposalApi';
 import '../../utils/clearProposalStorage'; // Enable global clearProposalStorage() function
+import { Moon, Sun, MoonStar } from 'lucide-react';
 
 // Import new modular components
 import Header from '../../components/create-page/Header';
@@ -29,15 +30,60 @@ function CreateNewProposalContent() {
   const { user } = useAuth();
   const { toasts, removeToast, success, error, info } = useToast();
   
+  // Theme state
+  const [theme, setTheme] = useState('light');
+  
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('dashboard-theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  // Apply dark class to document for CSS variable support
+  useEffect(() => {
+    const isDarkMode = theme === 'dark' || theme === 'darkest';
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    // Cleanup on unmount
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard-theme', newTheme);
+  };
+
+  // Theme helper variables
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  
+  // Theme-based classes
+  const bgClass = isDarkest ? 'bg-black' : isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-50 to-slate-100';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const subTextColor = isDark ? 'text-slate-400' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-200';
+  
   // Storage instance
   const storageRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
   const hasUnsavedChangesRef = useRef(false);
+  const formIEditorRef = useRef(null);
 
   // Proposal metadata
   const [proposalId, setProposalId] = useState(null);
   const [proposalCode, setProposalCode] = useState(null);
-  const [currentVersion, setCurrentVersion] = useState(0.1);
+  const [proposalStatus, setProposalStatus] = useState('DRAFT');
+  const [currentVersion, setCurrentVersion] = useState(0.1); // Drafts start at 0.1
   const [isLoading, setIsLoading] = useState(true);
 
   // Proposal Information State
@@ -64,6 +110,7 @@ function CreateNewProposalContent() {
   // Form I Editor Content
   const [formIContent, setFormIContent] = useState(null);
   const [formIUploadedPdf, setFormIUploadedPdf] = useState(null);
+  const [isNewProposal, setIsNewProposal] = useState(true); // Track if this is a new proposal vs continuing draft
 
   // Additional Forms State (IA, IX, X, XI, XII)
   const [additionalForms, setAdditionalForms] = useState({
@@ -120,37 +167,24 @@ function CreateNewProposalContent() {
         // Initialize storage
         storageRef.current = new ProposalStorage();
         
-        // Check if there's an existing draft in localStorage
-        const localData = storageRef.current.initialize('new');
+        // Check for draft query parameter - only load draft if explicitly requested
+        const draftId = router.query.draft;
         
-        // Validate and fix fundingMethod in local storage
-        if (localData?.proposalInfo?.fundingMethod) {
-          const normalized = normalizeFundingMethod(localData.proposalInfo.fundingMethod);
-          if (normalized !== localData.proposalInfo.fundingMethod) {
-            // Update localStorage with correct value
-            storageRef.current.save({
-              proposalInfo: {
-                ...localData.proposalInfo,
-                fundingMethod: normalized
-              }
-            }, false);
-          }
-        }
-        
-        // Try to load latest draft from backend
-        try {
-          const response = await getProposals({ status: 'DRAFT', limit: 1 });
-          if (response.data.proposals && response.data.proposals.length > 0) {
-            const draft = response.data.proposals[0];
-            
-            // Load from backend
-            const fullDraft = await getProposalById(draft._id);
+        if (draftId) {
+          // User clicked "Continue Draft" - load the specific draft
+          // Initialize storage with the draft ID first
+          storageRef.current.initialize(draftId);
+          setIsNewProposal(false); // This is continuing an existing draft
+          
+          try {
+            const fullDraft = await getProposalById(draftId);
             const draftData = fullDraft.data;
             
             // Update state
             setProposalId(draftData._id);
             setProposalCode(draftData.proposalCode);
-            setCurrentVersion(draftData.currentVersion);
+            setProposalStatus(draftData.status || 'DRAFT');
+            setCurrentVersion(draftData.currentVersion || 0.1); // Drafts are 0.1
             setProposalInfo({
               title: draftData.title || '',
               fundingMethod: normalizeFundingMethod(draftData.fundingMethod || 'S&T of MoC'),
@@ -162,9 +196,9 @@ function CreateNewProposalContent() {
               projectOutlayLakhs: draftData.outlayLakhs || '',
             });
             
-            // Set form content
-            if (draftData.forms?.formI) {
-              setFormIContent(draftData.forms.formI);
+            // Set form content - use formi field (single form storage)
+            if (draftData.formi) {
+              setFormIContent(draftData.formi);
             }
             
             // Set documents from supportingDocs array
@@ -220,7 +254,7 @@ function CreateNewProposalContent() {
                 projectDurationMonths: draftData.durationMonths || '',
                 projectOutlayLakhs: draftData.outlayLakhs || '',
               },
-              formIContent: draftData.forms?.formI,
+              formIContent: draftData.formi, // Use formi field
               formIUploadedPdf: docMap.formIPdf || null,
               initialDocuments: {
                 coveringLetter: docMap.coveringLetter || null,
@@ -243,13 +277,22 @@ function CreateNewProposalContent() {
                 researchContent: docMap.researchContent || null,
                 collaboration: docMap.collaboration || null
               },
-              currentVersion: draftData.currentVersion,
+              currentVersion: draftData.currentVersion || 0.1,
             }, false);
             
             info('Draft proposal loaded');
+          } catch (err) {
+            console.error('Failed to load draft:', err);
+            error('Failed to load draft proposal');
+            // Clear the draft param and start fresh
+            router.replace('/proposal/create', undefined, { shallow: true });
           }
-        } catch (err) {
-          console.log('No existing draft found, starting fresh');
+        } else {
+          // No draft param - user clicked "New Proposal" - start fresh
+          // Clear any existing localStorage data for new proposals
+          storageRef.current.clear();
+          storageRef.current.initialize('new');
+          setIsNewProposal(true); // This is a new proposal
         }
         
         setIsLoading(false);
@@ -260,7 +303,10 @@ function CreateNewProposalContent() {
       }
     };
     
-    initializeProposal();
+    // Wait for router to be ready before initializing
+    if (router.isReady) {
+      initializeProposal();
+    }
     
     // Cleanup on unmount
     return () => {
@@ -268,7 +314,7 @@ function CreateNewProposalContent() {
         clearInterval(autoSaveTimerRef.current);
       }
     };
-  }, []);
+  }, [router.isReady, router.query.draft]);
 
   // Setup auto-save timer (every 30 seconds)
   useEffect(() => {
@@ -289,17 +335,51 @@ function CreateNewProposalContent() {
 
   // Handle page exit/navigation - save to backend
   useEffect(() => {
-    const handleBeforeUnload = async (e) => {
-      if (hasUnsavedChangesRef.current) {
-        e.preventDefault();
-        e.returnValue = '';
-        await saveToBackend();
+    const handleBeforeUnload = (e) => {
+      // Get latest content and try to save synchronously using sendBeacon
+      // Note: async operations don't work reliably in beforeunload
+      if (formIEditorRef.current) {
+        try {
+          const latestContent = formIEditorRef.current.getFormData();
+          if (latestContent && proposalId) {
+            // Use sendBeacon for reliable data sending on page close
+            const token = localStorage.getItem('token');
+            const payload = JSON.stringify({
+              formi: latestContent, // Single form field
+              title: proposalInfo.title,
+              fundingMethod: proposalInfo.fundingMethod,
+              principalAgency: proposalInfo.principalImplementingAgency,
+              projectLeader: proposalInfo.projectLeader,
+              projectCoordinator: proposalInfo.projectCoordinator,
+              durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
+              outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0
+            });
+            
+            // Create a Blob with proper content type for the beacon
+            const blob = new Blob([payload], { type: 'application/json' });
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+            navigator.sendBeacon(`${apiUrl}/api/proposals/${proposalId}/beacon-save?token=${token}`, blob);
+            console.log('[SAVE] Sent beacon save on page close');
+          }
+        } catch (err) {
+          console.error('Failed to save draft on page close:', err);
+        }
       }
     };
     
-    const handleRouteChange = async () => {
-      if (hasUnsavedChangesRef.current) {
-        await saveToBackend();
+    const handleRouteChange = async (url) => {
+      // Skip if navigating to dashboard (handleBackToDashboard handles this)
+      if (url.includes('/dashboard')) return;
+      
+      try {
+        const latestContent = formIEditorRef.current?.getFormData();
+        if (latestContent) {
+          await saveToBackendWithContent(latestContent);
+          console.log('[SAVE] Saved on route change');
+        }
+      } catch (err) {
+        console.error('Failed to save draft on route change:', err);
+        // Don't block navigation
       }
     };
     
@@ -310,7 +390,7 @@ function CreateNewProposalContent() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       router.events?.off('routeChangeStart', handleRouteChange);
     };
-  }, [router]);
+  }, [router, proposalId, proposalInfo]);
 
   // Validate proposal info
   useEffect(() => {
@@ -384,6 +464,11 @@ function CreateNewProposalContent() {
 
   // Save to backend (on navigation/exit)
   const saveToBackend = async () => {
+    return saveToBackendWithContent(formIContent);
+  };
+  
+  // Save to backend with specific content (called from manual save and back to dashboard)
+  const saveToBackendWithContent = async (formContent) => {
     if (!storageRef.current || isSavingToBackend) return;
     
     setIsSavingToBackend(true);
@@ -451,6 +536,10 @@ function CreateNewProposalContent() {
         }
       });
       
+      // Use the provided formContent (latest from editor) or fall back to state
+      const editorContentToSave = formContent || formIContent;
+      console.log('[SAVE] saveToBackendWithContent - editorContentToSave:', editorContentToSave);
+      
       const proposalData = {
         title: proposalInfo.title,
         fundingMethod: normalizeFundingMethod(proposalInfo.fundingMethod),
@@ -460,16 +549,15 @@ function CreateNewProposalContent() {
         projectCoordinator: proposalInfo.projectCoordinator,
         durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
         outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0,
-        forms: {
-          formI: formIContent
-        },
+        formi: editorContentToSave, // Single form field
         supportingDocs
       };
       
       // Debug log to verify correct values
       console.log('Sending proposal data to backend:', {
         fundingMethod: proposalData.fundingMethod,
-        title: proposalData.title
+        title: proposalData.title,
+        hasFormI: !!proposalData.formi
       });
       
       if (proposalId) {
@@ -533,6 +621,7 @@ function CreateNewProposalContent() {
 
   // Handle Form I content change
   const handleFormIContentChange = (data) => {
+    console.log('[EDITOR] handleFormIContentChange called with:', data);
     setFormIContent(data);
     hasUnsavedChangesRef.current = true;
     storageRef.current?.markDirty();
@@ -546,12 +635,47 @@ function CreateNewProposalContent() {
     }
   }, [formIUploadedPdf]);
 
-  // Handle Form I save (manual save button)
-  const handleFormISave = async (data, isAutoSave = false) => {
-    if (!isAutoSave) {
-      // Manual save - trigger immediate auto-save
+  // Handle Form I manual save (called from AdvancedProposalEditor's handleManualSave)
+  const handleFormIManualSave = async (formDataStore) => {
+    console.log('[SAVE] handleFormIManualSave called with formDataStore:', formDataStore);
+    
+    try {
+      // Update formIContent state with the latest editor content
+      if (formDataStore) {
+        setFormIContent(formDataStore);
+      }
+      
+      // Mark as dirty and save to localStorage
+      hasUnsavedChangesRef.current = true;
+      storageRef.current?.markDirty();
       handleAutoSave();
+      
+      // Also save to backend immediately
+      await saveToBackendWithContent(formDataStore);
+      
       success('Form I saved successfully');
+    } catch (err) {
+      console.error('Manual save error:', err);
+      error('Failed to save Form I');
+    }
+  };
+  
+  // Handle Form I auto save (called from AdvancedProposalEditor's auto-save)
+  const handleFormIAutoSave = async (formDataStore) => {
+    console.log('[SAVE] handleFormIAutoSave called with formDataStore:', formDataStore);
+    
+    try {
+      // Update formIContent state with the latest editor content
+      if (formDataStore) {
+        setFormIContent(formDataStore);
+      }
+      
+      // Mark as dirty and save to localStorage
+      hasUnsavedChangesRef.current = true;
+      storageRef.current?.markDirty();
+      handleAutoSave();
+    } catch (err) {
+      console.error('Auto save error:', err);
     }
   };
 
@@ -599,15 +723,35 @@ function CreateNewProposalContent() {
     info('Supporting document removed');
   };
 
+  // Helper function to get the latest editor content
+  const getLatestEditorContent = () => {
+    if (formIEditorRef.current) {
+      const editorData = formIEditorRef.current.getFormData();
+      if (editorData) {
+        console.log('[SAVE] Got latest content from editor ref');
+        return editorData;
+      }
+    }
+    console.log('[SAVE] Using formIContent state');
+    return formIContent;
+  };
+
   // Handle back to dashboard
   const handleBackToDashboard = async () => {
-    // Save to backend before navigating
+    // Try to save to backend before navigating, but don't block if it fails
     try {
-      await saveToBackend();
-      router.push('/dashboard');
+      // Always get the latest editor content before saving
+      const latestContent = getLatestEditorContent();
+      console.log('[SAVE] handleBackToDashboard - saving with content:', latestContent ? 'has content' : 'no content');
+      
+      if (latestContent) {
+        await saveToBackendWithContent(latestContent);
+      }
     } catch (err) {
-      error('Failed to save proposal before leaving');
+      console.error('Failed to save draft before leaving:', err);
+      // Don't block navigation - user may have an empty/incomplete draft
     }
+    router.push('/dashboard');
   };
 
   // Validate all required fields before submission
@@ -685,10 +829,15 @@ function CreateNewProposalContent() {
     setShowConfirmationModal(false);
 
     try {
-      // First, save to backend if not already saved
-      if (!proposalId) {
-        await saveToBackend();
-      }
+      // Always get the latest editor content before saving
+      const latestContent = getLatestEditorContent();
+      console.log('[SUBMIT] Saving with latest editor content:', latestContent ? 'has content' : 'no content');
+      
+      // Save to backend with latest content
+      await saveToBackendWithContent(latestContent);
+      
+      // Wait a moment for save to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Mock AI evaluation process
       info('AI evaluation in progress...');
@@ -721,57 +870,95 @@ function CreateNewProposalContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center transition-colors duration-300`}>
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-black text-lg">Loading proposal...</p>
+          <div className={`w-16 h-16 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/10 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+          <p className={`${textColor} text-lg`}>Loading proposal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black/5">
+    <div className={`min-h-screen ${bgClass} transition-colors duration-300`}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* Header with back button */}
-      <div className="bg-white border-b border-black/10">
+      <div className={`${cardBg} border-b ${borderColor}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={handleBackToDashboard}
-              className="px-4 py-2 text-sm border border-black/20 text-black rounded-lg hover:bg-black/5 transition-colors"
+              className={`flex items-center gap-2 px-4 py-2 text-sm border rounded-lg transition-colors ${isDark ? `border-slate-600 ${textColor} hover:bg-white/5` : `border-slate-300 ${textColor} hover:bg-black/5`}`}
             >
-              ← Back to Dashboard
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Dashboard
             </button>
             {proposalCode && (
-              <div className="text-sm text-black/60">
-                Code: <span className="font-mono font-semibold">{proposalCode}</span>
-                {' '} | Version: <span className="font-semibold">{currentVersion}</span>
+              <div className={`flex items-center gap-3 text-sm ${textColor}`}>
+                <span>Code: <span className="font-mono font-semibold">{proposalCode}</span></span>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-slate-700 border border-slate-600' : 'bg-slate-200 border border-slate-300'}`}>
+                  {proposalStatus === 'DRAFT' ? 'Draft v0.1' : `v${currentVersion}`}
+                </span>
               </div>
             )}
           </div>
-          {lastSavedTime && (
-            <div className="text-sm text-black/60">
-              {isAutoSaving ? 'Saving...' : `Last saved: ${lastSavedTime.toLocaleTimeString()}`}
-            </div>
-          )}
+          
+          {/* Right side: Last saved, Date, Theme toggle */}
+          <div className="flex items-center gap-4">
+            {lastSavedTime && (
+              <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-black'}`}>
+                {isAutoSaving ? (
+                  <span className="flex items-center gap-2">
+                    <div className={`w-3 h-3 border-2 ${isDark ? 'border-white/30 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin`}></div>
+                    Saving...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <svg className={`w-4 h-4 ${textColor}`} fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Last saved: {lastSavedTime.toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+            )}
+            <span className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-black'}`}>
+              {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-black/5 text-black'}`}
+              title={theme === 'light' ? 'Switch to Dark Mode' : theme === 'dark' ? 'Switch to Darkest Mode' : 'Switch to Light Mode'}
+            >
+              {theme === 'light' ? (
+                <Moon className="w-5 h-5" />
+              ) : theme === 'dark' ? (
+                <MoonStar className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Guidelines */}
-        <Guidelines />
+        <Guidelines theme={theme} />
 
         {/* Pre-submission info */}
-        <PreSubmissionInfo />
+        <PreSubmissionInfo theme={theme} />
 
         {/* Proposal Information */}
         <ProposalInformation
           proposalInfo={proposalInfo}
           validationErrors={validationErrors}
           onChange={handleInfoChange}
+          theme={theme}
         />
 
         {/* Initial Documents */}
@@ -780,29 +967,34 @@ function CreateNewProposalContent() {
           onDocumentUpload={handleInitialDocumentUpload}
           onDocumentRemove={handleInitialDocumentRemove}
           proposalCode={proposalCode}
+          theme={theme}
         />
 
         {/* Form I Editor */}
         <Suspense fallback={
-          <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+          <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="w-12 h-12 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-black">Loading editor...</p>
+                <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/10 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+                <p className={textColor}>Loading editor...</p>
               </div>
             </div>
           </div>
         }>
           <FormIEditor
+            ref={formIEditorRef}
             editorContent={formIContent}
             uploadedPdf={formIUploadedPdf}
             onContentChange={handleFormIContentChange}
             onPdfUpload={setFormIUploadedPdf}
             onPdfRemove={() => setFormIUploadedPdf(null)}
-            onSave={handleFormISave}
+            onManualSave={handleFormIManualSave}
+            onAutoSave={handleFormIAutoSave}
             lastSavedTime={lastSavedTime}
             isAutoSaving={isAutoSaving}
             proposalCode={proposalCode}
+            isNewProposal={isNewProposal}
+            theme={theme}
           />
         </Suspense>
 
@@ -812,6 +1004,7 @@ function CreateNewProposalContent() {
           onFormUpload={handleAdditionalFormUpload}
           onFormRemove={handleAdditionalFormRemove}
           proposalCode={proposalCode}
+          theme={theme}
         />
 
         {/* Supporting Documents */}
@@ -820,6 +1013,7 @@ function CreateNewProposalContent() {
           onDocumentUpload={handleSupportingDocumentUpload}
           onDocumentRemove={handleSupportingDocumentRemove}
           proposalCode={proposalCode}
+          theme={theme}
         />
 
         {/* Submit Button */}
@@ -827,7 +1021,7 @@ function CreateNewProposalContent() {
           <button
             onClick={handleSubmitClick}
             disabled={isSavingToBackend}
-            className="px-8 py-3 bg-black text-white rounded-lg hover:bg-black/90 transition-colors font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`px-8 py-3 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}
           >
             {isSavingToBackend ? 'Saving...' : 'Submit Proposal'}
           </button>
@@ -846,6 +1040,7 @@ function CreateNewProposalContent() {
           supportingDocuments,
           formIContent,
         }}
+        theme={theme}
       />
 
       {/* Success Modal */}
@@ -853,6 +1048,7 @@ function CreateNewProposalContent() {
         isOpen={showSuccessModal}
         onClose={handleSuccessModalClose}
         proposalId={submittedProposalId}
+        theme={theme}
       />
 
       {/* Chatbot */}

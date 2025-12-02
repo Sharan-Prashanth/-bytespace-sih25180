@@ -8,11 +8,23 @@ const CollaboratorsModal = ({
   collaborators = [],
   canInvite = false,
   onInvite,
-  currentCICount = 0 
+  currentCICount = 0,
+  theme = 'light'
 }) => {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
+
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const modalBg = isDarkest ? 'bg-neutral-900' : isDark ? 'bg-slate-800' : 'bg-white';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/10';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
+  const itemBg = isDark ? 'bg-white/10' : 'bg-black/5';
+  const inputBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-white border-black/20';
+  const buttonBg = isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90';
 
   if (!isOpen) return null;
 
@@ -51,12 +63,12 @@ const CollaboratorsModal = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className={`relative ${modalBg} rounded-lg shadow-xl max-w-md w-full mx-4`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-black/10">
-          <h2 className="text-lg font-semibold text-black">Collaborators</h2>
-          <button onClick={onClose} className="p-1 hover:bg-black/5 rounded transition-colors">
-            <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={`flex items-center justify-between p-4 border-b ${borderColor}`}>
+          <h2 className={`text-lg font-semibold ${textColor}`}>Collaborators</h2>
+          <button onClick={onClose} className={`p-1 ${hoverBg} rounded transition-colors`}>
+            <svg className={`w-5 h-5 ${textColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -65,23 +77,23 @@ const CollaboratorsModal = ({
         {/* Content */}
         <div className="p-4 max-h-80 overflow-y-auto">
           {collaborators.length === 0 ? (
-            <p className="text-center text-black text-sm py-4">No collaborators yet.</p>
+            <p className={`text-center ${textColor} text-sm py-4`}>No collaborators yet.</p>
           ) : (
             <div className="space-y-2">
               {collaborators.map((collaborator, index) => (
                 <div 
                   key={collaborator._id || collaborator.id || index}
-                  className="flex items-center justify-between p-3 bg-black/5 rounded-lg"
+                  className={`flex items-center justify-between p-3 ${itemBg} rounded-lg`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-black/10 rounded-full flex items-center justify-center text-sm font-semibold text-black">
+                    <div className={`w-8 h-8 ${isDark ? 'bg-white/20' : 'bg-black/10'} rounded-full flex items-center justify-center text-sm font-semibold ${textColor}`}>
                       {collaborator.user?.fullName?.charAt(0) || collaborator.fullName?.charAt(0) || 'U'}
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-black">
+                      <div className={`text-sm font-semibold ${textColor}`}>
                         {collaborator.user?.fullName || collaborator.fullName || 'Unknown'}
                       </div>
-                      <div className="text-xs text-black">
+                      <div className={`text-xs ${textColor}`}>
                         {formatRole(collaborator.role)}
                       </div>
                     </div>
@@ -97,9 +109,9 @@ const CollaboratorsModal = ({
 
         {/* Invite Section */}
         {canInvite && (
-          <div className="p-4 border-t border-black/10">
+          <div className={`p-4 border-t ${borderColor}`}>
             {currentCICount >= 5 ? (
-              <p className="text-sm text-black text-center">Maximum 5 co-investigators reached.</p>
+              <p className={`text-sm ${textColor} text-center`}>Maximum 5 co-investigators reached.</p>
             ) : showInviteForm ? (
               <div className="space-y-3">
                 <input
@@ -107,29 +119,29 @@ const CollaboratorsModal = ({
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="Enter email address"
-                  className="w-full px-3 py-2 border border-black/20 rounded-lg text-sm text-black focus:outline-none focus:ring-1 focus:ring-black/20"
+                  className={`w-full px-3 py-2 border ${inputBg} rounded-lg text-sm ${textColor} focus:outline-none focus:ring-1 focus:ring-white/20`}
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={handleInvite}
                     disabled={!inviteEmail.trim() || isInviting}
-                    className="flex-1 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-black/90 transition-colors disabled:opacity-50"
+                    className={`flex-1 px-4 py-2 ${buttonBg} text-sm font-medium rounded-lg transition-colors disabled:opacity-50`}
                   >
                     {isInviting ? 'Sending...' : 'Send Invite'}
                   </button>
                   <button
                     onClick={() => { setShowInviteForm(false); setInviteEmail(''); }}
-                    className="px-4 py-2 border border-black/20 text-black text-sm rounded-lg hover:bg-black/5 transition-colors"
+                    className={`px-4 py-2 border ${borderColor} ${textColor} text-sm rounded-lg ${hoverBg} transition-colors`}
                   >
                     Cancel
                   </button>
                 </div>
-                <p className="text-xs text-black">{5 - currentCICount} invitation(s) remaining</p>
+                <p className={`text-xs ${textColor}`}>{5 - currentCICount} invitation(s) remaining</p>
               </div>
             ) : (
               <button
                 onClick={() => setShowInviteForm(true)}
-                className="w-full px-4 py-2 border border-dashed border-black/30 text-black text-sm rounded-lg hover:bg-black/5 transition-colors"
+                className={`w-full px-4 py-2 border border-dashed ${borderColor} ${textColor} text-sm rounded-lg ${hoverBg} transition-colors`}
               >
                 Invite Co-Investigator
               </button>
@@ -138,10 +150,10 @@ const CollaboratorsModal = ({
         )}
 
         {/* Footer */}
-        <div className="p-4 border-t border-black/10">
+        <div className={`p-4 border-t ${borderColor}`}>
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-black/90 transition-colors"
+            className={`w-full px-4 py-2 ${buttonBg} text-sm font-medium rounded-lg transition-colors`}
           >
             Close
           </button>

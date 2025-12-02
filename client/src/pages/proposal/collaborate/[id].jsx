@@ -8,6 +8,7 @@ import LoadingScreen from '../../../components/LoadingScreen';
 import { useSocketCollaboration } from '../../../hooks/useSocketCollaboration';
 import { getCollaborateStorage } from '../../../utils/collaborateStorage';
 import apiClient from '../../../utils/api';
+import { Clock, MessageSquare, TrendingUp, ChevronDown, ChevronUp, FileCheck, Moon, Sun, MoonStar } from 'lucide-react';
 
 // Import modular collaborate page components
 import {
@@ -35,11 +36,54 @@ const AUTO_SAVE_INTERVAL = 30000;
 // Debounce delay for socket updates (5 seconds)
 const SOCKET_UPDATE_DELAY = 5000;
 
-
 function CollaborateContent() {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
+  
+  // Theme state
+  const [theme, setTheme] = useState('light');
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('dashboard-theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  // Apply dark class to document for CSS variable support
+  useEffect(() => {
+    const isDarkMode = theme === 'dark' || theme === 'darkest';
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    // Cleanup on unmount
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard-theme', newTheme);
+  };
+
+  // Theme helper variables
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  
+  // Theme-based classes
+  const bgClass = isDarkest ? 'bg-black' : isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-50 to-slate-100';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const subTextColor = isDark ? 'text-slate-400' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-200';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
   
   // Core state
   const [loading, setLoading] = useState(true);
@@ -77,6 +121,12 @@ function CollaborateContent() {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showTeamChat, setShowTeamChat] = useState(false);
   const [showSaarthi, setShowSaarthi] = useState(false);
+  const [fabExpanded, setFabExpanded] = useState(true);
+
+  // Draft version state
+  const [hasDraft, setHasDraft] = useState(false);
+  const [draftVersionLabel, setDraftVersionLabel] = useState('');
+
 
   // Initialize socket collaboration hook
   const {
@@ -191,20 +241,22 @@ function CollaborateContent() {
     };
   }, [id, proposal, isDirty, saveToLocalStorage]);
 
-  // Sync to DB on page unload/navigation
+  // Sync to DB on page unload/navigation - creates/updates x.1 draft version
   const syncToDatabase = useCallback(async () => {
     if (!id || !isDirty) return;
 
     try {
-      await apiClient.post(`/api/collaboration/${id}/sync`, {
+      // Use the new saveDraftVersion API to create/update x.1 draft
+      await apiClient.post(`/api/proposals/${id}/versions/draft`, {
+        formi: proposal?.formi || proposal?.forms?.formI,
         proposalInfo,
-        createMinorVersion: true
+        commitMessage: 'Auto-saved draft'
       });
-      console.log('[DB SYNC] Synced to database with new minor version');
+      console.log('[DB SYNC] Synced to database as draft version (x.1)');
     } catch (err) {
       console.error('[DB SYNC] Failed to sync:', err);
     }
-  }, [id, isDirty, proposalInfo]);
+  }, [id, isDirty, proposalInfo, proposal]);
 
   // Handle page unload
   useEffect(() => {
@@ -444,20 +496,22 @@ function CollaborateContent() {
 
   const handleSaveChanges = useCallback(async (versionData) => {
     try {
-      // Create new version via API
-      const response = await apiClient.post(`/api/proposals/${id}/versions`, {
-        commitMessage: versionData.commitMessage
-      });
-
-      console.log('[API] New version created:', response.data);
+      // The SaveChangesModal now handles the API call for promotion/creation
+      // We just need to update local state
 
       // Update proposal state with new version
       if (proposal) {
         setProposal(prev => ({
           ...prev,
-          currentVersion: versionData.version
+          currentVersion: versionData.version,
+          hasDraft: false,
+          draftVersionLabel: ''
         }));
       }
+
+      // Reset draft state
+      setHasDraft(false);
+      setDraftVersionLabel('');
 
       // Save to local storage as well
       saveToLocalStorage();
@@ -467,7 +521,7 @@ function CollaborateContent() {
       // Re-throw to let the modal handle the error
       throw new Error(err.response?.data?.message || 'Failed to create new version');
     }
-  }, [id, proposal, saveToLocalStorage]);
+  }, [proposal, saveToLocalStorage]);
 
   const handleSendChatMessage = useCallback((message) => {
     const newMessage = {
@@ -495,19 +549,33 @@ function CollaborateContent() {
         const storage = getCollaborateStorage(id);
         const cachedData = storage.getData();
 
-        // Fetch fresh data from API
-        const [proposalRes, collaboratorsRes, commentsRes] = await Promise.all([
+        // Fetch fresh data from API (including draft info)
+        const [proposalRes, collaboratorsRes, commentsRes, draftRes] = await Promise.all([
           apiClient.get(`/api/collaboration/proposals/${id}/collaborate`).catch(err => {
             console.warn('[API] Collaboration endpoint failed, trying proposals:', err);
             return apiClient.get(`/api/proposals/${id}`);
           }),
           apiClient.get(`/api/collaboration/${id}/collaborators`).catch(() => ({ data: { data: [] } })),
-          apiClient.get(`/api/proposals/${id}/comments`).catch(() => ({ data: { data: [] } }))
+          apiClient.get(`/api/proposals/${id}/comments`).catch(() => ({ data: { data: [] } })),
+          apiClient.get(`/api/proposals/${id}/versions/draft`).catch(() => ({ data: { data: null } }))
         ]);
 
         const proposalData = proposalRes.data.data || proposalRes.data;
         const collaboratorsData = collaboratorsRes.data.data || collaboratorsRes.data || [];
         const commentsData = commentsRes.data.data || commentsRes.data || [];
+        const draftData = draftRes.data.data || null;
+
+        // Set draft state - use decimal versioning (x.1 format)
+        if (draftData) {
+          setHasDraft(true);
+          // Use decimal version number (e.g., 1.1, 2.1)
+          const draftVersionNum = draftData.versionNumber || (proposalData.currentVersion + 0.1);
+          setDraftVersionLabel(`v${draftVersionNum}`);
+        } else if (proposalData.hasDraft) {
+          setHasDraft(true);
+          const draftVersionNum = proposalData.currentVersion + 0.1;
+          setDraftVersionLabel(proposalData.draftVersionLabel || `v${draftVersionNum}`);
+        }
 
         // Set proposal data
         setProposal(proposalData);
@@ -522,35 +590,43 @@ function CollaborateContent() {
           outlayLakhs: proposalData.outlayLakhs || ''
         });
 
-        // Build collaborators list from proposal data
-        const collabList = [];
+        // Build collaborators list from proposal data with deduplication
+        const collabMap = new Map(); // Use Map for O(1) lookup and deduplication
 
-        // Add PI (creator)
+        // Helper to add collaborator with deduplication
+        const addCollaborator = (userData, role) => {
+          if (!userData) return;
+          const userId = userData._id?.toString() || userData.toString();
+          // Only add if not already present (first occurrence wins)
+          if (!collabMap.has(userId)) {
+            const user = typeof userData === 'object' ? userData : { _id: userData };
+            collabMap.set(userId, { ...user, _id: userId, role });
+          }
+        };
+
+        // Add PI (creator) first - highest priority
         if (proposalData.createdBy) {
-          const pi = typeof proposalData.createdBy === 'object'
-            ? proposalData.createdBy
-            : { _id: proposalData.createdBy };
-          collabList.push({ ...pi, role: 'PI' });
+          addCollaborator(proposalData.createdBy, 'PI');
         }
 
         // Add CIs
         if (proposalData.coInvestigators) {
           proposalData.coInvestigators.forEach(ci => {
-            const ciData = typeof ci === 'object' ? ci : { _id: ci };
-            collabList.push({ ...ciData, role: 'CI' });
+            addCollaborator(ci, 'CI');
           });
         }
 
-        // Add collaborators from collaboration endpoint
+        // Add collaborators from collaboration endpoint (reviewers, committee members, etc.)
         if (collaboratorsData.length > 0) {
           collaboratorsData.forEach(collab => {
-            if (!collabList.find(c => c._id === collab._id)) {
-              collabList.push(collab);
-            }
+            // Extract user data from the collaborator object
+            const userData = collab.user || collab;
+            const role = collab.role || 'COLLABORATOR';
+            addCollaborator(userData, role);
           });
         }
 
-        setCollaborators(collabList);
+        setCollaborators(Array.from(collabMap.values()));
         setComments(commentsData);
 
         // Initialize with current user as online
@@ -594,23 +670,23 @@ function CollaborateContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center`}>
         <div className="text-center">
           <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
-          <h1 className="text-2xl font-bold text-black mb-2">Error Loading Proposal</h1>
-          <p className="text-black mb-4">{error}</p>
+          <h1 className={`text-2xl font-bold ${textColor} mb-2`}>Error Loading Proposal</h1>
+          <p className={`${textColor} mb-4`}>{error}</p>
           <div className="flex gap-4 justify-center">
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+              className={`px-6 py-2 ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'} rounded-lg transition-colors`}
             >
               Try Again
             </button>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-6 py-2 border border-black text-black rounded-lg hover:bg-black/5 transition-colors"
+              className={`px-6 py-2 border ${borderColor} ${textColor} rounded-lg ${hoverBg} transition-colors`}
             >
               Return to Dashboard
             </button>
@@ -622,16 +698,16 @@ function CollaborateContent() {
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center`}>
         <div className="text-center">
-          <svg className="w-16 h-16 text-black/30 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-16 h-16 ${isDark ? 'text-white/30' : 'text-black/30'} mx-auto mb-4`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h1 className="text-2xl font-bold text-black mb-2">Proposal Not Found</h1>
-          <p className="text-black mb-4">The requested proposal could not be loaded.</p>
+          <h1 className={`text-2xl font-bold ${textColor} mb-2`}>Proposal Not Found</h1>
+          <p className={`${textColor} mb-4`}>The requested proposal could not be loaded.</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+            className={`px-6 py-2 ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'} rounded-lg transition-colors`}
           >
             Return to Dashboard
           </button>
@@ -641,13 +717,29 @@ function CollaborateContent() {
   }
 
   return (
-    <div className="min-h-screen bg-black/5">
+    <div className={`min-h-screen ${bgClass}`}>
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors`}
+        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
+      >
+        {theme === 'light' ? (
+          <Moon className={`w-5 h-5 ${textColor}`} />
+        ) : theme === 'dark' ? (
+          <MoonStar className={`w-5 h-5 ${textColor}`} />
+        ) : (
+          <Sun className={`w-5 h-5 ${textColor}`} />
+        )}
+      </button>
+
       {/* Header */}
       <CollaborateHeader
         proposalCode={proposal.proposalCode}
         onlineCount={onlineUsers.length}
         collaboratorCount={collaborators.length}
         onCollaboratorsClick={() => setShowCollaboratorsModal(true)}
+        theme={theme}
       />
 
       {/* Main Content */}
@@ -657,6 +749,9 @@ function CollaborateContent() {
           proposalCode={proposal.proposalCode}
           status={proposal.status}
           version={proposal.currentVersion}
+          hasDraft={hasDraft || proposal.hasDraft}
+          draftVersionLabel={draftVersionLabel || proposal.draftVersionLabel}
+          theme={theme}
         />
 
         {/* Proposal Information */}
@@ -664,6 +759,7 @@ function CollaborateContent() {
           proposalInfo={proposalInfo}
           canEdit={canEditProposalInfo}
           onSave={handleSaveProposalInfo}
+          theme={theme}
         />
 
         {/* Comments & Suggestions Section - Collapsible, above editor */}
@@ -673,6 +769,7 @@ function CollaborateContent() {
           onReply={handleReplyToComment}
           onResolve={handleResolveComment}
           onAddComment={handleAddComment}
+          theme={theme}
         />
 
         {/* Editor Section */}
@@ -683,30 +780,99 @@ function CollaborateContent() {
           onlineUsers={onlineUsers}
           onShowOnlineUsers={() => setShowOnlineUsersModal(true)}
           onSaveChanges={canSaveChanges ? () => setShowSaveModal(true) : undefined}
+          theme={theme}
         >
           <Suspense fallback={
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="w-12 h-12 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-black text-sm">Loading editor...</p>
+                <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+                <p className={`${textColor} text-sm`}>Loading editor...</p>
               </div>
             </div>
           }>
             <AdvancedProposalEditor
               proposalId={id}
+              mode="collaborate"
+              initialContent={proposal?.formi || proposal?.forms}
+              isNewProposal={false}
               canEdit={canEditEditor}
               canSuggest={isSuggestionMode}
+              readOnly={!canEditEditor && !isSuggestionMode}
+              theme={theme}
             />
           </Suspense>
         </CollaborativeEditor>
       </div>
 
-      {/* Toggle Panel Buttons */}
+      {/* Floating Action Button Panel - Fixed position */}
+      <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40">
+        <div className={`${cardBg} rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
+          {/* Toggle Button */}
+          <button
+            onClick={() => setFabExpanded(!fabExpanded)}
+            className={`w-full flex items-center justify-between p-3 ${hoverBg} transition-colors border-b ${borderColor}`}
+          >
+            {fabExpanded && <span className={`text-sm font-semibold ${textColor}`}>Actions</span>}
+            {fabExpanded ? (
+              <ChevronDown className={`w-5 h-5 ${textColor}`} />
+            ) : (
+              <ChevronUp className={`w-5 h-5 ${textColor} mx-auto`} />
+            )}
+          </button>
+
+          {/* Action Buttons */}
+          <div className="p-2 space-y-1">
+            {/* Version History Button - Available to all */}
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${
+                showVersionHistory ? (isDark ? 'bg-white/10' : 'bg-black/10') : hoverBg
+              } ${textColor} ${!fabExpanded && 'justify-center'}`}
+              title="Version History"
+            >
+              <Clock className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {fabExpanded && <span className="text-sm font-medium">Versions</span>}
+            </button>
+
+            {/* Team Chat Button - Available to all */}
+            <button
+              onClick={() => setShowTeamChat(true)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${
+                showTeamChat ? (isDark ? 'bg-white/10' : 'bg-black/10') : hoverBg
+              } ${textColor} ${!fabExpanded && 'justify-center'}`}
+              title="Team Chat"
+            >
+              <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {fabExpanded && <span className="text-sm font-medium">Team Chat</span>}
+            </button>
+
+            {/* Track Progress Button - Available to all */}
+            <button
+              onClick={() => router.push(`/proposal/track/${id}`)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
+              title="Track Progress"
+            >
+              <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {fabExpanded && <span className="text-sm font-medium">Track</span>}
+            </button>
+
+            {/* Review Button - Only for Reviewers and Committee Members */}
+            {(isReviewer() || isCommitteeMember()) && (
+              <button
+                onClick={() => router.push(`/proposal/review/${id}`)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
+                title="Review Proposal"
+              >
+                <FileCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                {fabExpanded && <span className="text-sm font-medium">Review</span>}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Toggle Panel Button - Only Saarthi AI */}
       <TogglePanelButtons
-        showVersionHistory={showVersionHistory}
-        setShowVersionHistory={setShowVersionHistory}
-        showTeamChat={showTeamChat}
-        setShowTeamChat={setShowTeamChat}
         showSaarthi={showSaarthi}
         setShowSaarthi={setShowSaarthi}
       />
@@ -753,12 +919,14 @@ function CollaborateContent() {
         canInvite={canInviteCI}
         currentCICount={currentCICount}
         onInvite={handleInviteCI}
+        theme={theme}
       />
 
       <OnlineUsersModal
         isOpen={showOnlineUsersModal}
         onClose={() => setShowOnlineUsersModal(false)}
         onlineUsers={onlineUsers}
+        theme={theme}
       />
 
       <SaveChangesModal
@@ -767,6 +935,7 @@ function CollaborateContent() {
         onSave={handleSaveChanges}
         currentVersion={proposal?.currentVersion || 1}
         proposalId={id}
+        theme={theme}
       />
     </div>
   );

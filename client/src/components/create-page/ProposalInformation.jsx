@@ -1,19 +1,29 @@
 import React from 'react';
 
-const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
+const ProposalInformation = ({ proposalInfo, validationErrors, onChange, theme = 'light' }) => {
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const mutedText = isDark ? 'text-slate-400' : 'text-black';
+  const inputBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-300';
+  const inputText = isDark ? 'text-white placeholder-slate-500' : 'text-black placeholder-slate-400';
+  const inputFocus = isDark ? 'focus:ring-white/20 focus:border-white/30' : 'focus:ring-black/10 focus:border-black/30';
+
   const handleChange = (field, value) => {
     onChange(field, value);
   };
 
   return (
-    <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
-      <h2 className="text-xl font-semibold text-black mb-4">Proposal Information</h2>
+    <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
+      <h2 className={`text-xl font-semibold ${textColor} mb-6`}>Proposal Information</h2>
       
-      <div className="space-y-4">
+      <div className="space-y-5">
         {/* Project Title */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Project Title <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Project Title <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -21,27 +31,27 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             onChange={(e) => handleChange('title', e.target.value)}
             maxLength={150}
             placeholder="Enter project title (max 150 characters)"
-            className={`w-full px-4 py-2 border rounded-lg text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-black/20 ${
-              validationErrors.title ? 'border-red-500' : 'border-black/20'
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors ${
+              validationErrors.title ? 'border-red-500' : ''
             }`}
           />
-          <div className="flex justify-between mt-1">
+          <div className="flex justify-between mt-1.5">
             {validationErrors.title && (
-              <p className="text-sm text-red-600">{validationErrors.title}</p>
+              <p className="text-sm text-red-500">{validationErrors.title}</p>
             )}
-            <p className="text-sm text-black/60 ml-auto">{proposalInfo.title.length}/150</p>
+            <p className={`text-sm ${mutedText} ml-auto`}>{proposalInfo.title.length}/150</p>
           </div>
         </div>
 
         {/* Funding Method */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Funding Method <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Funding Method <span className="text-red-500">*</span>
           </label>
           <select
             value={proposalInfo.fundingMethod}
             onChange={(e) => handleChange('fundingMethod', e.target.value)}
-            className="w-full px-4 py-2 border border-black/20 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-black/20"
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors`}
           >
             <option value="S&T of MoC">S&T of MoC</option>
             <option value="R&D of CIL">R&D of CIL</option>
@@ -50,8 +60,8 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
 
         {/* Principal Implementing Agency */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Principal Implementing Agency <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Principal Implementing Agency <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -59,19 +69,19 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             onChange={(e) => handleChange('principalImplementingAgency', e.target.value)}
             maxLength={100}
             placeholder="Enter principal implementing agency"
-            className={`w-full px-4 py-2 border rounded-lg text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-black/20 ${
-              validationErrors.principalImplementingAgency ? 'border-red-500' : 'border-black/20'
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors ${
+              validationErrors.principalImplementingAgency ? 'border-red-500' : ''
             }`}
           />
           {validationErrors.principalImplementingAgency && (
-            <p className="text-sm text-red-600 mt-1">{validationErrors.principalImplementingAgency}</p>
+            <p className="text-sm text-red-500 mt-1">{validationErrors.principalImplementingAgency}</p>
           )}
         </div>
 
         {/* Sub Implementing Agency */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Sub Implementing Agency <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Sub Implementing Agency <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -79,19 +89,19 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             onChange={(e) => handleChange('subImplementingAgency', e.target.value)}
             maxLength={100}
             placeholder="Enter sub implementing agency"
-            className={`w-full px-4 py-2 border rounded-lg text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-black/20 ${
-              validationErrors.subImplementingAgency ? 'border-red-500' : 'border-black/20'
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors ${
+              validationErrors.subImplementingAgency ? 'border-red-500' : ''
             }`}
           />
           {validationErrors.subImplementingAgency && (
-            <p className="text-sm text-red-600 mt-1">{validationErrors.subImplementingAgency}</p>
+            <p className="text-sm text-red-500 mt-1">{validationErrors.subImplementingAgency}</p>
           )}
         </div>
 
         {/* Project Leader */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Project Leader <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Project Leader <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -99,19 +109,19 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             onChange={(e) => handleChange('projectLeader', e.target.value)}
             maxLength={100}
             placeholder="Enter project leader name"
-            className={`w-full px-4 py-2 border rounded-lg text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-black/20 ${
-              validationErrors.projectLeader ? 'border-red-500' : 'border-black/20'
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors ${
+              validationErrors.projectLeader ? 'border-red-500' : ''
             }`}
           />
           {validationErrors.projectLeader && (
-            <p className="text-sm text-red-600 mt-1">{validationErrors.projectLeader}</p>
+            <p className="text-sm text-red-500 mt-1">{validationErrors.projectLeader}</p>
           )}
         </div>
 
         {/* Project Coordinator */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Project Coordinator <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Project Coordinator <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -119,19 +129,19 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             onChange={(e) => handleChange('projectCoordinator', e.target.value)}
             maxLength={100}
             placeholder="Enter project coordinator name"
-            className={`w-full px-4 py-2 border rounded-lg text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-black/20 ${
-              validationErrors.projectCoordinator ? 'border-red-500' : 'border-black/20'
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors ${
+              validationErrors.projectCoordinator ? 'border-red-500' : ''
             }`}
           />
           {validationErrors.projectCoordinator && (
-            <p className="text-sm text-red-600 mt-1">{validationErrors.projectCoordinator}</p>
+            <p className="text-sm text-red-500 mt-1">{validationErrors.projectCoordinator}</p>
           )}
         </div>
 
         {/* Project Duration */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Project Duration (in months) <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Project Duration (in months) <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -139,19 +149,19 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             onChange={(e) => handleChange('projectDurationMonths', e.target.value)}
             min="1"
             placeholder="Enter duration"
-            className={`w-full px-4 py-2 border rounded-lg text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-black/20 ${
-              validationErrors.projectDurationMonths ? 'border-red-500' : 'border-black/20'
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors ${
+              validationErrors.projectDurationMonths ? 'border-red-500' : ''
             }`}
           />
           {validationErrors.projectDurationMonths && (
-            <p className="text-sm text-red-600 mt-1">{validationErrors.projectDurationMonths}</p>
+            <p className="text-sm text-red-500 mt-1">{validationErrors.projectDurationMonths}</p>
           )}
         </div>
 
         {/* Project Outlay */}
         <div>
-          <label className="block text-sm font-medium text-black mb-2">
-            Project Outlay (in lakhs) <span className="text-red-600">*</span>
+          <label className={`block text-sm font-medium ${textColor} mb-2`}>
+            Project Outlay (in lakhs) <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -160,12 +170,12 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange }) => {
             min="0.01"
             step="0.01"
             placeholder="Enter outlay"
-            className={`w-full px-4 py-2 border rounded-lg text-black placeholder-black/40 focus:outline-none focus:ring-2 focus:ring-black/20 ${
-              validationErrors.projectOutlayLakhs ? 'border-red-500' : 'border-black/20'
+            className={`w-full px-4 py-2.5 border rounded-lg ${inputBg} ${inputText} ${inputFocus} focus:outline-none focus:ring-2 transition-colors ${
+              validationErrors.projectOutlayLakhs ? 'border-red-500' : ''
             }`}
           />
           {validationErrors.projectOutlayLakhs && (
-            <p className="text-sm text-red-600 mt-1">{validationErrors.projectOutlayLakhs}</p>
+            <p className="text-sm text-red-500 mt-1">{validationErrors.projectOutlayLakhs}</p>
           )}
         </div>
       </div>

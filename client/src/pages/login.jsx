@@ -41,9 +41,9 @@ export default function Login() {
       <Navbar />
 
       {/* Hero Section with Video Background */}
-      <section className="relative h-screen w-full overflow-hidden bg-slate-900 text-white pt-20">
+      <section className="relative min-h-screen w-full overflow-y-auto bg-slate-900 text-white pt-20">
         {/* Background Video Layer */}
-        <div className="absolute inset-0 z-0">
+        <div className="fixed inset-0 z-0">
           <div className="absolute inset-0 bg-black/60 z-10" />
           <video
             autoPlay
@@ -57,10 +57,10 @@ export default function Login() {
         </div>
 
         {/* Login Form - Centered */}
-        <div className="relative z-30 h-full flex items-center justify-center px-4 py-8">
+        <div className="relative z-30 min-h-[calc(100vh-5rem)] flex items-center justify-center px-4 py-8">
           <form
             onSubmit={handleSubmit}
-            className="bg-white/10 backdrop-blur-2xl p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-white/20 animate-fade-in-up"
+            className="bg-white/10 backdrop-blur-2xl p-6 rounded-2xl shadow-2xl w-full max-w-md border border-white/20 animate-fade-in-up"
           >
             {/* Header */}
             <div className="text-center mb-6">
@@ -182,31 +182,103 @@ export default function Login() {
               </button>
 
               {showCredentials && (
-                <div className="mt-2 p-4 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-xl border border-white/10 backdrop-blur-sm animate-fade-in-up">
-                  <div className="text-xs text-slate-200 space-y-1.5 max-h-40 overflow-y-auto pr-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-red-400 rounded-full flex-shrink-0"></div>
-                      <span><strong>Admin:</strong> bytespacesih@gmail.com / adminpass</span>
+                <div className="mt-2 p-3 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-xl border border-white/10 backdrop-blur-sm animate-fade-in-up">
+                  <div className="text-xs text-slate-200 space-y-1">
+                    <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <div className="w-1.5 h-1.5 bg-red-400 rounded-full flex-shrink-0"></div>
+                        <span><strong>Admin:</strong> bytespacesih@gmail.com / adminpass</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ email: 'bytespacesih@gmail.com', password: 'adminpass' })}
+                        className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
+                        title="Quick fill Admin credentials"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0"></div>
-                      <span><strong>User:</strong> user-bs@gmail.com / userpass</span>
+                    <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0"></div>
+                        <span><strong>User:</strong> user-bs@gmail.com / userpass</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ email: 'user-bs@gmail.com', password: 'userpass' })}
+                        className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
+                        title="Quick fill User credentials"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-orange-400 rounded-full flex-shrink-0"></div>
-                      <span><strong>CMPDI:</strong> cmpdi-bs@gmail.com / cmpdipass</span>
+                    <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <div className="w-1.5 h-1.5 bg-orange-400 rounded-full flex-shrink-0"></div>
+                        <span><strong>CMPDI:</strong> cmpdi-bs@gmail.com / cmpdipass</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ email: 'cmpdi-bs@gmail.com', password: 'cmpdipass' })}
+                        className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
+                        title="Quick fill CMPDI credentials"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full flex-shrink-0"></div>
-                      <span><strong>Expert:</strong> expert-bs@gmail.com / expertpass</span>
+                    <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <div className="w-1.5 h-1.5 bg-purple-400 rounded-full flex-shrink-0"></div>
+                        <span><strong>Expert:</strong> expert-bs@gmail.com / expertpass</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ email: 'expert-bs@gmail.com', password: 'expertpass' })}
+                        className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
+                        title="Quick fill Expert credentials"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></div>
-                      <span><strong>TSSRC:</strong> tssrc-bs@gmail.com / tssrcpass</span>
+                    <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <div className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></div>
+                        <span><strong>TSSRC:</strong> tssrc-bs@gmail.com / tssrcpass</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ email: 'tssrc-bs@gmail.com', password: 'tssrcpass' })}
+                        className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
+                        title="Quick fill TSSRC credentials"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full flex-shrink-0"></div>
-                      <span><strong>SSRC:</strong> ssrc-bs@gmail.com / ssrcpass</span>
+                    <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full flex-shrink-0"></div>
+                        <span><strong>SSRC:</strong> ssrc-bs@gmail.com / ssrcpass</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ email: 'ssrc-bs@gmail.com', password: 'ssrcpass' })}
+                        className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
+                        title="Quick fill SSRC credentials"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>

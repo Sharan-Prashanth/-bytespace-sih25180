@@ -125,6 +125,38 @@ export const revertToVersion = async (proposalId, versionNumber) => {
   }
 };
 
+// Draft version management
+
+// Get current draft version (x.1)
+export const getDraftVersion = async (proposalId) => {
+  try {
+    const response = await apiClient.get(`/api/proposals/${proposalId}/versions/draft`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Save changes to draft (creates x.1 if not exists)
+export const saveDraftVersion = async (proposalId, draftData) => {
+  try {
+    const response = await apiClient.post(`/api/proposals/${proposalId}/versions/draft`, draftData);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Discard draft version
+export const discardDraftVersion = async (proposalId) => {
+  try {
+    const response = await apiClient.delete(`/api/proposals/${proposalId}/versions/draft`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
 // Collaboration APIs
 
 // Invite co-investigator
@@ -176,6 +208,55 @@ export const uploadDocument = async (file, proposalCode) => {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Delete document from Supabase storage
+export const deleteDocument = async (s3Key) => {
+  try {
+    const response = await apiClient.delete('/api/collaboration/delete/document', {
+      data: { s3Key }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Delete image from Supabase storage
+export const deleteImage = async (s3Key) => {
+  try {
+    const response = await apiClient.delete('/api/collaboration/delete/image', {
+      data: { s3Key }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Track embedded image in proposal
+export const trackEmbeddedImage = async (proposalId, url, s3Key) => {
+  try {
+    const response = await apiClient.post(`/api/collaboration/${proposalId}/track-image`, {
+      url,
+      s3Key
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Delete embedded image from proposal and storage
+export const deleteEmbeddedImage = async (proposalId, s3Key, url) => {
+  try {
+    const response = await apiClient.delete(`/api/collaboration/${proposalId}/embedded-image`, {
+      data: { s3Key, url }
     });
     return response.data;
   } catch (error) {
@@ -397,6 +478,9 @@ export default {
   getVersionContent,
   createVersion,
   revertToVersion,
+  getDraftVersion,
+  saveDraftVersion,
+  discardDraftVersion,
   inviteCoInvestigator,
   addCollaborator,
   uploadImage,
@@ -418,5 +502,9 @@ export default {
   createReport,
   updateReport,
   submitReport,
-  deleteReport
+  deleteReport,
+  deleteDocument,
+  deleteImage,
+  trackEmbeddedImage,
+  deleteEmbeddedImage
 };

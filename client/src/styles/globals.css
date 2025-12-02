@@ -36,7 +36,7 @@
   /* Brand color for text selection */
 }
 
-/* Force light mode for Plate floating toolbar */
+/* Plate floating toolbar - Light mode */
 div[data-plate-floating-toolbar] {
   background-color: white !important;
   color: #1f2937 !important;
@@ -51,6 +51,23 @@ div[data-plate-floating-toolbar] button {
 div[data-plate-floating-toolbar] button:hover {
   background-color: #f3f4f6 !important;
   color: #111827 !important;
+}
+
+/* Plate floating toolbar - Dark mode */
+.dark div[data-plate-floating-toolbar] {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border: 1px solid #475569 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
+}
+
+.dark div[data-plate-floating-toolbar] button {
+  color: #f1f5f9 !important;
+}
+
+.dark div[data-plate-floating-toolbar] button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -321,8 +338,6 @@ input,
 textarea,
 select {
   border: 2px solid #d1d5db;
-  color: #000000 !important;
-  background-color: #ffffff !important;
   font-weight: 500;
   font-size: 16px;
 }
@@ -333,23 +348,20 @@ select:focus {
   border-color: #3b82f6;
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  color: #000000 !important;
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: #6b7280 !important;
   font-weight: 400;
 }
 
-/* Specific input styling overrides */
+/* Specific input styling overrides - removed !important to allow component-level theming */
 input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="number"],
 textarea {
-  color: #000000 !important;
-  background-color: #ffffff !important;
+  /* Colors now controlled by component classes for theme support */
 }
 
 /* Enhanced card styling */
@@ -479,7 +491,7 @@ textarea {
   --accent-foreground: #f8fafc;
   --destructive: #7f1d1d;
   --destructive-foreground: #f8fafc;
-  --border: #1e293b;
+  --border: #475569;
   --input: #1e293b;
   --ring: #cbd5e1;
   --chart-1: #3b82f6;
