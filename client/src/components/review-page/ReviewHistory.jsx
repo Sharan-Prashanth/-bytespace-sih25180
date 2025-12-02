@@ -3,10 +3,13 @@
 import React from 'react';
 import { MessageSquare } from 'lucide-react';
 
-const ReviewHistory = ({ feedbackList = [], isDark }) => {
-  const cardBgClass = isDark ? 'bg-slate-900/50 border-slate-800 backdrop-blur-sm' : 'bg-white border-orange-200 shadow-lg';
-  const textClass = isDark ? 'text-white' : 'text-black';
-  const subTextClass = isDark ? 'text-slate-400' : 'text-black';
+const ReviewHistory = ({ feedbackList = [], theme = 'light' }) => {
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-black/10';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const itemBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-black/5 border-black/10';
 
   // Mock feedback if none provided
   const displayFeedback = feedbackList.length > 0 ? feedbackList : [
@@ -34,8 +37,8 @@ const ReviewHistory = ({ feedbackList = [], isDark }) => {
   };
 
   return (
-    <div className={`${cardBgClass} border rounded-xl shadow-lg p-6 animate-slideInUp`} style={{ animationDelay: '0.6s' }}>
-      <h3 className={`text-xl font-bold ${textClass} mb-6 flex items-center`}>
+    <div className={`${cardBg} border rounded-xl shadow-lg p-6`}>
+      <h3 className={`text-xl font-bold ${textColor} mb-6 flex items-center`}>
         <div className={`w-10 h-10 ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-lg flex items-center justify-center mr-3`}>
           <MessageSquare className="w-6 h-6 text-purple-600" />
         </div>
@@ -46,7 +49,7 @@ const ReviewHistory = ({ feedbackList = [], isDark }) => {
         {displayFeedback.map((feedback) => (
           <div 
             key={feedback.id} 
-            className={`p-4 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-orange-50/50 border-orange-100'} rounded-lg border`}
+            className={`p-4 ${itemBg} rounded-lg border`}
           >
             <div className="flex items-start gap-3 mb-3">
               <div className={`w-10 h-10 ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-full flex items-center justify-center`}>
@@ -56,18 +59,18 @@ const ReviewHistory = ({ feedbackList = [], isDark }) => {
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
-                  <div className={`font-semibold ${textClass}`}>{feedback.reviewer}</div>
-                  <div className={`text-xs ${subTextClass}`}>{feedback.date}</div>
+                  <div className={`font-semibold ${textColor}`}>{feedback.reviewer}</div>
+                  <div className={`text-xs ${textColor}`}>{feedback.date}</div>
                 </div>
-                <p className={`${subTextClass} text-sm leading-relaxed`}>{feedback.comment}</p>
+                <p className={`${textColor} text-sm leading-relaxed`}>{feedback.comment}</p>
               </div>
             </div>
           </div>
         ))}
         
         {displayFeedback.length === 0 && (
-          <div className={`text-center py-8 ${subTextClass}`}>
-            <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-40" />
+          <div className={`text-center py-8 ${textColor}`}>
+            <MessageSquare className={`w-12 h-12 mx-auto mb-3 ${isDark ? 'opacity-40' : 'opacity-40'}`} />
             <p>No review comments yet</p>
           </div>
         )}

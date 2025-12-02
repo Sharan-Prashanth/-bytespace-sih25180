@@ -136,6 +136,15 @@ const proposalSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  // Track embedded images in editor content for cleanup on deletion
+  embeddedImages: [{
+    url: String,
+    s3Key: String,
+    addedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   timeline: [{
     status: String,
     changedBy: {

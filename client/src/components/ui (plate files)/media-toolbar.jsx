@@ -15,7 +15,6 @@ import {
   useElement,
   useFocusedLast,
   useReadOnly,
-  useRemoveNodeButton,
   useSelected,
 } from 'platejs/react';
 
@@ -26,6 +25,7 @@ import {
   PopoverContent,
 } from '@/components/ui (plate files)/popover';
 import { Separator } from '@/components/ui (plate files)/separator';
+import { deleteImage } from '@/utils/proposalApi';
 
 import { CaptionButton } from './caption';
 
@@ -59,7 +59,55 @@ export function MediaToolbar({
   }, [open]);
 
   const element = useElement();
-  const { props: buttonProps } = useRemoveNodeButton({ element });
+
+  // Helper function to extract s3Key from Supabase URL
+  const extractS3KeyFromUrl = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    
+    // Skip base64 data URLs
+    if (url.startsWith('data:')) return null;
+    
+    // Check if it's a Supabase storage URL
+    if (url.includes('supabase.co/storage/v1/object/public/images/')) {
+      try {
+        const urlObj = new URL(url);
+        const pathParts = urlObj.pathname.split('/');
+        const bucketIndex = pathParts.indexOf('images');
+        if (bucketIndex !== -1) {
+          return pathParts.slice(bucketIndex + 1).join('/');
+        }
+      } catch (e) {
+        console.error('Error parsing URL:', e);
+      }
+    }
+    return null;
+  };
+
+  // Custom delete handler that also deletes from S3
+  const handleDeleteWithS3 = async (e) => {
+    // Get s3Key from element or extract from URL
+    let s3Key = element?.s3Key;
+    if (!s3Key && element?.url) {
+      s3Key = extractS3KeyFromUrl(element.url);
+    }
+    
+    // First, remove the node from the editor using the path
+    const path = editor.api.findPath(element);
+    if (path) {
+      console.log('[MediaToolbar] Removing image node at path:', path);
+      editor.tf.removeNodes({ at: path });
+    }
+    
+    // Then delete from S3 (async, don't wait)
+    if (s3Key) {
+      console.log('[MediaToolbar] Deleting image from S3:', s3Key);
+      deleteImage(s3Key)
+        .then(() => console.log('[MediaToolbar] Image deleted from S3 successfully'))
+        .catch((error) => console.error('[MediaToolbar] Failed to delete image from S3:', error));
+    } else {
+      console.log('[MediaToolbar] No s3Key found, skipping S3 deletion');
+    }
+  };
 
   return (
     <Popover open={open} modal={false}>
@@ -90,7 +138,7 @@ export function MediaToolbar({
 
             <Separator orientation="vertical" className="mx-1 h-6" />
 
-            <Button size="sm" variant="ghost" {...buttonProps}>
+            <Button size="sm" variant="ghost" onClick={handleDeleteWithS3}>
               <Trash2Icon />
             </Button>
           </div>

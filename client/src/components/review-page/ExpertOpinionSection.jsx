@@ -14,7 +14,8 @@ import apiClient from '../../utils/api';
 const ExpertOpinionSection = ({ 
   proposalId,
   currentUser,
-  userRoles = []
+  userRoles = [],
+  theme = 'light'
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [rating, setRating] = useState(0);
@@ -25,6 +26,19 @@ const ExpertOpinionSection = ({
   const [userOpinion, setUserOpinion] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-black/10';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const iconBg = isDark ? 'bg-white/10' : 'bg-black/5';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/20';
+  const inputBg = isDark ? 'bg-slate-700 text-white placeholder-slate-400' : 'bg-white text-black placeholder-black/50';
+  const infoBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-black/5 border-black/10';
+  const btnBg = isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-black/90';
+  const starMuted = isDark ? 'text-white/30' : 'text-black/30';
 
   // Check if user can submit opinions
   const canSubmitOpinion = userRoles.some(role => 
@@ -89,21 +103,21 @@ const ExpertOpinionSection = ({
   }
 
   return (
-    <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+    <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
       {/* Header */}
       <div 
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center mr-3">
-            <MessageSquare className="w-5 h-5 text-black" />
+          <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center mr-3`}>
+            <MessageSquare className={`w-5 h-5 ${textColor}`} />
           </div>
-          <h2 className="text-xl font-semibold text-black">Expert Opinion</h2>
+          <h2 className={`text-xl font-semibold ${textColor}`}>Expert Opinion</h2>
         </div>
-        <button className="p-1 hover:bg-black/5 rounded transition-colors">
+        <button className={`p-1 ${hoverBg} rounded transition-colors`}>
           <ChevronDown 
-            className={`w-5 h-5 text-black transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 ${textColor} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           />
         </button>
       </div>
@@ -125,22 +139,22 @@ const ExpertOpinionSection = ({
               </div>
 
               {userOpinion && (
-                <div className="p-4 bg-black/5 border border-black/10 rounded-lg">
+                <div className={`p-4 ${infoBg} border rounded-lg`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm text-black font-medium">Your Rating:</span>
+                    <span className={`text-sm ${textColor} font-medium`}>Your Rating:</span>
                     <div className="flex items-center gap-1">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star 
                           key={star}
-                          className={`w-4 h-4 ${star <= userOpinion.rating ? 'text-yellow-500 fill-yellow-500' : 'text-black/30'}`}
+                          className={`w-4 h-4 ${star <= userOpinion.rating ? 'text-yellow-500 fill-yellow-500' : starMuted}`}
                         />
                       ))}
                     </div>
-                    <span className="text-sm text-black">({userOpinion.rating}/5)</span>
+                    <span className={`text-sm ${textColor}`}>({userOpinion.rating}/5)</span>
                   </div>
                   <div>
-                    <span className="text-sm text-black font-medium">Your Opinion:</span>
-                    <p className="text-sm text-black mt-1">{userOpinion.opinion}</p>
+                    <span className={`text-sm ${textColor} font-medium`}>Your Opinion:</span>
+                    <p className={`text-sm ${textColor} mt-1`}>{userOpinion.opinion}</p>
                   </div>
                 </div>
               )}
@@ -148,14 +162,14 @@ const ExpertOpinionSection = ({
           ) : (
             // Show opinion form
             <div className="space-y-4">
-              <p className="text-sm text-black">
+              <p className={`text-sm ${textColor}`}>
                 As a reviewer, please rate this proposal and provide your expert opinion. 
                 This information will be visible to committee members and help in the evaluation process.
               </p>
 
               {/* Rating Section */}
               <div>
-                <label className="block text-sm font-medium text-black mb-2">
+                <label className={`block text-sm font-medium ${textColor} mb-2`}>
                   Rating (1-5 Stars)
                 </label>
                 <div className="flex items-center gap-2">
@@ -172,20 +186,20 @@ const ExpertOpinionSection = ({
                         className={`w-8 h-8 transition-colors ${
                           star <= (hoverRating || rating) 
                             ? 'text-yellow-500 fill-yellow-500' 
-                            : 'text-black/30'
+                            : starMuted
                         }`}
                       />
                     </button>
                   ))}
                   {rating > 0 && (
-                    <span className="text-sm text-black ml-2">({rating}/5)</span>
+                    <span className={`text-sm ${textColor} ml-2`}>({rating}/5)</span>
                   )}
                 </div>
               </div>
 
               {/* Opinion Text */}
               <div>
-                <label className="block text-sm font-medium text-black mb-2">
+                <label className={`block text-sm font-medium ${textColor} mb-2`}>
                   Your Opinion
                 </label>
                 <textarea
@@ -193,9 +207,9 @@ const ExpertOpinionSection = ({
                   onChange={(e) => setOpinion(e.target.value)}
                   placeholder="Provide your detailed opinion about this proposal..."
                   rows={4}
-                  className="w-full px-4 py-3 border border-black/20 rounded-lg text-black placeholder-black/50 focus:outline-none focus:ring-2 focus:ring-black/20 resize-none"
+                  className={`w-full px-4 py-3 border ${borderColor} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none`}
                 />
-                <p className="text-xs text-black mt-1">
+                <p className={`text-xs ${textColor} mt-1`}>
                   {opinion.length}/2000 characters (minimum 10)
                 </p>
               </div>
@@ -220,13 +234,13 @@ const ExpertOpinionSection = ({
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || rating === 0 || opinion.trim().length < 10}
-                className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-black text-white font-semibold rounded-lg hover:bg-black/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full flex items-center justify-center gap-2 py-3 px-6 ${btnBg} font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <Send className="w-4 h-4" />
                 {isSubmitting ? 'Submitting...' : 'Submit Opinion'}
               </button>
 
-              <p className="text-xs text-black text-center">
+              <p className={`text-xs ${textColor} text-center`}>
                 You can only submit one opinion per proposal. This cannot be changed once submitted.
               </p>
             </div>

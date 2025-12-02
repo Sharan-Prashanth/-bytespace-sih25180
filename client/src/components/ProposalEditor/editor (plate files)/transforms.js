@@ -16,6 +16,7 @@ import { SuggestionPlugin } from '@platejs/suggestion/react';
 import { TablePlugin } from '@platejs/table/react';
 import { insertToc } from '@platejs/toc';
 import { KEYS, PathApi } from 'platejs';
+import { uploadImage as uploadImageApi } from '@/utils/proposalApi';
 
 const ACTION_THREE_COLUMNS = 'action_three_columns';
 
@@ -24,6 +25,46 @@ const insertList = (editor, type) => {
     indent: 1,
     listStyleType: type,
   }), { select: true });
+};
+
+// Helper function to upload image to S3 and insert into editor
+const uploadAndInsertImage = async (editor, file) => {
+  // Validate file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Image size must be less than 5MB');
+    return;
+  }
+
+  try {
+    console.log('[transforms] Uploading image to S3:', file.name);
+    
+    // Upload to S3 via backend API first
+    const response = await uploadImageApi(file, 'editor-images');
+    console.log('[transforms] Upload response:', response);
+    
+    const uploadData = response.data || response;
+    
+    if (!uploadData || !uploadData.url) {
+      throw new Error('Upload failed - no URL returned');
+    }
+    
+    console.log('[transforms] Image uploaded successfully:', uploadData.url);
+    
+    // Only insert image node after successful upload
+    const imageNode = {
+      type: KEYS.img,
+      url: uploadData.url,
+      s3Key: uploadData.s3Key || uploadData.path,
+      width: '100%',
+      children: [{ text: '' }],
+    };
+    
+    editor.tf.insertNodes([imageNode]);
+    
+  } catch (error) {
+    console.error('[transforms] Image upload failed:', error);
+    alert('Failed to upload image. Please try again.');
+  }
 };
 
 const insertBlockMap = {
@@ -39,7 +80,7 @@ const insertBlockMap = {
   [KEYS.excalidraw]: (editor) => insertExcalidraw(editor, {}, { select: true }),
   [KEYS.file]: (editor) => insertFilePlaceholder(editor, { select: true }),
   [KEYS.img]: (editor) => {
-    // Trigger file upload (stores as base64, will upload to S3 on proposal submission)
+    // Trigger file upload - uploads to S3
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -50,48 +91,15 @@ const insertBlockMap = {
       
       const file = e.target.files?.[0];
       if (!file) {
-        // User cancelled - don't do anything
         input.remove();
         return;
       }
 
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image size must be less than 5MB');
-        input.remove();
-        return;
-      }
-
-      // Read file and convert to base64 (will upload to S3 on proposal submission)
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result;
-        
-        // Insert image node directly with base64 data URL
-        const imageNode = {
-          type: KEYS.img,
-          url: dataUrl,
-          width: '100%',
-          children: [{ text: '' }],
-        };
-        
-        // Insert the image node
-        editor.tf.insertNodes([imageNode]);
-        
-        // Move selection after the image
-        const path = editor.selection?.focus?.path || [0];
-        editor.tf.select({ path: [path[0] + 1, 0], offset: 0 });
-        
-        input.remove();
-      };
-      reader.onerror = () => {
-        alert('Error reading file');
-        input.remove();
-      };
-      reader.readAsDataURL(file);
+      // Upload to S3 and insert
+      uploadAndInsertImage(editor, file);
+      input.remove();
     };
     
-    // Cancel handler
     input.oncancel = () => {
       input.remove();
     };

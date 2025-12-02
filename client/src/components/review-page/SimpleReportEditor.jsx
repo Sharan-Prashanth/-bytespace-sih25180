@@ -105,8 +105,15 @@ const SimpleReportEditor = ({
   content = null, 
   onChange,
   placeholder = 'Write your review report here...',
-  minCharacters = 100
+  minCharacters = 100,
+  theme = 'light'
 }) => {
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/20';
+  const footerBg = isDark ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10';
+  const textColor = isDark ? 'text-white' : 'text-black';
   // Get initial content
   const initialValue = useMemo(() => {
     if (content && Array.isArray(content) && content.length > 0) {
@@ -145,14 +152,14 @@ const SimpleReportEditor = ({
   const wordCount = countWords(currentText);
 
   return (
-    <div className="border border-black/20 rounded-lg overflow-hidden">
+    <div className={`border ${borderColor} rounded-lg overflow-hidden`}>
       <Plate 
         editor={editor}
         onChange={handleChange}
       >
         <EditorContainer className="border-none">
           {/* Toolbar */}
-          <FixedToolbar className="border-b border-black/10">
+          <FixedToolbar className={`border-b ${borderColor}`}>
             <FixedToolbarButtons />
           </FixedToolbar>
           
@@ -165,12 +172,12 @@ const SimpleReportEditor = ({
       </Plate>
 
       {/* Character Count Footer */}
-      <div className="flex items-center justify-between px-4 py-2 bg-black/5 border-t border-black/10 text-xs">
-        <span className={`${characterCount < minCharacters ? 'text-red-600' : 'text-black'}`}>
+      <div className={`flex items-center justify-between px-4 py-2 ${footerBg} border-t text-xs`}>
+        <span className={`${characterCount < minCharacters ? 'text-red-600' : textColor}`}>
           {characterCount} characters
           {characterCount < minCharacters && ` (minimum ${minCharacters} recommended)`}
         </span>
-        <span className="text-black">
+        <span className={textColor}>
           {wordCount} words
         </span>
       </div>

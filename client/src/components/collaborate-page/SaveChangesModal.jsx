@@ -3,13 +3,28 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../utils/api';
 
-const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposalId }) => {
+const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposalId, theme = 'light' }) => {
   const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [hasDraft, setHasDraft] = useState(false);
   const [draftLabel, setDraftLabel] = useState('');
   const [checkingDraft, setCheckingDraft] = useState(false);
+
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const modalBg = isDarkest ? 'bg-neutral-900' : isDark ? 'bg-slate-800' : 'bg-white';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/10';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
+  const inputBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-white border-black/20';
+  const cardBg = isDark ? 'bg-white/10' : 'bg-black/5';
+  const buttonBg = isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90';
+  const infoBg = isDark ? 'bg-blue-500/20 border-blue-400/30' : 'bg-blue-50 border-blue-200';
+  const infoText = isDark ? 'text-blue-300' : 'text-blue-800';
+  const warningBg = isDark ? 'bg-amber-500/20 border-amber-400/30' : 'bg-amber-50 border-amber-200';
+  const warningText = isDark ? 'text-amber-300' : 'text-amber-800';
 
   // Check if there's an existing draft when modal opens
   useEffect(() => {
@@ -96,14 +111,14 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className={`relative ${modalBg} rounded-lg shadow-xl max-w-md w-full mx-4`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-black/10">
-          <h2 className="text-lg font-semibold text-black">
+        <div className={`flex items-center justify-between p-4 border-b ${borderColor}`}>
+          <h2 className={`text-lg font-semibold ${textColor}`}>
             {hasDraft ? 'Commit Draft Version' : 'Create New Version'}
           </h2>
-          <button onClick={onClose} className="p-1 hover:bg-black/5 rounded transition-colors" disabled={isSaving}>
-            <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onClick={onClose} className={`p-1 ${hoverBg} rounded transition-colors`} disabled={isSaving}>
+            <svg className={`w-5 h-5 ${textColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -113,24 +128,24 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
         <div className="p-4 space-y-4">
           {checkingDraft ? (
             <div className="flex items-center justify-center py-6">
-              <div className="w-8 h-8 border-3 border-black/20 border-t-black rounded-full animate-spin"></div>
+              <div className={`w-8 h-8 border-3 ${isDark ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin`}></div>
             </div>
           ) : (
             <>
               {/* Version Info */}
-              <div className="flex items-center justify-between p-3 bg-black/5 rounded-lg">
+              <div className={`flex items-center justify-between p-3 ${cardBg} rounded-lg`}>
                 <div>
-                  <p className="text-xs font-medium text-black">Current Version</p>
-                  <p className="text-2xl font-bold text-black">v{currentVersion}</p>
+                  <p className={`text-xs font-medium ${textColor}`}>Current Version</p>
+                  <p className={`text-2xl font-bold ${textColor}`}>v{currentVersion}</p>
                 </div>
-                <svg className="w-6 h-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-6 h-6 ${textColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
                 <div>
-                  <p className="text-xs font-medium text-black">
+                  <p className={`text-xs font-medium ${textColor}`}>
                     {hasDraft ? 'From Draft' : 'New Version'}
                   </p>
-                  <p className="text-2xl font-bold text-black">
+                  <p className={`text-2xl font-bold ${textColor}`}>
                     {hasDraft ? draftLabel : `v${getNextVersion()}`}
                   </p>
                 </div>
@@ -138,12 +153,12 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
 
               {/* Draft Indicator */}
               {hasDraft && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className={`p-3 ${warningBg} border rounded-lg`}>
                   <div className="flex items-start gap-2">
-                    <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-4 h-4 ${warningText} mt-0.5 flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
-                    <p className="text-xs text-amber-800">
+                    <p className={`text-xs ${warningText}`}>
                       You have unsaved draft changes. Committing will promote your draft to a permanent major version.
                     </p>
                   </div>
@@ -152,7 +167,7 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-semibold text-black mb-2">
+                <label className={`block text-sm font-semibold ${textColor} mb-2`}>
                   Version Description
                 </label>
                 <textarea
@@ -160,28 +175,28 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe what changes were made in this version..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-black/20 rounded-lg text-sm text-black placeholder-black/50 focus:outline-none focus:ring-2 focus:ring-black/20 resize-none"
+                  className={`w-full px-3 py-2 border ${inputBg} rounded-lg text-sm ${textColor} ${isDark ? 'placeholder-white/50' : 'placeholder-black/50'} focus:outline-none focus:ring-2 focus:ring-white/20 resize-none`}
                   disabled={isSaving}
                 />
-                <p className="mt-1 text-xs text-black">
+                <p className={`mt-1 text-xs ${textColor}`}>
                   If left empty, the default message will be "Version {getNextVersion()}"
                 </p>
               </div>
 
               {/* Error Message */}
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-800">{error}</p>
+                <div className={`p-3 ${isDark ? 'bg-red-500/20 border-red-400/30' : 'bg-red-50 border-red-200'} border rounded-lg`}>
+                  <p className={`text-sm ${isDark ? 'text-red-300' : 'text-red-800'}`}>{error}</p>
                 </div>
               )}
 
               {/* Info */}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className={`p-3 ${infoBg} border rounded-lg`}>
                 <div className="flex items-start gap-2">
-                  <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-4 h-4 ${infoText} mt-0.5 flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-xs text-blue-800">
+                  <p className={`text-xs ${infoText}`}>
                     {hasDraft
                       ? 'This will convert your draft into a permanent version. Previous versions can be viewed from the Version History panel.'
                       : 'This will create a new version with your current changes. Previous versions can be viewed from the Version History panel.'
@@ -194,13 +209,13 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-4 border-t border-black/10">
+        <div className={`flex items-center justify-between p-4 border-t ${borderColor}`}>
           <div>
             {hasDraft && !checkingDraft && (
               <button
                 onClick={handleDiscardDraft}
                 disabled={isSaving}
-                className="px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                className={`px-3 py-2 text-sm font-medium ${isDark ? 'text-red-400 hover:bg-red-500/20' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors disabled:opacity-50`}
               >
                 Discard Draft
               </button>
@@ -209,7 +224,7 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-black hover:bg-black/5 rounded-lg transition-colors"
+              className={`px-4 py-2 text-sm font-medium ${textColor} ${hoverBg} rounded-lg transition-colors`}
               disabled={isSaving}
             >
               Cancel
@@ -217,7 +232,7 @@ const SaveChangesModal = ({ isOpen, onClose, onSave, currentVersion = 1, proposa
             <button
               onClick={handleSave}
               disabled={isSaving || checkingDraft}
-              className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-black/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+              className={`px-4 py-2 ${buttonBg} text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2`}
             >
               {isSaving ? (
                 <>

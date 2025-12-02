@@ -26,6 +26,11 @@ export const ImageElement = withHOC(ResizableProvider, function ImageElement(pro
 
   // Get the URL from element (supports both base64 and regular URLs)
   const imageUrl = props.element?.url || '';
+  
+  // Don't render anything if no URL (prevents "No image URL provided" showing during upload)
+  if (!imageUrl) {
+    return null;
+  }
 
   return (
     <MediaToolbar plugin={ImagePlugin}>
@@ -40,30 +45,24 @@ export const ImageElement = withHOC(ResizableProvider, function ImageElement(pro
             <ResizeHandle
               className={mediaResizeHandleVariants({ direction: 'left' })}
               options={{ direction: 'left' }} />
-            {imageUrl ? (
-              <img
-                ref={handleRef}
-                src={imageUrl}
-                className={cn(
-                  'block w-full max-w-full cursor-pointer object-cover px-0',
-                  'rounded-sm',
-                  focused && selected && 'ring-2 ring-ring ring-offset-2',
-                  isDragging && 'opacity-50'
-                )}
-                alt={props.element?.alt || 'Uploaded image'}
-                onError={(e) => {
-                  console.error('Image failed to load:', imageUrl);
-                  e.target.style.display = 'none';
-                }}
-                onLoad={() => {
-                  console.log('Image loaded successfully:', imageUrl.substring(0, 50));
-                }}
-              />
-            ) : (
-              <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">
-                No image URL provided
-              </div>
-            )}
+            <img
+              ref={handleRef}
+              src={imageUrl}
+              className={cn(
+                'block w-full max-w-full cursor-pointer object-cover px-0',
+                'rounded-sm',
+                focused && selected && 'ring-2 ring-ring ring-offset-2',
+                isDragging && 'opacity-50'
+              )}
+              alt={props.element?.alt || 'Uploaded image'}
+              onError={(e) => {
+                console.error('Image failed to load:', imageUrl);
+                e.target.style.display = 'none';
+              }}
+              onLoad={() => {
+                console.log('Image loaded successfully:', imageUrl.substring(0, 50));
+              }}
+            />
             <ResizeHandle
               className={mediaResizeHandleVariants({
                 direction: 'right',

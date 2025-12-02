@@ -40,6 +40,7 @@ const AdvancedProposalEditor = forwardRef(({
   showVersionHistory = false, // Control version history button externally
   onToggleVersionHistory = () => { }, // Callback to toggle version history
   readOnly = false, // Force read-only mode
+  theme = 'light', // Theme prop: 'light', 'dark', 'darkest'
   className = '',
 }, ref) => {
   const { user } = useAuth(); // Get current logged-in user
@@ -51,6 +52,10 @@ const AdvancedProposalEditor = forwardRef(({
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isManualSaving, setIsManualSaving] = useState(false);
+
+  // Theme helper variables
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
 
   // Use signatures from props (parent manages state)
   const headSignature = signatures?.headSignature || null;
@@ -76,9 +81,35 @@ const AdvancedProposalEditor = forwardRef(({
     }).join('');
   }, []);
 
+  // Helper function to filter out invalid image nodes (images with empty URLs)
+  // Creates a new array without mutating the original
+  const filterInvalidImageNodes = useCallback((nodes) => {
+    if (!nodes || !Array.isArray(nodes)) return nodes;
+    
+    return nodes
+      .filter(node => {
+        // Filter out image nodes with empty URLs
+        if (node.type === 'img' && (!node.url || node.url === '')) {
+          console.log('[Editor] Filtering out image node with empty URL');
+          return false;
+        }
+        return true;
+      })
+      .map(node => {
+        // Recursively filter children if they exist (create new object to avoid mutation)
+        if (node.children && Array.isArray(node.children)) {
+          return {
+            ...node,
+            children: filterInvalidImageNodes(node.children)
+          };
+        }
+        return node;
+      });
+  }, []);
+
   // Get initial value - prioritize initialContent prop for create/edit mode
   const getInitialValue = useCallback(() => {
-    console.log('📝 getInitialValue called with:', {
+    console.log('getInitialValue called with:', {
       hasInitialContent: !!initialContent,
       initialContentType: typeof initialContent,
       isArray: Array.isArray(initialContent),
@@ -86,67 +117,69 @@ const AdvancedProposalEditor = forwardRef(({
       mode
     });
     
+    let content = null;
+    
     // For existing drafts: initialContent comes from database
     if (initialContent) {
       // Check if initialContent has the formi structure (lowercase)
       if (initialContent.formi && initialContent.formi.content && Array.isArray(initialContent.formi.content) && initialContent.formi.content.length > 0) {
-        console.log('📝 Using initialContent.formi.content for editor', initialContent.formi.content.length, 'nodes');
-        return initialContent.formi.content;
+        console.log('Using initialContent.formi.content for editor', initialContent.formi.content.length, 'nodes');
+        content = initialContent.formi.content;
       }
-      
       // Check if initialContent is the content array directly
-      if (Array.isArray(initialContent) && initialContent.length > 0) {
-        console.log('📝 Using initialContent array directly for editor', initialContent.length, 'nodes');
-        return initialContent;
+      else if (Array.isArray(initialContent) && initialContent.length > 0) {
+        console.log('Using initialContent array directly for editor', initialContent.length, 'nodes');
+        content = initialContent;
       }
-      
       // Check if initialContent has formI (uppercase I - from database format)
-      if (initialContent.formI) {
+      else if (initialContent.formI) {
         if (initialContent.formI.editorContent && Array.isArray(initialContent.formI.editorContent) && initialContent.formI.editorContent.length > 0) {
-          console.log('📝 Using initialContent.formI.editorContent for editor');
-          return initialContent.formI.editorContent;
-        }
-        if (initialContent.formI.content && Array.isArray(initialContent.formI.content) && initialContent.formI.content.length > 0) {
-          console.log('📝 Using initialContent.formI.content for editor');
-          return initialContent.formI.content;
-        }
-        // formI might be the content array directly
-        if (Array.isArray(initialContent.formI) && initialContent.formI.length > 0) {
-          console.log('📝 Using initialContent.formI array directly for editor');
-          return initialContent.formI;
+          console.log('Using initialContent.formI.editorContent for editor');
+          content = initialContent.formI.editorContent;
+        } else if (initialContent.formI.content && Array.isArray(initialContent.formI.content) && initialContent.formI.content.length > 0) {
+          console.log('Using initialContent.formI.content for editor');
+          content = initialContent.formI.content;
+        } else if (Array.isArray(initialContent.formI) && initialContent.formI.length > 0) {
+          console.log('Using initialContent.formI array directly for editor');
+          content = initialContent.formI;
         }
       }
-      
-      // Check for nested object structure - initialContent could be { formi: { content: [...] } } or { content: [...] }
-      if (initialContent.content && Array.isArray(initialContent.content) && initialContent.content.length > 0) {
-        console.log('📝 Using initialContent.content for editor');
-        return initialContent.content;
+      // Check for nested object structure
+      else if (initialContent.content && Array.isArray(initialContent.content) && initialContent.content.length > 0) {
+        console.log('Using initialContent.content for editor');
+        content = initialContent.content;
       }
-      
-      // Check if initialContent is an object with editorContent (another possible format)
-      if (initialContent.editorContent && Array.isArray(initialContent.editorContent) && initialContent.editorContent.length > 0) {
-        console.log('📝 Using initialContent.editorContent for editor');
-        return initialContent.editorContent;
+      // Check if initialContent is an object with editorContent
+      else if (initialContent.editorContent && Array.isArray(initialContent.editorContent) && initialContent.editorContent.length > 0) {
+        console.log('Using initialContent.editorContent for editor');
+        content = initialContent.editorContent;
       }
     }
     
     // Fallback to formDataStore if available
-    const storedData = formDataStore['formi'];
-    if (storedData && storedData.content && Array.isArray(storedData.content) && storedData.content.length > 0) {
-      console.log('📝 Using formDataStore.formi.content for editor');
-      return storedData.content;
+    if (!content) {
+      const storedData = formDataStore['formi'];
+      if (storedData && storedData.content && Array.isArray(storedData.content) && storedData.content.length > 0) {
+        console.log('Using formDataStore.formi.content for editor');
+        content = storedData.content;
+      }
     }
     
     // Only use default template content for NEW proposals (isNewProposal === true)
-    if (isNewProposal) {
-      console.log('📝 Using TAB_DEFAULT_CONTENT for new proposal');
-      return TAB_DEFAULT_CONTENT['formi'] || [{ type: 'p', children: [{ text: '' }] }];
+    if (!content && isNewProposal) {
+      console.log('Using TAB_DEFAULT_CONTENT for new proposal');
+      content = TAB_DEFAULT_CONTENT['formi'] || [{ type: 'p', children: [{ text: '' }] }];
     }
     
     // For existing drafts with no content, show empty editor (not template)
-    console.log('📝 Using empty content as fallback for existing draft');
-    return [{ type: 'p', children: [{ text: '' }] }];
-  }, [formDataStore, initialContent, isNewProposal, mode]);
+    if (!content) {
+      console.log('Using empty content as fallback for existing draft');
+      content = [{ type: 'p', children: [{ text: '' }] }];
+    }
+    
+    // Filter out invalid image nodes before returning
+    return filterInvalidImageNodes(content);
+  }, [formDataStore, initialContent, isNewProposal, mode, filterInvalidImageNodes]);
 
   // Determine editor behavior based on mode
   const isViewMode = mode === 'view' || readOnly;
@@ -956,13 +989,13 @@ const AdvancedProposalEditor = forwardRef(({
 
   return (
     <>
-      <div className={`bg-white rounded-xl shadow-xl p-6 border border-orange-200 ${className}`}>
+      <div className={`${isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-blue-200'} rounded-xl shadow-xl p-6 border ${className}`}>
         <div className="mb-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-black flex items-center">
-              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+            <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-black'} flex items-center`}>
+              <div className={`w-8 h-8 ${isDark ? 'bg-blue-900/50' : 'bg-blue-100'} rounded-lg flex items-center justify-center mr-3`}>
                 <svg
-                  className="w-4 h-4 text-orange-600"
+                  className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -983,10 +1016,10 @@ const AdvancedProposalEditor = forwardRef(({
               <div className="flex items-center gap-3">
                 {/* Connection Status */}
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${socketConnected
-                  ? 'bg-green-50 text-green-700 border border-green-200'
-                  : 'bg-red-50 text-red-700 border border-red-200'
+                  ? isDark ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : isDark ? 'bg-red-900/30 text-red-400 border border-red-800' : 'bg-red-50 text-red-700 border border-red-200'
                   }`}>
-                  <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                  <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
                     }`} />
                   {socketConnected ? 'Connected' : 'Disconnected'}
                 </div>
@@ -995,7 +1028,7 @@ const AdvancedProposalEditor = forwardRef(({
           </div>
 
           {/* Plate.js Editor */}
-          <div className="border border-gray-200 rounded-xl min-h-[600px] bg-white shadow-inner">
+          <div className={`border rounded-xl min-h-[600px] shadow-inner ${isDarkest ? 'border-neutral-700 bg-neutral-900' : isDark ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-white'}`}>
             <Plate
               key="formi"
               editor={editor}
@@ -1003,15 +1036,16 @@ const AdvancedProposalEditor = forwardRef(({
             >
               {/* Hide toolbar in view mode */}
               {!isViewMode && (
-                <FixedToolbar>
+                <FixedToolbar theme={theme}>
                   <FixedToolbarButtons />
                 </FixedToolbar>
               )}
 
-              <EditorContainer className="pt-4 pb-2">
+              <EditorContainer className="pt-4 pb-2" theme={theme}>
                 <Editor
                   variant="default"
-                  className="min-h-[500px] focus:outline-none text-black leading-relaxed pb-4 px-4"
+                  theme={theme}
+                  className={`min-h-[500px] focus:outline-none leading-relaxed pb-4 px-4 ${isDark ? 'text-white' : 'text-black'}`}
                   readOnly={isViewMode}
                 />
               </EditorContainer>
@@ -1020,7 +1054,7 @@ const AdvancedProposalEditor = forwardRef(({
 
           {/* Action Bar with Save and Export - Show only Export in view mode */}
           {!isViewMode && (
-            <div className="mt-4 flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className={`mt-4 flex items-center justify-between p-4 rounded-lg border ${isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center gap-4">
                 {/* Save Button */}
                 <button
@@ -1028,8 +1062,8 @@ const AdvancedProposalEditor = forwardRef(({
                   onClick={handleManualSave}
                   disabled={isManualSaving}
                   className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${isManualSaving
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-white text-blue-600 border border-blue-300 hover:bg-blue-50'
+                    ? isDark ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : isDark ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-white text-blue-600 border border-blue-300 hover:bg-blue-50'
                     }`}
                 >
                   {isManualSaving ? (
@@ -1051,7 +1085,7 @@ const AdvancedProposalEditor = forwardRef(({
                   onClick={handleExportPDF}
                   disabled={isExporting}
                   className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${isExporting
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ? isDark ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                     : 'bg-red-500 text-white hover:bg-red-600'
                     }`}
                 >
@@ -1075,17 +1109,17 @@ const AdvancedProposalEditor = forwardRef(({
 
               </div>
               <div className="flex flex-col items-end gap-1">
-                <span className="text-sm font-medium text-gray-700">
+                <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-black'}`}>
                   Words: {wordCount} | Chars: {characterCount}
                 </span>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-slate-400' : 'text-black'}`}>
                   <span className="flex items-center gap-1">
-                    <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     Auto-save enabled
                   </span>
-                  <span>•</span>
+                  <span>-</span>
                   <span>Last saved: {lastSavedTime ? lastSavedTime.toLocaleTimeString() : 'Not saved yet'}</span>
                 </div>
               </div>
@@ -1094,14 +1128,14 @@ const AdvancedProposalEditor = forwardRef(({
 
           {/* Export Button Only for View Mode */}
           {isViewMode && (
-            <div className="mt-4 flex items-center justify-center p-4 bg-black/5 rounded-lg border border-black/10">
+            <div className={`mt-4 flex items-center justify-center p-4 rounded-lg border ${isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
               <button
                 type="button"
                 onClick={handleExportPDF}
                 disabled={isExporting}
                 className={`px-6 py-3 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-2 ${isExporting
-                  ? 'bg-black/20 text-black/40 cursor-not-allowed'
-                  : 'bg-black text-white hover:bg-black/90'
+                  ? isDark ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
               >
                 {isExporting ? (

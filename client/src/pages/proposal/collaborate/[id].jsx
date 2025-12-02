@@ -8,7 +8,7 @@ import LoadingScreen from '../../../components/LoadingScreen';
 import { useSocketCollaboration } from '../../../hooks/useSocketCollaboration';
 import { getCollaborateStorage } from '../../../utils/collaborateStorage';
 import apiClient from '../../../utils/api';
-import { Clock, MessageSquare, TrendingUp, ChevronDown, ChevronUp, FileCheck } from 'lucide-react';
+import { Clock, MessageSquare, TrendingUp, ChevronDown, ChevronUp, FileCheck, Moon, Sun, MoonStar } from 'lucide-react';
 
 // Import modular collaborate page components
 import {
@@ -40,6 +40,50 @@ function CollaborateContent() {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
+  
+  // Theme state
+  const [theme, setTheme] = useState('light');
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('dashboard-theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  // Apply dark class to document for CSS variable support
+  useEffect(() => {
+    const isDarkMode = theme === 'dark' || theme === 'darkest';
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    // Cleanup on unmount
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard-theme', newTheme);
+  };
+
+  // Theme helper variables
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  
+  // Theme-based classes
+  const bgClass = isDarkest ? 'bg-black' : isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-50 to-slate-100';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const subTextColor = isDark ? 'text-slate-400' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-200';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
   
   // Core state
   const [loading, setLoading] = useState(true);
@@ -626,23 +670,23 @@ function CollaborateContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center`}>
         <div className="text-center">
           <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
-          <h1 className="text-2xl font-bold text-black mb-2">Error Loading Proposal</h1>
-          <p className="text-black mb-4">{error}</p>
+          <h1 className={`text-2xl font-bold ${textColor} mb-2`}>Error Loading Proposal</h1>
+          <p className={`${textColor} mb-4`}>{error}</p>
           <div className="flex gap-4 justify-center">
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+              className={`px-6 py-2 ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'} rounded-lg transition-colors`}
             >
               Try Again
             </button>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-6 py-2 border border-black text-black rounded-lg hover:bg-black/5 transition-colors"
+              className={`px-6 py-2 border ${borderColor} ${textColor} rounded-lg ${hoverBg} transition-colors`}
             >
               Return to Dashboard
             </button>
@@ -654,16 +698,16 @@ function CollaborateContent() {
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center`}>
         <div className="text-center">
-          <svg className="w-16 h-16 text-black/30 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-16 h-16 ${isDark ? 'text-white/30' : 'text-black/30'} mx-auto mb-4`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h1 className="text-2xl font-bold text-black mb-2">Proposal Not Found</h1>
-          <p className="text-black mb-4">The requested proposal could not be loaded.</p>
+          <h1 className={`text-2xl font-bold ${textColor} mb-2`}>Proposal Not Found</h1>
+          <p className={`${textColor} mb-4`}>The requested proposal could not be loaded.</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+            className={`px-6 py-2 ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'} rounded-lg transition-colors`}
           >
             Return to Dashboard
           </button>
@@ -673,13 +717,29 @@ function CollaborateContent() {
   }
 
   return (
-    <div className="min-h-screen bg-black/5">
+    <div className={`min-h-screen ${bgClass}`}>
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors`}
+        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
+      >
+        {theme === 'light' ? (
+          <Moon className={`w-5 h-5 ${textColor}`} />
+        ) : theme === 'dark' ? (
+          <MoonStar className={`w-5 h-5 ${textColor}`} />
+        ) : (
+          <Sun className={`w-5 h-5 ${textColor}`} />
+        )}
+      </button>
+
       {/* Header */}
       <CollaborateHeader
         proposalCode={proposal.proposalCode}
         onlineCount={onlineUsers.length}
         collaboratorCount={collaborators.length}
         onCollaboratorsClick={() => setShowCollaboratorsModal(true)}
+        theme={theme}
       />
 
       {/* Main Content */}
@@ -691,6 +751,7 @@ function CollaborateContent() {
           version={proposal.currentVersion}
           hasDraft={hasDraft || proposal.hasDraft}
           draftVersionLabel={draftVersionLabel || proposal.draftVersionLabel}
+          theme={theme}
         />
 
         {/* Proposal Information */}
@@ -698,6 +759,7 @@ function CollaborateContent() {
           proposalInfo={proposalInfo}
           canEdit={canEditProposalInfo}
           onSave={handleSaveProposalInfo}
+          theme={theme}
         />
 
         {/* Comments & Suggestions Section - Collapsible, above editor */}
@@ -707,6 +769,7 @@ function CollaborateContent() {
           onReply={handleReplyToComment}
           onResolve={handleResolveComment}
           onAddComment={handleAddComment}
+          theme={theme}
         />
 
         {/* Editor Section */}
@@ -717,12 +780,13 @@ function CollaborateContent() {
           onlineUsers={onlineUsers}
           onShowOnlineUsers={() => setShowOnlineUsersModal(true)}
           onSaveChanges={canSaveChanges ? () => setShowSaveModal(true) : undefined}
+          theme={theme}
         >
           <Suspense fallback={
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="w-12 h-12 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-black text-sm">Loading editor...</p>
+                <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+                <p className={`${textColor} text-sm`}>Loading editor...</p>
               </div>
             </div>
           }>
@@ -734,6 +798,7 @@ function CollaborateContent() {
               canEdit={canEditEditor}
               canSuggest={isSuggestionMode}
               readOnly={!canEditEditor && !isSuggestionMode}
+              theme={theme}
             />
           </Suspense>
         </CollaborativeEditor>
@@ -741,17 +806,17 @@ function CollaborateContent() {
 
       {/* Floating Action Button Panel - Fixed position */}
       <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40">
-        <div className={`bg-white rounded-2xl shadow-2xl border border-black/10 overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
+        <div className={`${cardBg} rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
           {/* Toggle Button */}
           <button
             onClick={() => setFabExpanded(!fabExpanded)}
-            className="w-full flex items-center justify-between p-3 hover:bg-black/5 transition-colors border-b border-black/10"
+            className={`w-full flex items-center justify-between p-3 ${hoverBg} transition-colors border-b ${borderColor}`}
           >
-            {fabExpanded && <span className="text-sm font-semibold text-black">Actions</span>}
+            {fabExpanded && <span className={`text-sm font-semibold ${textColor}`}>Actions</span>}
             {fabExpanded ? (
-              <ChevronDown className="w-5 h-5 text-black" />
+              <ChevronDown className={`w-5 h-5 ${textColor}`} />
             ) : (
-              <ChevronUp className="w-5 h-5 text-black mx-auto" />
+              <ChevronUp className={`w-5 h-5 ${textColor} mx-auto`} />
             )}
           </button>
 
@@ -761,8 +826,8 @@ function CollaborateContent() {
             <button
               onClick={() => setShowVersionHistory(true)}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${
-                showVersionHistory ? 'bg-black/10' : 'hover:bg-black/5'
-              } text-black ${!fabExpanded && 'justify-center'}`}
+                showVersionHistory ? (isDark ? 'bg-white/10' : 'bg-black/10') : hoverBg
+              } ${textColor} ${!fabExpanded && 'justify-center'}`}
               title="Version History"
             >
               <Clock className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -773,8 +838,8 @@ function CollaborateContent() {
             <button
               onClick={() => setShowTeamChat(true)}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${
-                showTeamChat ? 'bg-black/10' : 'hover:bg-black/5'
-              } text-black ${!fabExpanded && 'justify-center'}`}
+                showTeamChat ? (isDark ? 'bg-white/10' : 'bg-black/10') : hoverBg
+              } ${textColor} ${!fabExpanded && 'justify-center'}`}
               title="Team Chat"
             >
               <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -784,7 +849,7 @@ function CollaborateContent() {
             {/* Track Progress Button - Available to all */}
             <button
               onClick={() => router.push(`/proposal/track/${id}`)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
               title="Track Progress"
             >
               <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -795,7 +860,7 @@ function CollaborateContent() {
             {(isReviewer() || isCommitteeMember()) && (
               <button
                 onClick={() => router.push(`/proposal/review/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
                 title="Review Proposal"
               >
                 <FileCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -854,12 +919,14 @@ function CollaborateContent() {
         canInvite={canInviteCI}
         currentCICount={currentCICount}
         onInvite={handleInviteCI}
+        theme={theme}
       />
 
       <OnlineUsersModal
         isOpen={showOnlineUsersModal}
         onClose={() => setShowOnlineUsersModal(false)}
         onlineUsers={onlineUsers}
+        theme={theme}
       />
 
       <SaveChangesModal
@@ -868,6 +935,7 @@ function CollaborateContent() {
         onSave={handleSaveChanges}
         currentVersion={proposal?.currentVersion || 1}
         proposalId={id}
+        theme={theme}
       />
     </div>
   );

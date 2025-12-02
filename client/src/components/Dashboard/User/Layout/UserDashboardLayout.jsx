@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, Moon, Sun } from 'lucide-react';
+import { Calendar, Moon, Sun, MoonStar } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import CalendarWidget from '../../Widgets/CalendarWidget';
 import UserSidebar from '../Sidebar/UserSidebar';
@@ -76,12 +76,19 @@ export default function UserDashboardLayout({
                         <button
                             onClick={toggleTheme}
                             className={`p-1.5 rounded-lg shadow-sm transition-colors 
-                                ${theme === 'darkest' ? 'bg-neutral-900 text-yellow-400 border border-neutral-800 hover:bg-neutral-800' :
-                                    theme === 'dark' ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' :
-                                        'bg-white text-black hover:text-black'}
+                                ${theme === 'darkest' ? 'bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800' :
+                                    theme === 'dark' ? 'bg-slate-800 text-white hover:bg-slate-700' :
+                                        'bg-white text-black hover:bg-slate-100'}
                             `}
+                            title={theme === 'light' ? 'Switch to Dark Mode' : theme === 'dark' ? 'Switch to Darkest Mode' : 'Switch to Light Mode'}
                         >
-                            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                            {theme === 'light' ? (
+                                <Moon size={16} />
+                            ) : theme === 'dark' ? (
+                                <MoonStar size={16} />
+                            ) : (
+                                <Sun size={16} />
+                            )}
                         </button>
 
                         {/* Calendar Widget Trigger */}

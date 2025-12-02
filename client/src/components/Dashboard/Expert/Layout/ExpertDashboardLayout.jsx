@@ -75,12 +75,21 @@ export default function ExpertDashboardLayout({
                         <button
                             onClick={toggleTheme}
                             className={`p-2 rounded-xl shadow-sm transition-colors 
-                                ${theme === 'darkest' ? 'bg-neutral-900 text-yellow-400 border border-neutral-800 hover:bg-neutral-800' :
-                                    theme === 'dark' ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' :
-                                        'bg-white text-slate-600 hover:text-slate-900'}
+                                ${theme === 'darkest' ? 'bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800' :
+                                    theme === 'dark' ? 'bg-slate-800 text-white hover:bg-slate-700' :
+                                        'bg-white text-black hover:bg-slate-100'}
                             `}
+                            title={theme === 'light' ? 'Switch to Dark Mode' : theme === 'dark' ? 'Switch to Darkest Mode' : 'Switch to Light Mode'}
                         >
-                            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+                            {theme === 'light' ? (
+                                <Moon size={18} />
+                            ) : theme === 'dark' ? (
+                                <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
+                                </svg>
+                            ) : (
+                                <Sun size={18} />
+                            )}
                         </button>
 
                         {/* Calendar Widget Trigger */}

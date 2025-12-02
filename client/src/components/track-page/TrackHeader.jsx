@@ -9,9 +9,19 @@ const TrackHeader = ({
   projectLeader, 
   status, 
   version,
-  userRoles = []
+  userRoles = [],
+  theme = 'light'
 }) => {
   const router = useRouter();
+
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const bgClass = isDarkest ? 'bg-neutral-900' : isDark ? 'bg-slate-800' : 'bg-white';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-black/10';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const subTextColor = isDark ? 'text-white/60' : 'text-black/60';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
 
   // Format status for display
   const formatStatus = (status) => {
@@ -40,11 +50,11 @@ const TrackHeader = ({
   return (
     <>
       {/* Back Button Section */}
-      <div className="bg-white border-b border-black/10">
+      <div className={`${bgClass} border-b ${borderColor}`}>
         <div className="max-w-7xl mx-auto px-6 py-4">
           <button
             onClick={() => router.push('/dashboard')}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-black/20 text-black rounded-lg hover:bg-black/5 transition-colors"
+            className={`flex items-center gap-2 px-4 py-2 text-sm border ${borderColor} ${textColor} rounded-lg ${hoverBg} transition-colors`}
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
@@ -53,42 +63,42 @@ const TrackHeader = ({
       </div>
 
       {/* Header Content */}
-      <div className="bg-white border-b border-black/10">
+      <div className={`${bgClass} border-b ${borderColor}`}>
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <h1 className="text-3xl font-bold text-black mb-4">Track Proposal</h1>
+          <h1 className={`text-3xl font-bold ${textColor} mb-4`}>Track Proposal</h1>
           
           {/* Proposal Info Row */}
-          <div className="flex flex-wrap items-center gap-4 text-sm text-black">
+          <div className={`flex flex-wrap items-center gap-4 text-sm ${textColor}`}>
             {/* Proposal Code */}
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-black/60" />
+              <FileText className={`w-4 h-4 ${subTextColor}`} />
               <span>Code:</span>
               <span className="font-semibold">{proposalCode || 'N/A'}</span>
             </div>
 
-            <span className="text-black/40">|</span>
+            <span className={isDark ? 'text-white/40' : 'text-black/40'}>|</span>
 
             {/* Project Leader */}
             <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-black/60" />
+              <User className={`w-4 h-4 ${subTextColor}`} />
               <span>Leader:</span>
               <span className="font-semibold">{projectLeader || 'N/A'}</span>
             </div>
 
-            <span className="text-black/40">|</span>
+            <span className={isDark ? 'text-white/40' : 'text-black/40'}>|</span>
 
             {/* Version */}
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-black/60" />
+              <Clock className={`w-4 h-4 ${subTextColor}`} />
               <span>Version:</span>
               <span className="font-semibold">v{version || 1}</span>
             </div>
 
-            <span className="text-black/40">|</span>
+            <span className={isDark ? 'text-white/40' : 'text-black/40'}>|</span>
 
             {/* Status Badge */}
             <div className="flex items-center gap-2">
-              <Tag className="w-4 h-4 text-black/60" />
+              <Tag className={`w-4 h-4 ${subTextColor}`} />
               <span>Status:</span>
               <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getStatusColor(status)}`}>
                 {formatStatus(status)}

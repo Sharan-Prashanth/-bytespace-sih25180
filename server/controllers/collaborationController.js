@@ -327,6 +327,14 @@ export const getCollaborators = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const uploadImage = asyncHandler(async (req, res) => {
+  console.log('[uploadImage] Received upload request');
+  console.log('[uploadImage] File:', req.file ? { 
+    originalname: req.file.originalname, 
+    mimetype: req.file.mimetype, 
+    size: req.file.size 
+  } : 'No file');
+  console.log('[uploadImage] Body:', req.body);
+  
   if (!req.file) {
     return res.status(400).json({
       success: false,
@@ -335,8 +343,10 @@ export const uploadImage = asyncHandler(async (req, res) => {
   }
 
   const folder = req.body.folder || 'misc';
+  console.log('[uploadImage] Using folder:', folder);
 
   const uploadResult = await storageService.uploadImage(req.file, folder);
+  console.log('[uploadImage] Storage service result:', uploadResult);
 
   if (!uploadResult.success) {
     return res.status(500).json({
@@ -346,14 +356,18 @@ export const uploadImage = asyncHandler(async (req, res) => {
     });
   }
 
-  res.json({
+  const responseData = {
     success: true,
     message: 'Image uploaded successfully',
     data: {
       url: uploadResult.url,
-      path: uploadResult.path
+      path: uploadResult.path,
+      s3Key: uploadResult.path // Include s3Key for deletion
     }
-  });
+  };
+  
+  console.log('[uploadImage] Sending response:', JSON.stringify(responseData, null, 2));
+  res.json(responseData);
 });
 
 /**
@@ -396,29 +410,49 @@ export const uploadDocument = asyncHandler(async (req, res) => {
     success: true,
     message: 'Document uploaded successfully',
     data: {
+      fileUrl: uploadResult.url,
       url: uploadResult.url,
-      path: uploadResult.path
+      path: uploadResult.path,
+      s3Key: uploadResult.path // Include s3Key for deletion
     }
   });
 });
 
 /**
  * @route   DELETE /api/collaboration/delete/image
- * @desc    Delete an image from storage
+ * @desc    Delete an image from storage (images bucket)
  * @access  Private
  */
 export const deleteImage = asyncHandler(async (req, res) => {
-  const { url, path } = req.body;
+  const { url, path, s3Key } = req.body;
 
-  if (!url && !path) {
+  // Use s3Key if provided, otherwise extract from path or url
+  let filePath = s3Key || path;
+  
+  if (!filePath && url) {
+    // Extract path from URL (e.g., https://xxx.supabase.co/storage/v1/object/public/images/path/to/file.jpg)
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const bucketIndex = pathParts.indexOf('images');
+      if (bucketIndex !== -1) {
+        filePath = pathParts.slice(bucketIndex + 1).join('/');
+      }
+    } catch (e) {
+      // URL parsing failed, try using url directly
+      filePath = url;
+    }
+  }
+
+  if (!filePath) {
     return res.status(400).json({
       success: false,
-      message: 'Image URL or path is required'
+      message: 'Image path or s3Key is required'
     });
   }
 
   try {
-    const deleteResult = await storageService.deleteFile(path || url);
+    const deleteResult = await storageService.deleteFile(storageService.buckets.images, filePath);
 
     if (!deleteResult.success) {
       return res.status(500).json({
@@ -434,6 +468,170 @@ export const deleteImage = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Image deletion failed',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   DELETE /api/collaboration/delete/document
+ * @desc    Delete a document from storage (proposal-files bucket)
+ * @access  Private
+ */
+export const deleteDocument = asyncHandler(async (req, res) => {
+  const { url, path, s3Key } = req.body;
+
+  // Use s3Key if provided, otherwise extract from path or url
+  let filePath = s3Key || path;
+  
+  if (!filePath && url) {
+    // Extract path from URL (e.g., https://xxx.supabase.co/storage/v1/object/public/proposal-files/path/to/file.pdf)
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const bucketIndex = pathParts.indexOf('proposal-files');
+      if (bucketIndex !== -1) {
+        filePath = pathParts.slice(bucketIndex + 1).join('/');
+      }
+    } catch (e) {
+      // URL parsing failed, try using url directly
+      filePath = url;
+    }
+  }
+
+  if (!filePath) {
+    return res.status(400).json({
+      success: false,
+      message: 'Document path or s3Key is required'
+    });
+  }
+
+  try {
+    const deleteResult = await storageService.deleteFile(storageService.buckets.proposalFiles, filePath);
+
+    if (!deleteResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Document deletion failed',
+        error: deleteResult.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Document deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Document deletion failed',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   POST /api/collaboration/:proposalId/track-image
+ * @desc    Track an embedded image in a proposal
+ * @access  Private
+ */
+export const trackEmbeddedImage = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { url, s3Key } = req.body;
+
+  if (!url || !s3Key) {
+    return res.status(400).json({
+      success: false,
+      message: 'URL and s3Key are required'
+    });
+  }
+
+  const proposal = await findProposal(proposalId);
+
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Check if image is already tracked
+  const existingImage = proposal.embeddedImages?.find(img => img.s3Key === s3Key);
+  if (!existingImage) {
+    if (!proposal.embeddedImages) {
+      proposal.embeddedImages = [];
+    }
+    proposal.embeddedImages.push({
+      url,
+      s3Key,
+      addedAt: new Date()
+    });
+    await proposal.save();
+  }
+
+  res.json({
+    success: true,
+    message: 'Image tracked successfully'
+  });
+});
+
+/**
+ * @route   DELETE /api/collaboration/:proposalId/embedded-image
+ * @desc    Delete an embedded image from storage and remove tracking
+ * @access  Private
+ */
+export const deleteEmbeddedImage = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { url, s3Key } = req.body;
+
+  // Use s3Key if provided, otherwise extract from url
+  let filePath = s3Key;
+  
+  if (!filePath && url) {
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const bucketIndex = pathParts.indexOf('images');
+      if (bucketIndex !== -1) {
+        filePath = pathParts.slice(bucketIndex + 1).join('/');
+      }
+    } catch (e) {
+      filePath = url;
+    }
+  }
+
+  if (!filePath) {
+    return res.status(400).json({
+      success: false,
+      message: 'Image s3Key or URL is required'
+    });
+  }
+
+  try {
+    // Delete from Supabase storage
+    const deleteResult = await storageService.deleteFile(storageService.buckets.images, filePath);
+
+    // Remove from proposal tracking (even if storage delete fails - file might not exist)
+    if (proposalId) {
+      const proposal = await findProposal(proposalId);
+      if (proposal && proposal.embeddedImages) {
+        proposal.embeddedImages = proposal.embeddedImages.filter(
+          img => img.s3Key !== filePath && img.url !== url
+        );
+        await proposal.save();
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Image deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting embedded image:', error);
     res.status(500).json({
       success: false,
       message: 'Image deletion failed',

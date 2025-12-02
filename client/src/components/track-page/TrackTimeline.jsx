@@ -65,8 +65,17 @@ const TrackTimeline = ({
   proposalStatus,
   timeline = [],
   isOpen,
-  onToggle
+  onToggle,
+  theme = 'light'
 }) => {
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const cardBg = isDarkest ? 'bg-neutral-900' : isDark ? 'bg-slate-800' : 'bg-white';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-black/10';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
+
   // Get all statuses that exist in timeline
   const timelineStatuses = timeline.map(t => t.status);
 
@@ -159,30 +168,30 @@ const TrackTimeline = ({
   };
 
   return (
-    <div className="bg-white border border-black/10 rounded-lg overflow-hidden">
+    <div className={`${cardBg} border ${borderColor} rounded-lg overflow-hidden`}>
       {/* Header */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-6 hover:bg-black/5 transition-colors"
+        className={`w-full flex items-center justify-between p-6 ${hoverBg} transition-colors`}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-            <Clock className="w-5 h-5 text-amber-600" />
+          <div className={`w-10 h-10 ${isDark ? 'bg-amber-500/20' : 'bg-amber-100'} rounded-lg flex items-center justify-center`}>
+            <Clock className={`w-5 h-5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
           </div>
           <div className="text-left">
-            <h3 className="text-lg font-semibold text-black">Review Timeline</h3>
-            <p className="text-sm text-black">Current Stage: {getCurrentStageName()}</p>
+            <h3 className={`text-lg font-semibold ${textColor}`}>Review Timeline</h3>
+            <p className={`text-sm ${textColor}`}>Current Stage: {getCurrentStageName()}</p>
           </div>
         </div>
-        <ChevronDown className={`w-5 h-5 text-black transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-5 h-5 ${textColor} transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Content */}
       {isOpen && (
-        <div className="px-6 pb-6 border-t border-black/10">
+        <div className={`px-6 pb-6 border-t ${borderColor}`}>
           <div className="mt-4 relative">
             {/* Timeline Line */}
-            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-black/10" />
+            <div className={`absolute left-4 top-0 bottom-0 w-0.5 ${isDark ? 'bg-white/10' : 'bg-black/10'}`} />
             
             {REVIEW_STAGES.map((stage, index) => {
               const status = getStageStatus(stage, index);
@@ -192,22 +201,22 @@ const TrackTimeline = ({
                 <div key={stage.key} className="relative pl-12 pb-6 last:pb-0">
                   {/* Status Icon */}
                   <div className={`absolute left-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                    status === 'completed' ? 'bg-green-100' :
-                    status === 'rejected' ? 'bg-red-100' :
-                    status === 'active' ? 'bg-blue-100' :
-                    status === 'skipped' ? 'bg-black/10' :
-                    'bg-black/5'
+                    status === 'completed' ? (isDark ? 'bg-green-500/20' : 'bg-green-100') :
+                    status === 'rejected' ? (isDark ? 'bg-red-500/20' : 'bg-red-100') :
+                    status === 'active' ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100') :
+                    status === 'skipped' ? (isDark ? 'bg-white/10' : 'bg-black/10') :
+                    (isDark ? 'bg-white/5' : 'bg-black/5')
                   }`}>
                     {status === 'completed' ? (
-                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <CheckCircle className={`w-5 h-5 ${isDark ? 'text-green-400' : 'text-green-600'}`} />
                     ) : status === 'rejected' ? (
-                      <AlertCircle className="w-5 h-5 text-red-600" />
+                      <AlertCircle className={`w-5 h-5 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
                     ) : status === 'active' ? (
-                      <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse" />
+                      <div className={`w-3 h-3 ${isDark ? 'bg-blue-400' : 'bg-blue-600'} rounded-full animate-pulse`} />
                     ) : status === 'skipped' ? (
-                      <Circle className="w-5 h-5 text-black/30" />
+                      <Circle className={`w-5 h-5 ${isDark ? 'text-white/30' : 'text-black/30'}`} />
                     ) : (
-                      <Circle className="w-5 h-5 text-black/30" />
+                      <Circle className={`w-5 h-5 ${isDark ? 'text-white/30' : 'text-black/30'}`} />
                     )}
                   </div>
 
@@ -215,40 +224,40 @@ const TrackTimeline = ({
                   <div className={`${status === 'pending' ? 'opacity-50' : ''}`}>
                     <div className="flex items-center justify-between mb-1">
                       <h4 className={`font-medium ${
-                        status === 'completed' ? 'text-green-700' :
-                        status === 'rejected' ? 'text-red-700' :
-                        status === 'active' ? 'text-blue-700' :
-                        'text-black'
+                        status === 'completed' ? (isDark ? 'text-green-400' : 'text-green-700') :
+                        status === 'rejected' ? (isDark ? 'text-red-400' : 'text-red-700') :
+                        status === 'active' ? (isDark ? 'text-blue-400' : 'text-blue-700') :
+                        textColor
                       }`}>
                         {stage.label}
                       </h4>
                       {status === 'active' && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                        <span className={`px-2 py-0.5 ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'} text-xs font-medium rounded`}>
                           Current
                         </span>
                       )}
                       {status === 'completed' && (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
+                        <span className={`px-2 py-0.5 ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'} text-xs font-medium rounded`}>
                           Completed
                         </span>
                       )}
                       {status === 'rejected' && (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded">
+                        <span className={`px-2 py-0.5 ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'} text-xs font-medium rounded`}>
                           Rejected
                         </span>
                       )}
                       {status === 'skipped' && (
-                        <span className="px-2 py-0.5 bg-black/10 text-black text-xs font-medium rounded">
+                        <span className={`px-2 py-0.5 ${isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black'} text-xs font-medium rounded`}>
                           Skipped
                         </span>
                       )}
                     </div>
                     
-                    <p className="text-sm text-black mb-2">{stage.description}</p>
+                    <p className={`text-sm ${textColor} mb-2`}>{stage.description}</p>
                     
                     {/* Completion Info */}
                     {stageInfo && (status === 'completed' || status === 'rejected') && (
-                      <div className="flex items-center gap-4 text-xs text-black">
+                      <div className={`flex items-center gap-4 text-xs ${textColor}`}>
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           <span>{stageInfo.date} at {stageInfo.time}</span>
@@ -263,7 +272,7 @@ const TrackTimeline = ({
                     )}
                     
                     {stageInfo && status === 'active' && (
-                      <div className="flex items-center gap-4 text-xs text-black">
+                      <div className={`flex items-center gap-4 text-xs ${textColor}`}>
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           <span>Started: {stageInfo.date}</span>

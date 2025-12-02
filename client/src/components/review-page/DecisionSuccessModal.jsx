@@ -15,10 +15,23 @@ const DecisionSuccessModal = ({
   decision,
   proposalCode,
   reportTitle,
-  pdfUrl
+  pdfUrl,
+  theme = 'light'
 }) => {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const modalBg = isDarkest ? 'bg-neutral-900' : isDark ? 'bg-slate-800' : 'bg-white';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/10';
+  const cardBg = isDark ? 'bg-white/10' : 'bg-black/5';
+  const infoBg = isDark ? 'bg-blue-500/20 border-blue-400/30' : 'bg-blue-50 border-blue-200';
+  const infoText = isDark ? 'text-blue-300' : 'text-blue-600';
+  const successBg = isDark ? 'bg-green-500/20 border-green-400/30' : 'bg-green-50 border-green-100';
+  const buttonBg = isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90';
 
   useEffect(() => {
     setMounted(true);
@@ -61,16 +74,16 @@ const DecisionSuccessModal = ({
       <div className="absolute inset-0 bg-black/50" />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden mx-4">
+      <div className={`relative ${modalBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden mx-4`}>
         {/* Success Icon Header */}
-        <div className="bg-green-50 border-b border-green-100 p-8 text-center">
+        <div className={`${successBg} border-b ${borderColor} p-8 text-center`}>
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
-          <h2 className="text-2xl font-semibold text-black mb-2">
+          <h2 className={`text-2xl font-semibold ${textColor} mb-2`}>
             Decision Submitted Successfully
           </h2>
-          <p className="text-black">
+          <p className={textColor}>
             {getDecisionLabel()}
           </p>
         </div>
@@ -78,34 +91,34 @@ const DecisionSuccessModal = ({
         {/* Content */}
         <div className="p-6">
           {/* Decision Details */}
-          <div className="bg-black/5 rounded-lg p-4 mb-6">
+          <div className={`${cardBg} rounded-lg p-4 mb-6`}>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-black">Proposal Code:</span>
-                <span className="text-sm font-medium text-black">{proposalCode}</span>
+                <span className={`text-sm ${textColor}`}>Proposal Code:</span>
+                <span className={`text-sm font-medium ${textColor}`}>{proposalCode}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-black">Report Title:</span>
-                <span className="text-sm font-medium text-black truncate max-w-[200px]">{reportTitle}</span>
+                <span className={`text-sm ${textColor}`}>Report Title:</span>
+                <span className={`text-sm font-medium ${textColor} truncate max-w-[200px]`}>{reportTitle}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-black">Status:</span>
+                <span className={`text-sm ${textColor}`}>Status:</span>
                 <span className="text-sm font-medium text-green-600">Completed</span>
               </div>
             </div>
           </div>
 
           {/* Description */}
-          <p className="text-sm text-black mb-6">
+          <p className={`text-sm ${textColor} mb-6`}>
             {getDecisionDescription()}
           </p>
 
           {/* PDF Generated Notice */}
-          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg mb-6">
-            <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className={`flex items-start gap-3 p-4 ${infoBg} border rounded-lg mb-6`}>
+            <FileText className={`w-5 h-5 ${infoText} flex-shrink-0 mt-0.5`} />
             <div>
-              <p className="text-sm font-medium text-black">PDF Report Generated</p>
-              <p className="text-sm text-black mt-1">
+              <p className={`text-sm font-medium ${textColor}`}>PDF Report Generated</p>
+              <p className={`text-sm ${textColor} mt-1`}>
                 Your review report has been converted to PDF and stored securely. 
                 It will be available in the Supporting Documents section.
               </p>
@@ -114,7 +127,7 @@ const DecisionSuccessModal = ({
                   href={pdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 mt-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                  className={`inline-flex items-center gap-2 mt-2 text-sm font-medium ${infoText} hover:underline transition-colors`}
                 >
                   <Download className="w-4 h-4" />
                   Download Report PDF
@@ -126,7 +139,7 @@ const DecisionSuccessModal = ({
           {/* Back to Dashboard Button */}
           <button
             onClick={handleBackToDashboard}
-            className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-black text-white font-semibold rounded-lg hover:bg-black/90 transition-colors"
+            className={`w-full flex items-center justify-center gap-2 py-3 px-6 ${buttonBg} font-semibold rounded-lg transition-colors`}
           >
             <ArrowLeft className="w-5 h-5" />
             Back to Dashboard

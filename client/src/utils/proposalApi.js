@@ -215,6 +215,55 @@ export const uploadDocument = async (file, proposalCode) => {
   }
 };
 
+// Delete document from Supabase storage
+export const deleteDocument = async (s3Key) => {
+  try {
+    const response = await apiClient.delete('/api/collaboration/delete/document', {
+      data: { s3Key }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Delete image from Supabase storage
+export const deleteImage = async (s3Key) => {
+  try {
+    const response = await apiClient.delete('/api/collaboration/delete/image', {
+      data: { s3Key }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Track embedded image in proposal
+export const trackEmbeddedImage = async (proposalId, url, s3Key) => {
+  try {
+    const response = await apiClient.post(`/api/collaboration/${proposalId}/track-image`, {
+      url,
+      s3Key
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Delete embedded image from proposal and storage
+export const deleteEmbeddedImage = async (proposalId, s3Key, url) => {
+  try {
+    const response = await apiClient.delete(`/api/collaboration/${proposalId}/embedded-image`, {
+      data: { s3Key, url }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
 // Upload Form I with AI extraction
 export const uploadFormI = async (file, proposalCode) => {
   try {
@@ -453,5 +502,9 @@ export default {
   createReport,
   updateReport,
   submitReport,
-  deleteReport
+  deleteReport,
+  deleteDocument,
+  deleteImage,
+  trackEmbeddedImage,
+  deleteEmbeddedImage
 };

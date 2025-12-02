@@ -12,10 +12,21 @@ const AdvancedProposalEditor = lazy(() =>
 const ReviewEditorSection = ({ 
   proposalId,
   proposal,
-  defaultOpen = false 
+  defaultOpen = false,
+  theme = 'light'
 }) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-black/10';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const iconBg = isDark ? 'bg-white/10' : 'bg-black/5';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/10';
+  const loadingBg = isDark ? 'bg-slate-700' : 'bg-black/5';
 
   const handleGoToCollaborate = () => {
     router.push(`/proposal/collaborate/${proposalId}`);
@@ -102,26 +113,26 @@ const ReviewEditorSection = ({
   }, [proposal]);
 
   return (
-    <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+    <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
       {/* Header - Always visible, clickable to toggle */}
       <div 
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center mr-3">
-            <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center mr-3`}>
+            <svg className={`w-5 h-5 ${textColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-black">Proposal Contents</h2>
-            <p className="text-sm text-black mt-0.5">View all forms and documents</p>
+            <h2 className={`text-xl font-semibold ${textColor}`}>Proposal Contents</h2>
+            <p className={`text-sm ${textColor} mt-0.5 opacity-70`}>View all forms and documents</p>
           </div>
         </div>
-        <button className="p-1 hover:bg-black/5 rounded transition-colors">
+        <button className={`p-1 ${hoverBg} rounded transition-colors`}>
           <ChevronDown 
-            className={`w-5 h-5 text-black transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 ${textColor} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           />
         </button>
       </div>
@@ -150,12 +161,12 @@ const ReviewEditorSection = ({
           </div>
 
           {/* Editor in View Mode */}
-          <div className="border border-black/10 rounded-lg overflow-hidden">
+          <div className={`border ${borderColor} rounded-lg overflow-hidden`}>
             <Suspense fallback={
-              <div className="flex items-center justify-center py-12 bg-black/5">
+              <div className={`flex items-center justify-center py-12 ${loadingBg}`}>
                 <div className="text-center">
-                  <div className="w-12 h-12 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-sm text-black">Loading editor...</p>
+                  <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+                  <p className={`text-sm ${textColor}`}>Loading editor...</p>
                 </div>
               </div>
             }>

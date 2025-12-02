@@ -17,10 +17,22 @@ const ReviewDecisionPanel = ({
   proposalStatus,
   onSubmitDecision,
   isSubmitting = false,
-  hasUserMadeDecision = false
+  hasUserMadeDecision = false,
+  theme = 'light'
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedDecision, setSelectedDecision] = useState('');
+
+  // Theme helpers
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-black/10';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const iconBg = isDark ? 'bg-white/10' : 'bg-black/5';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
+  const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/10';
+  const infoBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-black/5 border-black/10';
+  const btnBg = isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-black/90';
 
   // Check if user is an expert reviewer - experts cannot see this panel
   const isExpert = userRoles.includes('EXPERT_REVIEWER') && 
@@ -105,19 +117,19 @@ const ReviewDecisionPanel = ({
   const getColorClasses = (color, isSelected) => {
     const colors = {
       green: {
-        border: isSelected ? 'border-green-500 bg-green-50' : 'border-black/10',
+        border: isSelected ? 'border-green-500 bg-green-50' : borderColor,
         icon: 'text-green-600',
-        radio: isSelected ? 'border-green-500 bg-green-500' : 'border-black/30'
+        radio: isSelected ? 'border-green-500 bg-green-500' : isDark ? 'border-white/30' : 'border-black/30'
       },
       red: {
-        border: isSelected ? 'border-red-500 bg-red-50' : 'border-black/10',
+        border: isSelected ? 'border-red-500 bg-red-50' : borderColor,
         icon: 'text-red-600',
-        radio: isSelected ? 'border-red-500 bg-red-500' : 'border-black/30'
+        radio: isSelected ? 'border-red-500 bg-red-500' : isDark ? 'border-white/30' : 'border-black/30'
       },
       blue: {
-        border: isSelected ? 'border-blue-500 bg-blue-50' : 'border-black/10',
+        border: isSelected ? 'border-blue-500 bg-blue-50' : borderColor,
         icon: 'text-blue-600',
-        radio: isSelected ? 'border-blue-500 bg-blue-500' : 'border-black/30'
+        radio: isSelected ? 'border-blue-500 bg-blue-500' : isDark ? 'border-white/30' : 'border-black/30'
       }
     };
     return colors[color] || colors.green;
@@ -153,27 +165,27 @@ const ReviewDecisionPanel = ({
   // If no decision options available and user cannot make decision, show locked state
   if (decisionOptions.length === 0 && !userCanMakeDecision) {
     return (
-      <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+      <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
         {/* Header */}
         <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center mr-3">
-              <Lock className="w-5 h-5 text-black/50" />
+            <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center mr-3`}>
+              <Lock className={`w-5 h-5 ${isDark ? 'text-white/50' : 'text-black/50'}`} />
             </div>
-            <h2 className="text-xl font-semibold text-black">Review Decision</h2>
+            <h2 className={`text-xl font-semibold ${textColor}`}>Review Decision</h2>
           </div>
-          <button className="p-1 hover:bg-black/5 rounded transition-colors">
-            <ChevronDown className={`w-5 h-5 text-black transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          <button className={`p-1 ${hoverBg} rounded transition-colors`}>
+            <ChevronDown className={`w-5 h-5 ${textColor} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
 
         {isOpen && (
           <div className="mt-4">
-            <div className="flex items-start gap-3 p-4 bg-black/5 border border-black/10 rounded-lg">
-              <Info className="w-5 h-5 text-black/60 flex-shrink-0 mt-0.5" />
+            <div className={`flex items-start gap-3 p-4 ${infoBg} border rounded-lg`}>
+              <Info className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-black/60'} flex-shrink-0 mt-0.5`} />
               <div>
-                <p className="text-sm text-black font-medium">Decision Not Available</p>
-                <p className="text-sm text-black mt-1">{getRestrictedMessage()}</p>
+                <p className={`text-sm ${textColor} font-medium`}>Decision Not Available</p>
+                <p className={`text-sm ${textColor} mt-1`}>{getRestrictedMessage()}</p>
               </div>
             </div>
           </div>
@@ -188,21 +200,21 @@ const ReviewDecisionPanel = ({
   }
 
   return (
-    <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+    <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
       {/* Header - Always visible, clickable to toggle */}
       <div 
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-black/5 rounded-lg flex items-center justify-center mr-3">
-            <ClipboardCheck className="w-5 h-5 text-black" />
+          <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center mr-3`}>
+            <ClipboardCheck className={`w-5 h-5 ${textColor}`} />
           </div>
-          <h2 className="text-xl font-semibold text-black">Review Decision</h2>
+          <h2 className={`text-xl font-semibold ${textColor}`}>Review Decision</h2>
         </div>
-        <button className="p-1 hover:bg-black/5 rounded transition-colors">
+        <button className={`p-1 ${hoverBg} rounded transition-colors`}>
           <ChevronDown 
-            className={`w-5 h-5 text-black transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 ${textColor} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           />
         </button>
       </div>
@@ -232,7 +244,7 @@ const ReviewDecisionPanel = ({
               return (
                 <label 
                   key={option.value} 
-                  className={`flex items-center cursor-pointer p-4 rounded-lg border-2 transition-all ${colorClasses.border}`}
+                  className={`flex items-center cursor-pointer p-4 rounded-lg border-2 transition-all ${colorClasses.border} ${isSelected ? '' : isDark ? 'bg-transparent' : ''}`}
                 >
                   <input
                     type="radio"
@@ -248,7 +260,7 @@ const ReviewDecisionPanel = ({
                     )}
                   </div>
                   <Icon className={`w-5 h-5 mr-3 ${colorClasses.icon}`} />
-                  <span className={`font-medium text-black ${isSelected ? 'font-semibold' : ''}`}>
+                  <span className={`font-medium ${isSelected ? 'font-semibold text-black' : textColor}`}>
                     {option.label}
                   </span>
                 </label>
@@ -260,12 +272,12 @@ const ReviewDecisionPanel = ({
           <button
             onClick={handleSubmit}
             disabled={!selectedDecision || isSubmitting}
-            className="w-full py-3 px-6 bg-black text-white font-semibold rounded-lg hover:bg-black/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`w-full py-3 px-6 ${btnBg} font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {isSubmitting ? 'Processing...' : 'Proceed with Decision'}
           </button>
 
-          <p className="text-xs text-black text-center mt-3">
+          <p className={`text-xs ${textColor} text-center mt-3`}>
             You will be asked to provide a detailed report before the decision is finalized.
           </p>
         </div>

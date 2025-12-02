@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import apiClient from '../../../utils/api';
+import { Moon, Sun, MoonStar } from 'lucide-react';
 
 // Import modular components
 import {
@@ -19,6 +20,50 @@ function TrackProposalContent() {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
+  
+  // Theme state
+  const [theme, setTheme] = useState('light');
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('dashboard-theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  // Apply dark class to document for CSS variable support
+  useEffect(() => {
+    const isDarkMode = theme === 'dark' || theme === 'darkest';
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    // Cleanup on unmount
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard-theme', newTheme);
+  };
+
+  // Theme helper variables
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  
+  // Theme-based classes
+  const bgClass = isDarkest ? 'bg-black' : isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-50 to-slate-100';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const subTextColor = isDark ? 'text-slate-400' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-200';
+  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
   
   // State
   const [proposal, setProposal] = useState(null);
@@ -169,10 +214,10 @@ function TrackProposalContent() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center`}>
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-black text-lg">Loading proposal tracking...</p>
+          <div className={`w-16 h-16 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+          <p className={`${textColor} text-lg`}>Loading proposal tracking...</p>
         </div>
       </div>
     );
@@ -181,23 +226,23 @@ function TrackProposalContent() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center`}>
         <div className="text-center">
           <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
-          <p className="text-black text-xl font-semibold mb-2">Error Loading Proposal</p>
-          <p className="text-black mb-4">{error}</p>
+          <p className={`${textColor} text-xl font-semibold mb-2`}>Error Loading Proposal</p>
+          <p className={`${textColor} mb-4`}>{error}</p>
           <div className="flex gap-4 justify-center">
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+              className={`px-6 py-2 ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'} rounded-lg transition-colors`}
             >
               Try Again
             </button>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-6 py-2 border border-black text-black rounded-lg hover:bg-black/5 transition-colors"
+              className={`px-6 py-2 border ${borderColor} ${textColor} rounded-lg ${hoverBg} transition-colors`}
             >
               Return to Dashboard
             </button>
@@ -210,16 +255,16 @@ function TrackProposalContent() {
   // Not found state
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center`}>
         <div className="text-center">
-          <svg className="w-16 h-16 text-black/30 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-16 h-16 ${isDark ? 'text-white/30' : 'text-black/30'} mx-auto mb-4`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p className="text-black text-xl font-semibold mb-2">Proposal Not Found</p>
-          <p className="text-black mb-4">The requested proposal could not be loaded.</p>
+          <p className={`${textColor} text-xl font-semibold mb-2`}>Proposal Not Found</p>
+          <p className={`${textColor} mb-4`}>The requested proposal could not be loaded.</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+            className={`px-6 py-2 ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'} rounded-lg transition-colors`}
           >
             Return to Dashboard
           </button>
@@ -246,18 +291,33 @@ function TrackProposalContent() {
   const isRejected = rejectedStageIndex >= 0;
 
   return (
-    <div className="min-h-screen bg-black/5">
+    <div className={`min-h-screen ${bgClass}`}>
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors`}
+        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
+      >
+        {theme === 'light' ? (
+          <Moon className={`w-5 h-5 ${textColor}`} />
+        ) : theme === 'dark' ? (
+          <MoonStar className={`w-5 h-5 ${textColor}`} />
+        ) : (
+          <Sun className={`w-5 h-5 ${textColor}`} />
+        )}
+      </button>
+
       {/* Floating Action Button Panel */}
       <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40">
-        <div className={`bg-white rounded-2xl shadow-2xl border border-black/10 overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
+        <div className={`${cardBg} rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
           {/* Toggle Button */}
           <button
             onClick={() => setFabExpanded(!fabExpanded)}
-            className="w-full flex items-center justify-between p-3 hover:bg-black/5 transition-colors border-b border-black/10"
+            className={`w-full flex items-center justify-between p-3 ${hoverBg} transition-colors border-b ${borderColor}`}
           >
-            {fabExpanded && <span className="text-sm font-semibold text-black">Actions</span>}
+            {fabExpanded && <span className={`text-sm font-semibold ${textColor}`}>Actions</span>}
             <svg 
-              className={`w-5 h-5 text-black transition-transform ${fabExpanded ? '' : 'mx-auto'} ${fabExpanded ? 'rotate-0' : 'rotate-180'}`} 
+              className={`w-5 h-5 ${textColor} transition-transform ${fabExpanded ? '' : 'mx-auto'} ${fabExpanded ? 'rotate-0' : 'rotate-180'}`} 
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
@@ -271,7 +331,7 @@ function TrackProposalContent() {
             {/* Version History Button */}
             <button
               onClick={() => router.push(`/proposal/view/${id}?tab=versions`)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
               title="Version History"
             >
               <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,7 +344,7 @@ function TrackProposalContent() {
             {canAccessCollaborate && (
               <button
                 onClick={() => router.push(`/proposal/collaborate/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
                 title="Collaborate"
               >
                 <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,7 +357,7 @@ function TrackProposalContent() {
             {/* View Button */}
             <button
               onClick={() => router.push(`/proposal/view/${id}`)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
               title="View Proposal"
             >
               <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -311,7 +371,7 @@ function TrackProposalContent() {
             {isReviewer && (
               <button
                 onClick={() => router.push(`/proposal/review/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
                 title="Review"
               >
                 <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -331,6 +391,7 @@ function TrackProposalContent() {
         status={proposal.status}
         version={proposal.currentVersion}
         userRoles={userRoles}
+        theme={theme}
       />
 
       {/* Main Content */}
@@ -345,11 +406,12 @@ function TrackProposalContent() {
           onOpinionsClick={handleOpinionsClick}
           onStageClick={handleStageClick}
           activeSection={activeSection}
+          theme={theme}
         />
 
         {/* Visual Timeline Bar */}
-        <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold text-black mb-6">Progress Overview</h3>
+        <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
+          <h3 className={`text-lg font-semibold ${textColor} mb-6`}>Progress Overview</h3>
           <div className="relative">
             {/* Progress Bar Container */}
             <div className="flex items-center">
@@ -368,17 +430,17 @@ function TrackProposalContent() {
                         isRejectedStage 
                           ? 'bg-red-500 border-red-500' 
                           : isCompleted 
-                            ? 'bg-black border-black' 
+                            ? (isDark ? 'bg-white border-white' : 'bg-black border-black') 
                             : isActive 
-                              ? 'bg-white border-black' 
-                              : 'bg-white border-black/20'
+                              ? (isDark ? 'bg-transparent border-white' : 'bg-white border-black') 
+                              : (isDark ? 'bg-transparent border-white/20' : 'bg-white border-black/20')
                       }`}>
                         {isRejectedStage ? (
                           <svg className="w-full h-full text-white p-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         ) : isCompleted ? (
-                          <svg className="w-full h-full text-white p-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className={`w-full h-full ${isDark ? 'text-black' : 'text-white'} p-0.5`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                           </svg>
                         ) : null}
@@ -387,10 +449,10 @@ function TrackProposalContent() {
                         isRejectedStage 
                           ? 'text-red-500' 
                           : isPastRejection
-                            ? 'text-black/20'
+                            ? (isDark ? 'text-white/20' : 'text-black/20')
                             : isCompleted || isActive 
-                              ? 'text-black' 
-                              : 'text-black/40'
+                              ? textColor 
+                              : (isDark ? 'text-white/40' : 'text-black/40')
                       }`}>
                         {stage}
                       </span>
@@ -403,8 +465,8 @@ function TrackProposalContent() {
                           isRejectedStage 
                             ? 'bg-red-500' 
                             : isCompleted && !isPastRejection
-                              ? 'bg-black' 
-                              : 'bg-black/10'
+                              ? (isDark ? 'bg-white' : 'bg-black') 
+                              : (isDark ? 'bg-white/10' : 'bg-black/10')
                         }`} />
                       </div>
                     )}
@@ -416,12 +478,12 @@ function TrackProposalContent() {
           
           {/* Rejection Notice */}
           {isRejected && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className={`mt-4 p-3 ${isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'} border rounded-lg`}>
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-sm text-black">
+                <p className={`text-sm ${textColor}`}>
                   This proposal was rejected at the <span className="font-semibold">{['AI', 'CMPDI', 'Expert', 'Decision', 'TSSRC', 'SSRC'][rejectedStageIndex]}</span> stage.
                 </p>
               </div>
@@ -441,6 +503,7 @@ function TrackProposalContent() {
                 setMilestonesOpen(!milestonesOpen);
                 if (!milestonesOpen) setActiveSection('milestones');
               }}
+              theme={theme}
             />
           </div>
 
@@ -454,6 +517,7 @@ function TrackProposalContent() {
                 setOpinionsOpen(!opinionsOpen);
                 if (!opinionsOpen) setActiveSection('opinions');
               }}
+              theme={theme}
             />
           </div>
 
@@ -467,6 +531,7 @@ function TrackProposalContent() {
                 setTimelineOpen(!timelineOpen);
                 if (!timelineOpen) setActiveSection('timeline');
               }}
+              theme={theme}
             />
           </div>
         </div>

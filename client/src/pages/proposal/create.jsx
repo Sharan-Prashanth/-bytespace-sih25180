@@ -9,6 +9,7 @@ import { useToast, ToastContainer } from '../../components/ui (plate files)/toas
 import ProposalStorage from '../../utils/proposalStorage';
 import { createProposal, updateProposal, submitProposal, getProposalById, getProposals } from '../../utils/proposalApi';
 import '../../utils/clearProposalStorage'; // Enable global clearProposalStorage() function
+import { Moon, Sun, MoonStar } from 'lucide-react';
 
 // Import new modular components
 import Header from '../../components/create-page/Header';
@@ -28,6 +29,49 @@ function CreateNewProposalContent() {
   const router = useRouter();
   const { user } = useAuth();
   const { toasts, removeToast, success, error, info } = useToast();
+  
+  // Theme state
+  const [theme, setTheme] = useState('light');
+  
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('dashboard-theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  // Apply dark class to document for CSS variable support
+  useEffect(() => {
+    const isDarkMode = theme === 'dark' || theme === 'darkest';
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    // Cleanup on unmount
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard-theme', newTheme);
+  };
+
+  // Theme helper variables
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  
+  // Theme-based classes
+  const bgClass = isDarkest ? 'bg-black' : isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-50 to-slate-100';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const subTextColor = isDark ? 'text-slate-400' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-200';
   
   // Storage instance
   const storageRef = useRef(null);
@@ -826,59 +870,95 @@ function CreateNewProposalContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center transition-colors duration-300`}>
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-black text-lg">Loading proposal...</p>
+          <div className={`w-16 h-16 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/10 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+          <p className={`${textColor} text-lg`}>Loading proposal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black/5">
+    <div className={`min-h-screen ${bgClass} transition-colors duration-300`}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* Header with back button */}
-      <div className="bg-white border-b border-black/10">
+      <div className={`${cardBg} border-b ${borderColor}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={handleBackToDashboard}
-              className="px-4 py-2 text-sm border border-black/20 text-black rounded-lg hover:bg-black/5 transition-colors"
+              className={`flex items-center gap-2 px-4 py-2 text-sm border rounded-lg transition-colors ${isDark ? `border-slate-600 ${textColor} hover:bg-white/5` : `border-slate-300 ${textColor} hover:bg-black/5`}`}
             >
-              ← Back to Dashboard
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Dashboard
             </button>
             {proposalCode && (
-              <div className="flex items-center gap-3 text-sm text-black">
+              <div className={`flex items-center gap-3 text-sm ${textColor}`}>
                 <span>Code: <span className="font-mono font-semibold">{proposalCode}</span></span>
-                <span className="px-2 py-0.5 bg-black/10 rounded text-xs font-medium">
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-slate-700 border border-slate-600' : 'bg-slate-200 border border-slate-300'}`}>
                   {proposalStatus === 'DRAFT' ? 'Draft v0.1' : `v${currentVersion}`}
                 </span>
               </div>
             )}
           </div>
-          {lastSavedTime && (
-            <div className="text-sm text-black">
-              {isAutoSaving ? 'Saving...' : `Last saved: ${lastSavedTime.toLocaleTimeString()}`}
-            </div>
-          )}
+          
+          {/* Right side: Last saved, Date, Theme toggle */}
+          <div className="flex items-center gap-4">
+            {lastSavedTime && (
+              <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-black'}`}>
+                {isAutoSaving ? (
+                  <span className="flex items-center gap-2">
+                    <div className={`w-3 h-3 border-2 ${isDark ? 'border-white/30 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin`}></div>
+                    Saving...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <svg className={`w-4 h-4 ${textColor}`} fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Last saved: {lastSavedTime.toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+            )}
+            <span className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-black'}`}>
+              {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-black/5 text-black'}`}
+              title={theme === 'light' ? 'Switch to Dark Mode' : theme === 'dark' ? 'Switch to Darkest Mode' : 'Switch to Light Mode'}
+            >
+              {theme === 'light' ? (
+                <Moon className="w-5 h-5" />
+              ) : theme === 'dark' ? (
+                <MoonStar className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Guidelines */}
-        <Guidelines />
+        <Guidelines theme={theme} />
 
         {/* Pre-submission info */}
-        <PreSubmissionInfo />
+        <PreSubmissionInfo theme={theme} />
 
         {/* Proposal Information */}
         <ProposalInformation
           proposalInfo={proposalInfo}
           validationErrors={validationErrors}
           onChange={handleInfoChange}
+          theme={theme}
         />
 
         {/* Initial Documents */}
@@ -887,15 +967,16 @@ function CreateNewProposalContent() {
           onDocumentUpload={handleInitialDocumentUpload}
           onDocumentRemove={handleInitialDocumentRemove}
           proposalCode={proposalCode}
+          theme={theme}
         />
 
         {/* Form I Editor */}
         <Suspense fallback={
-          <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
+          <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="w-12 h-12 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-black">Loading editor...</p>
+                <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/10 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+                <p className={textColor}>Loading editor...</p>
               </div>
             </div>
           </div>
@@ -913,6 +994,7 @@ function CreateNewProposalContent() {
             isAutoSaving={isAutoSaving}
             proposalCode={proposalCode}
             isNewProposal={isNewProposal}
+            theme={theme}
           />
         </Suspense>
 
@@ -922,6 +1004,7 @@ function CreateNewProposalContent() {
           onFormUpload={handleAdditionalFormUpload}
           onFormRemove={handleAdditionalFormRemove}
           proposalCode={proposalCode}
+          theme={theme}
         />
 
         {/* Supporting Documents */}
@@ -930,6 +1013,7 @@ function CreateNewProposalContent() {
           onDocumentUpload={handleSupportingDocumentUpload}
           onDocumentRemove={handleSupportingDocumentRemove}
           proposalCode={proposalCode}
+          theme={theme}
         />
 
         {/* Submit Button */}
@@ -937,7 +1021,7 @@ function CreateNewProposalContent() {
           <button
             onClick={handleSubmitClick}
             disabled={isSavingToBackend}
-            className="px-8 py-3 bg-black text-white rounded-lg hover:bg-black/90 transition-colors font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`px-8 py-3 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}
           >
             {isSavingToBackend ? 'Saving...' : 'Submit Proposal'}
           </button>
@@ -956,6 +1040,7 @@ function CreateNewProposalContent() {
           supportingDocuments,
           formIContent,
         }}
+        theme={theme}
       />
 
       {/* Success Modal */}
@@ -963,6 +1048,7 @@ function CreateNewProposalContent() {
         isOpen={showSuccessModal}
         onClose={handleSuccessModalClose}
         proposalId={submittedProposalId}
+        theme={theme}
       />
 
       {/* Chatbot */}
