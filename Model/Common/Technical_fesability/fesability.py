@@ -661,6 +661,8 @@ async def technical_feasibility(file: UploadFile = File(...), horizon: int = 24)
             'changeable_percent': changeable,
             'feasibility_decision': decision,
             'comment': comment_text,
+            # Provide templated comments block for UI/reporting
+            'comments': comment_text,
             'recommended_actions': recommendations,
             'flagged_lines': flagged_lines,
             'flagged_count': len(flagged_lines)

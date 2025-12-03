@@ -1160,6 +1160,8 @@ async def analyze_novelty_from_file(file: UploadFile = File(...)):
         response_data = {
             "novelty_percentage": round(result.novelty_percentage, 1),
             "comment": professional_comment,
+            # human-readable comments block for UI/reporting
+            "comments": professional_comment,
             "flagged_lines": flagged_lines
         }
         

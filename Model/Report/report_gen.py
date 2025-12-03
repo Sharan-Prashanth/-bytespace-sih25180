@@ -1163,6 +1163,42 @@ async def render_report_html(file: UploadFile = File(...), proposal_id: Optional
             "actual_labor_cost": "",
         }
 
+        # -----------------------------------------------------------------
+        # Build Page 2 content from microservice `comments` blocks (fallbacks)
+        # -----------------------------------------------------------------
+        def _route_comment(route_name):
+            # prefer 'comments', then 'comment', then other fallbacks
+            val = safe_get(modules_out.get(route_name), 'comments') or safe_get(modules_out.get(route_name), 'comment')
+            if isinstance(val, dict) or isinstance(val, list):
+                try:
+                    return json.dumps(val, ensure_ascii=False)
+                except:
+                    return str(val)
+            return str(val or "")
+
+        panels = [
+            ("Novelty", _route_comment('/analyze-novelty')),
+            ("Cost Justification", _route_comment('/process-and-estimate')),
+            ("Technical Feasibility", _route_comment('/technical_feasibility')),
+            ("Deliverables", _route_comment('/deliverable-check')),
+            ("AI Detection", _route_comment('/detect-ai-and-validate')),
+            ("Plagiarism", _route_comment('/check-plagiarism-final')),
+        ]
+
+        # Format panels into a single content block suitable for Page 2
+        page2_lines = ["Detailed Findings & Recommendations", ""]
+        for title, body in panels:
+            clean = sanitize_text(body)
+            if not clean:
+                clean = "No findings available."
+            page2_lines.append(title)
+            page2_lines.append(clean)
+            page2_lines.append("")
+
+        # ensure pages dict exists before assigning to it
+        pages = {}
+        pages['page2'] = {"title": "Detailed Findings & Recommendations", "content": "\n".join(page2_lines)}
+
         # Build dashboard categories strictly from proposal cost_breakdown
         dashboard_categories = []
         total_cost_val = 0

@@ -1626,10 +1626,79 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         # keep top 10 by probability
         flagged = sorted(flagged, key=lambda x: x.get("ai_probability", 0.0), reverse=True)[:10]
 
+        # Build the user-facing comments block using the project's LLM (Gemini).
+        # If the LLM call fails, fall back to a conservative static comment.
+        try:
+            try:
+                changeable_pct = int(display_score)
+            except Exception:
+                changeable_pct = 0
+
+            # Build a concise prompt using available context. Keep it explicit about the
+            # required output format (plain multiline comment block, no JSON).
+            prompt = f"""
+You are an expert program/project auditor for S&T grant proposals. Using the report context below, produce a concise, actionable "comments" block suitable for inclusion in an automated review. The block must be plain text only (no JSON), and should mirror the format shown:
+
+AI Detection
+Score: <display>/100    Changeable: <percent>%
+<One-sentence description of why the score is this way>
+Recommended actions:
+- <action 1>
+- <action 2>
+- <action 3>
+
+Use the information available to you (combined score, model and llm percentages, top flagged snippets, and a short explanation) to write tailored improvement guidance and reasons why the document received this score. Keep it no longer than 6-8 lines and avoid hallucinated facts — only use the provided context.
+
+Context (structured):
+- display_score: {display_score}
+- combined_score: {combined_score}
+- model_score_pct: {model_score_pct}
+- llm_score_pct: {llm_score_pct}
+- file_verdict: {file_verdict}
+- top_flagged_count: {len(flagged)}
+- improvement_summary: {improvement_sentence}
+
+Top flagged sentences (truncated):
+"""
+            # attach up to 5 flagged snippets for context
+            for f in flagged[:5]:
+                short = (f.get("text") or "").replace("\n", " ")[:300]
+                prompt += f"- ({f.get('ai_probability', 0.0)}) {short}\n"
+
+            prompt += "\nRespond ONLY with the plain text comment block exactly in the format described above."
+
+            model = genai.GenerativeModel(MODEL_NAME)
+            resp = model.generate_content(prompt)
+            comments_text = (resp.text or "").strip()
+
+            # remove code fences if present
+            if comments_text.startswith('```') and comments_text.endswith('```'):
+                comments_text = comments_text.strip('`\n ')
+            if not comments_text:
+                raise Exception("Empty response from Gemini")
+
+        except Exception:
+            # conservative fallback (keeps the expected format)
+            try:
+                changeable_pct = int(display_score)
+            except Exception:
+                changeable_pct = 0
+            comments_text = (
+                f"AI Detection\n"
+                f"Score: {display_score}/100    Changeable: {changeable_pct}%\n"
+                "Proposed milestones are defined but need clearer acceptance criteria and measurable outputs for each tranche. "
+                "Strengthening deliverable descriptions will help tie disbursements to verified progress.\n"
+                "Recommended actions:\n"
+                "- Attach a Gantt with milestone dates and specific, testable acceptance criteria for each deliverable.\n"
+                "- Define measurable KPIs (e.g., pilot throughput, emissions targets, energy recovery rates) per milestone.\n"
+                "- Propose verification methods and third-party sign-off procedures to enable tranche-based funding."
+            )
+
         response = {
             "classification": classification,
             "model_score_pct": display_score,
             "improvement_comment": improvement_sentence,
+            "comments": comments_text,
             "flagged_lines": flagged,
             "flagged_count": len(flagged),
             "full_report_url": report_url,

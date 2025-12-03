@@ -861,6 +861,8 @@ async def deliverable_check(file: UploadFile = File(...)):
         response_data = {
             "score": result["score"],
             "comment": result["comment"],
+            # Provide a templated comments block for UI/reporting (keeps previous `comment` for backward compat)
+            "comments": result.get("comment"),
             "analysis": {
                 "decision": result["decision"],
                 "total_months": result["total_months"],
