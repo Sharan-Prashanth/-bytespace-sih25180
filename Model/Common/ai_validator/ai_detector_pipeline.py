@@ -1373,15 +1373,142 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         # 1) duplicate check by hash (fast)
         existing = load_existing_report_by_hash(file_hash)
         if existing:
-            # return cached stored result immediately
-            return JSONResponse({
-                "status": "cached",
-                "message": "File already processed. Returning cached result.",
-                "filename": existing.get("filename"),
-                "file_hash": existing.get("file_hash"),
-                "created_at": existing.get("created_at"),
-                "cached_result": existing.get("result")
-            })
+            # Build a compact cached response (only the four fields requested)
+            try:
+                stored = existing.get("result") or existing.get("cached_result") or existing
+
+                # Try to derive display score (human-facing % where higher == more human)
+                display_score = None
+                # common places for overall human percentage
+                display_score = (
+                    (stored.get("overall_scores") or {}).get("overall_human_percentage")
+                    if isinstance(stored, dict) else None
+                )
+                if display_score is None:
+                    display_score = (
+                        (stored.get("field_analysis") or {}).get("overall_scores", {}).get("overall_human_percentage")
+                    )
+                if display_score is None:
+                    # try legacy names
+                    display_score = (
+                        (stored.get("field_analysis") or {}).get("overall_scores", {}).get("human_score")
+                    )
+                if display_score is None:
+                    # fallback: if combined_score present, compute 100 - combined
+                    combined = (stored.get("aggregate") or {}).get("combined_score_pct") or (stored.get("aggregate") or {}).get("combined_score")
+                    if isinstance(combined, (int, float)):
+                        display_score = int(round(100 - float(combined)))
+                if display_score is None:
+                    # final fallback: try overall ai/human mix
+                    try:
+                        ai_pct = (stored.get("field_analysis") or {}).get("overall_scores", {}).get("overall_ai_percentage")
+                        if isinstance(ai_pct, (int, float)):
+                            display_score = int(round(100 - float(ai_pct)))
+                    except Exception:
+                        display_score = None
+
+                if display_score is None:
+                    display_score = 50
+
+                try:
+                    display_score = int(display_score)
+                except Exception:
+                    display_score = max(0, min(100, int(round(float(display_score or 50)))))
+
+                # Determine classification for improvement comment
+                classification = None
+                classification = (stored.get("overall_scores") or {}).get("classification") or (stored.get("field_analysis") or {}).get("overall_scores", {}).get("classification")
+                if not classification:
+                    classification = (stored.get("aggregate") or {}).get("file_verdict")
+                if not classification:
+                    classification = "mixed"
+
+                if classification == "human":
+                    improvement_sentence = "Document appears human-authored. Consider adding more specific citations and examples to strengthen credibility."
+                elif classification == "ai":
+                    improvement_sentence = f"Document shows signs of AI generation in parts of the text. Add personal insights, specific examples, and vary writing style."
+                else:
+                    improvement_sentence = f"Mixed signals detected. Review flagged sections and add specific examples, citations and varied phrasing to improve human authenticity."
+
+                # Build deterministic comments text (same format as runtime run)
+                try:
+                    benefit_to_moc = "Yes" if display_score >= 50 else "No"
+                    if benefit_to_moc == "No":
+                        explanation = (
+                            "The document has limited alignment to the listed MOC benefit areas; "
+                            "revisions are needed to demonstrate clear benefits and technical readiness."
+                        )
+                        recommendations = [
+                            "Address gaps: include work on Advanced technologies for improving coal mining, Waste-to-Wealth concepts, Alternative uses of coal & clean coal technologies.",
+                            "Add technical validation or pilot plans to demonstrate feasibility.",
+                            "Highlight practical benefits to operations, safety, or environment with quantitative targets."
+                        ]
+                    else:
+                        explanation = (
+                            "The document demonstrates reasonable alignment to MOC benefit areas; "
+                            "consider strengthening technical validation, citations, and measurable targets."
+                        )
+                        recommendations = [
+                            "Add technical validation or pilot plans to demonstrate feasibility.",
+                            "Include quantitative targets for operational, safety, or environmental improvements.",
+                            "Provide clearer links between proposed work and MOC benefit areas with citations."
+                        ]
+
+                    comments_lines = []
+                    comments_lines.append(f"Score: {display_score}/100 Benefit to MOC: {benefit_to_moc}")
+                    comments_lines.append(explanation)
+                    comments_lines.append("Recommended actions:")
+                    for r in recommendations:
+                        comments_lines.append(f"- {r}")
+                    comments_text = "\n".join(comments_lines)
+                except Exception:
+                    comments_text = (
+                        f"Score: {display_score}/100 Benefit to MOC: No\n"
+                        "The document has limited alignment to the listed MOC benefit areas; revisions are needed to demonstrate clear benefits and technical readiness.\n"
+                        "Recommended actions:\n"
+                        "- Address gaps: include work on Advanced technologies for improving coal mining, Waste-to-Wealth concepts, Alternative uses of coal & clean coal technologies.\n"
+                        "- Add technical validation or pilot plans to demonstrate feasibility.\n"
+                        "- Highlight practical benefits to operations, safety, or environment with quantitative targets."
+                    )
+
+                # Attempt to extract flagged lines from stored result
+                flagged = []
+                try:
+                    # common locations
+                    if isinstance(stored, dict):
+                        if stored.get("flagged_lines"):
+                            flagged = stored.get("flagged_lines")
+                        elif (stored.get("aggregate") or {}).get("flagged_sentences"):
+                            flagged = (stored.get("aggregate") or {}).get("flagged_sentences")
+                        elif (stored.get("field_analysis") or {}).get("flagged_fields"):
+                            # map to compact format if needed
+                            ff = (stored.get("field_analysis") or {}).get("flagged_fields") or []
+                            for f in ff:
+                                flagged.append({
+                                    "field_name": f.get("field_name"),
+                                    "ai_probability": f.get("ai_probability"),
+                                    "reason": f.get("reason")
+                                })
+                except Exception:
+                    flagged = []
+
+                response = {
+                    "model_score_pct": display_score,
+                    "improvement_comment": improvement_sentence,
+                    "comments": comments_text,
+                    "flagged_lines": flagged,
+                }
+                return JSONResponse(response)
+            except Exception:
+                # if any error building compact response, fall back to original cached payload
+                return JSONResponse({
+                    "status": "cached",
+                    "message": "File already processed. Returning cached result.",
+                    "filename": existing.get("filename"),
+                    "file_hash": existing.get("file_hash"),
+                    "created_at": existing.get("created_at"),
+                    "cached_result": existing.get("result")
+                })
 
         # 2) text extraction
         text = extract_text(filename_raw, data)
@@ -1626,87 +1753,62 @@ async def detect_ai_and_validate(file: UploadFile = File(...)):
         # keep top 10 by probability
         flagged = sorted(flagged, key=lambda x: x.get("ai_probability", 0.0), reverse=True)[:10]
 
-        # Build the user-facing comments block using the project's LLM (Gemini).
-        # If the LLM call fails, fall back to a conservative static comment.
+        # Build a deterministic, user-facing comments block (no external LLM call)
         try:
             try:
                 changeable_pct = int(display_score)
             except Exception:
                 changeable_pct = 0
 
-            # Build a concise prompt using available context. Keep it explicit about the
-            # required output format (plain multiline comment block, no JSON).
-            prompt = f"""
-You are an expert program/project auditor for S&T grant proposals. Using the report context below, produce a concise, actionable "comments" block suitable for inclusion in an automated review. The block must be plain text only (no JSON), and should mirror the format shown:
+            # Determine basic benefit alignment flag based on display score
+            benefit_to_moc = "Yes" if display_score >= 50 else "No"
 
-AI Detection
-Score: <display>/100    Changeable: <percent>%
-<One-sentence description of why the score is this way>
-Recommended actions:
-- <action 1>
-- <action 2>
-- <action 3>
+            if benefit_to_moc == "No":
+                explanation = (
+                    "The document has limited alignment to the listed MOC benefit areas; "
+                    "revisions are needed to demonstrate clear benefits and technical readiness."
+                )
+                recommendations = [
+                    "Address gaps: include work on Advanced technologies for improving coal mining, Waste-to-Wealth concepts, Alternative uses of coal & clean coal technologies.",
+                    "Add technical validation or pilot plans to demonstrate feasibility.",
+                    "Highlight practical benefits to operations, safety, or environment with quantitative targets."
+                ]
+            else:
+                explanation = (
+                    "The document demonstrates reasonable alignment to MOC benefit areas; "
+                    "consider strengthening technical validation, citations, and measurable targets."
+                )
+                recommendations = [
+                    "Add technical validation or pilot plans to demonstrate feasibility.",
+                    "Include quantitative targets for operational, safety, or environmental improvements.",
+                    "Provide clearer links between proposed work and MOC benefit areas with citations."
+                ]
 
-Use the information available to you (combined score, model and llm percentages, top flagged snippets, and a short explanation) to write tailored improvement guidance and reasons why the document received this score. Keep it no longer than 6-8 lines and avoid hallucinated facts — only use the provided context.
+            # Compose the comments block as a single string
+            comments_lines = []
+            comments_lines.append(f"Score: {display_score}/100 Benefit to MOC: {benefit_to_moc}")
+            comments_lines.append(explanation)
+            comments_lines.append("Recommended actions:")
+            for r in recommendations:
+                comments_lines.append(f"- {r}")
 
-Context (structured):
-- display_score: {display_score}
-- combined_score: {combined_score}
-- model_score_pct: {model_score_pct}
-- llm_score_pct: {llm_score_pct}
-- file_verdict: {file_verdict}
-- top_flagged_count: {len(flagged)}
-- improvement_summary: {improvement_sentence}
-
-Top flagged sentences (truncated):
-"""
-            # attach up to 5 flagged snippets for context
-            for f in flagged[:5]:
-                short = (f.get("text") or "").replace("\n", " ")[:300]
-                prompt += f"- ({f.get('ai_probability', 0.0)}) {short}\n"
-
-            prompt += "\nRespond ONLY with the plain text comment block exactly in the format described above."
-
-            model = genai.GenerativeModel(MODEL_NAME)
-            resp = model.generate_content(prompt)
-            comments_text = (resp.text or "").strip()
-
-            # remove code fences if present
-            if comments_text.startswith('```') and comments_text.endswith('```'):
-                comments_text = comments_text.strip('`\n ')
-            if not comments_text:
-                raise Exception("Empty response from Gemini")
-
+            comments_text = "\n".join(comments_lines)
         except Exception:
-            # conservative fallback (keeps the expected format)
-            try:
-                changeable_pct = int(display_score)
-            except Exception:
-                changeable_pct = 0
+            # Very conservative fallback string
             comments_text = (
-                f"AI Detection\n"
-                f"Score: {display_score}/100    Changeable: {changeable_pct}%\n"
-                "Proposed milestones are defined but need clearer acceptance criteria and measurable outputs for each tranche. "
-                "Strengthening deliverable descriptions will help tie disbursements to verified progress.\n"
+                f"Score: {display_score}/100 Benefit to MOC: No\n"
+                "The document has limited alignment to the listed MOC benefit areas; revisions are needed to demonstrate clear benefits and technical readiness.\n"
                 "Recommended actions:\n"
-                "- Attach a Gantt with milestone dates and specific, testable acceptance criteria for each deliverable.\n"
-                "- Define measurable KPIs (e.g., pilot throughput, emissions targets, energy recovery rates) per milestone.\n"
-                "- Propose verification methods and third-party sign-off procedures to enable tranche-based funding."
+                "- Address gaps: include work on Advanced technologies for improving coal mining, Waste-to-Wealth concepts, Alternative uses of coal & clean coal technologies.\n"
+                "- Add technical validation or pilot plans to demonstrate feasibility.\n"
+                "- Highlight practical benefits to operations, safety, or environment with quantitative targets."
             )
 
         response = {
-            "classification": classification,
             "model_score_pct": display_score,
             "improvement_comment": improvement_sentence,
             "comments": comments_text,
             "flagged_lines": flagged,
-            "flagged_count": len(flagged),
-            "full_report_url": report_url,
-            "file_storage": {
-                "original_file": f"{RAW_BUCKET}/{uploaded_name}",
-                "json_report": json_name if report_url else None,
-                "report_url": report_url
-            }
         }
         # mark todo item complete for this change
         try:
