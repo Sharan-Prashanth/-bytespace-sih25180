@@ -1,597 +1,316 @@
-/* Ministry of Coal Report Styles */
-
-/* Basic page & print setup */
-@page {
-  size: A4;
-  margin: 15mm;
-}
-
 * {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
+html,
 body {
-  font-family: Arial, Helvetica, sans-serif;
-  margin: 0;
-  padding: 0;
-  background: #ffffff;
+  width: 100%;
+  height: 100%;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f5f5;
   color: #333;
-  line-height: 1.6;
 }
 
-/* Government Color Palette */
-:root {
-  --gov-saffron: #ff9933;
-  --gov-green: #138808;
-  --gov-navy: #002855;
-  --gov-mid: #6b6f71;
-  --gov-light: #ffffff;
-  --paper-bg: #fbfbfb;
-  --border-light: #e8e8e8;
-  --text-secondary: #666666;
-  --success-green: #28a745;
-  --warning-orange: #fd7e14;
-  --danger-red: #dc3545;
-}
-
-/* Page Layout */
-.page {
-  width: 210mm;
-  min-height: 297mm;
-  margin: 8px auto;
-  background: linear-gradient(180deg, #fff3e6 0%, #ffffff 48%, #eef8f0 100%);
-  padding: 12mm 12mm 18mm;
-  position: relative;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.12);
-  page-break-after: always;
-  border-left: 6px solid rgba(255,153,51,0.12);
-  border-right: 6px solid rgba(19,136,8,0.07);
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-
-.page:last-child {
-  page-break-after: auto;
-}
-
-/* Watermark */
-.page::before {
-  content: '';
-  position: absolute;
-  top: 36px;
-  left: 36px;
-  width: 460px;
-  height: 120px;
-  background-image: url('../assets/moc.jpg');
-  background-size: contain;
-  background-repeat: no-repeat;
-  opacity: 0.06;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.page > * {
-  position: relative;
-  z-index: 1;
-}
-
-/* Header Styles */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 3px solid var(--gov-saffron);
-}
-
-.header-left {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.moc-logo {
-  height: 64px;
-  width: auto;
-  object-fit: contain;
-  margin-top: 4px;
-}
-
-.header-title {
-  font-size: 22px;
-  font-weight: bold;
-  color: var(--gov-navy);
-  margin-bottom: 4px;
-}
-
-.header-subtext {
-  font-size: 11px;
-  max-width: 320px;
-  line-height: 1.4;
-  color: var(--text-secondary);
-}
-
-.candidate-info {
-  font-size: 11px;
-  text-align: right;
-  line-height: 1.5;
-}
-
-.candidate-info .label {
-  font-weight: bold;
-  color: var(--gov-navy);
-}
-
-.classification {
-  color: var(--danger-red);
-  font-weight: bold;
-  background: rgba(220, 53, 69, 0.1);
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-/* Section Styles */
-.section {
-  margin-bottom: 30px;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: bold;
-  color: var(--gov-navy);
-  margin-bottom: 15px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--gov-green);
-}
-
-/* Project Information Grid */
-.project-info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.info-item {
+.container {
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  gap: 20px;
+  padding: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
-.info-label {
-  font-weight: bold;
-  color: var(--gov-navy);
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-
-.info-value {
-  color: #333;
-  font-size: 14px;
-}
-
-.priority-high {
-  color: var(--success-green);
-  font-weight: bold;
-}
-
-/* Overall Assessment */
-.overall-section {
+/* Page Styles */
+.page {
+  background: white;
+  width: 210mm;
+  height: 297mm;
+  margin: 0 auto;
+  padding: 40px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  page-break-after: always;
   display: flex;
-  gap: 30px;
+  flex-direction: column;
 }
 
-.overall-left {
-  flex: 1;
-  padding-right: 20px;
-  border-right: 1px solid var(--border-light);
+/* PAGE 1 */
+.page-1 {
+  justify-content: space-between;
 }
 
-.overall-right {
-  flex: 2;
-  padding-left: 20px;
-}
-
-.overall-score-box {
+.header-section {
   display: flex;
-  align-items: center;
-  gap: 25px;
-}
-
-.overall-score-circle {
-  width: 90px;
-  height: 90px;
-}
-
-.progress-circle {
-  transform: rotate(-90deg);
-}
-
-.score-text {
-  font-size: 18px;
-  font-weight: bold;
-  fill: var(--gov-navy);
-}
-
-.score-label {
-  font-weight: bold;
-  font-size: 14px;
-  color: var(--gov-navy);
-}
-
-.score-description {
-  font-size: 12px;
-  color: var(--success-green);
-  font-weight: bold;
-}
-
-/* Strengths & Concerns */
-.strengths-concerns {
-  display: flex;
+  flex-direction: column;
   gap: 20px;
 }
 
-.strengths, .concerns {
-  flex: 1;
+.header-top {
+  border-bottom: 3px solid #003d7a;
+  padding-bottom: 15px;
 }
 
-.strengths h4 {
-  color: var(--success-green);
+.logo-placeholder {
+  font-weight: bold;
+  color: #003d7a;
   font-size: 14px;
-  margin-bottom: 10px;
 }
 
-.concerns h4 {
-  color: var(--warning-orange);
-  font-size: 14px;
-  margin-bottom: 10px;
+.ministry-info h2 {
+  font-size: 18px;
+  color: #003d7a;
+  margin: 5px 0;
 }
 
-.strengths ul, .concerns ul {
-  margin: 0;
-  padding-left: 16px;
-}
-
-.strengths li, .concerns li {
+.ministry-info p {
   font-size: 12px;
-  margin-bottom: 6px;
-  line-height: 1.4;
+  color: #666;
 }
 
-/* Capability Assessment Grid */
-.capability-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 15px;
+.project-details h1 {
+  font-size: 22px;
+  color: #003d7a;
+  margin: 15px 0;
+  font-weight: 600;
 }
 
-.capability-card {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 15px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.capability-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.capability-title {
-  font-weight: bold;
-  font-size: 14px;
-  color: var(--gov-navy);
-}
-
-.capability-score {
-  font-weight: bold;
-  font-size: 16px;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.score-excellent {
-  background: var(--success-green);
-  color: white;
-}
-
-.score-good {
-  background: var(--gov-green);
-  color: white;
-}
-
-.score-average {
-  background: var(--warning-orange);
-  color: white;
-}
-
-.score-poor {
-  background: var(--danger-red);
-  color: white;
-}
-
-.capability-description {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-/* Page 2 - Detailed Analysis */
-.analysis-section {
-  margin-bottom: 25px;
-}
-
-.analysis-category {
-  margin-bottom: 25px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 20px;
-}
-
-.analysis-category h3 {
-  color: var(--gov-navy);
-  font-size: 16px;
-  margin-bottom: 15px;
-  border-bottom: 1px solid var(--gov-green);
-  padding-bottom: 5px;
-}
-
-.analysis-points {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.analysis-points li {
-  margin-bottom: 10px;
-  padding-left: 20px;
-  position: relative;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.analysis-points li::before {
-  content: "•";
-  color: var(--gov-saffron);
-  position: absolute;
-  left: 0;
-  font-weight: bold;
-}
-
-/* Page 3 - Dashboard */
-.dashboard-container {
+.details-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.dashboard-section {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 15px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.dashboard-section.full-width {
-  grid-column: span 2;
-}
-
-.dashboard-section h3 {
-  color: var(--gov-navy);
-  font-size: 14px;
-  margin-bottom: 15px;
-  border-bottom: 1px solid var(--gov-green);
-  padding-bottom: 5px;
-}
-
-/* Risk Matrix */
-.risk-matrix {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.risk-item {
-  padding: 8px;
-  text-align: center;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: bold;
-}
-
-.risk-low {
-  background: var(--success-green);
-  color: white;
-}
-
-.risk-medium {
-  background: var(--warning-orange);
-  color: white;
-}
-
-.risk-high {
-  background: var(--danger-red);
-  color: white;
-}
-
-/* Cost Breakdown */
-.cost-breakdown {
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cost-chart {
-  width: 150px;
-  height: 150px;
-}
-
-/* Timeline View */
-.timeline-view {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  gap: 10px 20px;
   margin: 15px 0;
 }
 
-.timeline-milestone {
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.detail-item .label {
+  font-weight: 600;
+  color: #003d7a;
+  margin-bottom: 3px;
+}
+
+.detail-item .value {
+  color: #555;
+}
+
+.score-highlights {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  margin: 20px 0;
+  background: #f0f0f0;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.highlight-item {
   text-align: center;
+}
+
+.score-number {
+  font-size: 28px;
+  font-weight: bold;
+  color: #003d7a;
+}
+
+.score-label {
+  font-size: 12px;
+  color: #666;
+  margin-top: 5px;
+}
+
+.chart-section {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.chart-container {
+  position: relative;
+  height: 200px;
+  margin-bottom: 20px;
+}
+
+.pie-chart-container {
+  height: 300px;
+}
+
+.chart-legend {
+  text-align: center;
+  font-size: 11px;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* PAGE 2 */
+.page-2 {
+  overflow-y: auto;
+}
+
+.page-2 h2 {
+  color: #003d7a;
+  font-size: 20px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #003d7a;
+  padding-bottom: 10px;
+}
+
+.findings-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.finding-item {
+  padding: 12px;
+  background: #f9f9f9;
+  border-left: 4px solid #003d7a;
+  border-radius: 4px;
+}
+
+.finding-item h3 {
+  color: #003d7a;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.finding-item .score {
+  font-weight: bold;
+  color: #d9534f;
+}
+
+.finding-item .comment {
+  margin: 8px 0;
+  color: #555;
+}
+
+.recommendation-list {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 10px;
+}
+
+.recommendation-list li {
+  padding: 5px 0;
+  padding-left: 20px;
   position: relative;
 }
 
-.timeline-milestone::before {
-  content: '';
+.recommendation-list li:before {
+  content: "•";
   position: absolute;
-  top: 20px;
-  left: 50%;
-  width: 12px;
-  height: 12px;
-  background: var(--gov-green);
-  border-radius: 50%;
-  transform: translateX(-50%);
-}
-
-.timeline-milestone:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 25px;
-  left: 60%;
-  right: -50%;
-  height: 2px;
-  background: var(--border-light);
-}
-
-.timeline-label {
-  font-size: 10px;
-  margin-top: 35px;
-  color: var(--text-secondary);
-}
-
-/* Recommendation Box */
-.recommendation-box {
-  background: linear-gradient(135deg, rgba(19, 136, 8, 0.1), rgba(255, 153, 51, 0.1));
-  border: 1px solid var(--gov-green);
-  border-radius: 6px;
-  padding: 15px;
-}
-
-.recommendation-text {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--gov-navy);
-}
-
-.recommendation-status {
+  left: 5px;
+  color: #003d7a;
   font-weight: bold;
-  color: var(--success-green);
-  margin-bottom: 8px;
-  font-size: 14px;
 }
 
-/* Footer */
-.footer {
-  position: absolute;
-  bottom: 12mm;
-  left: 12mm;
-  right: 12mm;
+.footer-page2,
+.footer-page3 {
+  text-align: center;
+  font-size: 11px;
+  color: #999;
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
+}
+
+/* PAGE 3 */
+.page-3 h2 {
+  color: #003d7a;
+  font-size: 20px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #003d7a;
+  padding-bottom: 10px;
+}
+
+.financial-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  flex: 1;
+  align-items: start;
+}
+
+.cost-table {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 10px;
-  color: var(--text-secondary);
-  border-top: 1px solid var(--border-light);
-  padding-top: 8px;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.footer-left {
-  font-weight: bold;
+.cost-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
 }
 
-/* Print Optimizations */
+.cost-table th {
+  background-color: #003d7a;
+  color: white;
+  padding: 10px;
+  text-align: left;
+  border: 1px solid #003d7a;
+}
+
+.cost-table td {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+}
+
+.cost-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.cost-table tr:hover {
+  background-color: #efefef;
+}
+
+/* Print Styles */
 @media print {
-  body {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  .container {
+    background: white;
+    padding: 0;
+    gap: 0;
   }
-  
+
   .page {
     box-shadow: none;
-    margin: 0;
-    border: none;
+    break-after: page;
+    width: 100%;
+    height: auto;
   }
-  
-  .page-break {
-    page-break-before: always;
+
+  body {
+    background: white;
   }
 }
 
-/* Responsive adjustments for smaller screens */
-@media screen and (max-width: 1024px) {
+/* Responsive */
+@media (max-width: 768px) {
   .page {
-    width: 95%;
-    min-height: auto;
+    width: 100%;
+    height: auto;
+    padding: 30px 20px;
   }
-  
-  .header {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .overall-section {
-    flex-direction: column;
-  }
-  
-  .overall-left {
-    border-right: none;
-    border-bottom: 1px solid var(--border-light);
-    padding-bottom: 20px;
-    margin-bottom: 20px;
-  }
-  
-  .capability-grid {
+
+  .details-grid {
     grid-template-columns: 1fr;
   }
-  
-  .dashboard-container {
+
+  .score-highlights {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .financial-section {
     grid-template-columns: 1fr;
   }
-  
-  .dashboard-section.full-width {
-    grid-column: span 1;
-  }
 }
-
-/* Progress Circle Animation */
-.progress-circle circle {
-  transition: stroke-dashoffset 1s ease-in-out;
-}
-
-/* Utility Classes */
-.text-center { text-align: center; }
-.text-bold { font-weight: bold; }
-.text-success { color: var(--success-green); }
-.text-warning { color: var(--warning-orange); }
-.text-danger { color: var(--danger-red); }
-.text-muted { color: var(--text-secondary); }
-
-.mb-1 { margin-bottom: 5px; }
-.mb-2 { margin-bottom: 10px; }
-.mb-3 { margin-bottom: 15px; }
-.mb-4 { margin-bottom: 20px; }
-
-.mt-1 { margin-top: 5px; }
-.mt-2 { margin-top: 10px; }
-.mt-3 { margin-top: 15px; }
-.mt-4 { margin-top: 20px; }

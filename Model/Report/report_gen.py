@@ -1,7 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException,APIRouter
 import httpx
 
-app = FastAPI()
+router = APIRouter()
 
 # INTERNAL endpoints to forward the PDF to
 INTERNAL_ENDPOINTS = [
@@ -9,14 +9,14 @@ INTERNAL_ENDPOINTS = [
     "/process-and-estimate",
     "/deliverable-check",
     "/analyze-novelty",
-    "/technical-feasibility",
+    "/technical_feasibility",
     "/benefit-check"
 ]
 
 BASE_URL = "http://localhost:8000"   # Change if your internal services run elsewhere
 
 
-@app.post("/full-analysis")
+@router.post("/full-analysis")
 async def full_analysis(pdf: UploadFile = File(...)):
     # Validate file type
     if pdf.content_type not in ["application/pdf"]:
