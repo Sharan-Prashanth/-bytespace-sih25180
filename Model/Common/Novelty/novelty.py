@@ -324,7 +324,16 @@ class GNNInference:
             with torch.no_grad():
                 pred = self.model_loader.model(data.x, data.edge_index, data.batch).item()
             
-            novelty_score = round(pred * 100, 2)
+            model_score = round(pred * 100, 2)
+
+            # Compute a robust heuristic fallback and blend results to avoid constant outputs
+            try:
+                fallback_score, _ = self._fallback_prediction(project_details)
+            except Exception:
+                fallback_score = model_score
+
+            # Blend: give more weight to heuristic when model may be unstable
+            novelty_score = round(0.4 * model_score + 0.6 * fallback_score, 2)
             
             # Calculate node contributions
             node_contributions = self._calculate_node_importance(data, node_names)
@@ -1471,7 +1480,7 @@ if __name__ == "__main__":
     print("Starting PDF Novelty Analysis...")
     result = asyncio.run(analyze_pdf_novelty())
     
-    # Save results to file
+    # Save results to file 
     output_file = os.path.join(os.path.dirname(__file__), "novelty_analysis_output.json")
     try:
         with open(output_file, 'w', encoding='utf-8') as f:
@@ -1479,3 +1488,284 @@ if __name__ == "__main__":
         print(f"\nDetailed results saved to: {output_file}")
     except Exception as e:
         print(f"Could not save results to file: {e}")
+
+
+# ----------------------------
+# Supabase fetch + batch evaluation helpers
+# ----------------------------
+def fetch_processed_jsons_from_supabase(bucket: str = 'processed-json', prefix: str = None, limit: int = 200):
+    """Fetch JSON files from Supabase storage bucket and return list of parsed dicts.
+
+    This uses the existing `supabase` client defined at module top.
+    """
+    if 'supabase' not in globals():
+        raise RuntimeError('Supabase client not initialized. Set SUPABASE_URL and SUPABASE_KEY in environment')
+
+    items = []
+    try:
+        res = supabase.storage.from_(bucket).list(path=prefix or '', limit=limit)
+        files = res if isinstance(res, list) else (res.get('data') or [])
+    except Exception:
+        try:
+            files_resp = supabase.storage.from_(bucket).list()
+            files = files_resp if isinstance(files_resp, list) else (files_resp.get('data') or [])
+        except Exception as e:
+            logger.warning(f'Could not list files in Supabase bucket {bucket}: {e}')
+            return []
+
+    filenames = []
+    for f in files:
+        if isinstance(f, dict):
+            name = f.get('name') or f.get('file') or f.get('id')
+        else:
+            name = f
+        if not name:
+            continue
+        if prefix and not name.startswith(prefix):
+            continue
+        filenames.append(name)
+        if len(filenames) >= limit:
+            break
+
+    for name in filenames:
+        try:
+            dl = supabase.storage.from_(bucket).download(name)
+            if isinstance(dl, (bytes, bytearray)):
+                content = dl.decode('utf-8')
+            elif isinstance(dl, dict) and dl.get('data'):
+                content = dl['data']
+            else:
+                try:
+                    content = dl.read().decode('utf-8')
+                except Exception:
+                    raise RuntimeError('Download object not readable')
+            parsed = json.loads(content)
+            parsed['_supabase_path'] = name
+            items.append(parsed)
+        except Exception as e:
+            try:
+                url_obj = supabase.storage.from_(bucket).get_public_url(name)
+                public_url = None
+                if isinstance(url_obj, dict):
+                    public_url = url_obj.get('publicUrl') or (url_obj.get('data') or {}).get('publicUrl')
+                else:
+                    public_url = url_obj
+                if public_url:
+                    import requests
+                    r = requests.get(public_url)
+                    r.raise_for_status()
+                    parsed = r.json()
+                    parsed['_supabase_path'] = name
+                    items.append(parsed)
+                else:
+                    logger.warning(f'No public url for {name}')
+            except Exception as e2:
+                logger.warning(f'Failed to download {name}: {e} / {e2}')
+                continue
+
+    logger.info(f'Fetched {len(items)} JSON files from Supabase bucket "{bucket}"')
+    return items
+
+
+def upload_json_to_supabase(bucket: str = 'novelty-json', filename: Optional[str] = None, data: Optional[Dict] = None, make_public: bool = True) -> Dict[str, Any]:
+    """Upload a JSON-serializable Python object to Supabase storage bucket.
+
+    Returns a dict with keys: success (bool), filename, public_url (if available), error (if any), response (raw client response).
+    """
+    if 'supabase' not in globals():
+        return {"success": False, "error": "Supabase client not initialized. Set SUPABASE_URL and SUPABASE_KEY in environment"}
+
+    if data is None:
+        return {"success": False, "error": "No data provided to upload"}
+
+    import time
+
+    try:
+        if filename is None:
+            filename = f"upload_{int(time.time())}.json"
+
+        # Ensure bucket exists is not done here; user must create the bucket in Supabase dashboard
+        payload = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+
+        try:
+            resp = supabase.storage.from_(bucket).upload(filename, payload, {"content-type": "application/json"})
+        except Exception as e:
+            # Some supabase clients return a dict; attempt an alternate upload API call
+            try:
+                # If client expects a file-like object, wrap bytes in BytesIO
+                from io import BytesIO
+                resp = supabase.storage.from_(bucket).upload(filename, BytesIO(payload), {"content-type": "application/json"})
+            except Exception as e2:
+                logger.error(f"Upload failed for {filename} to bucket {bucket}: {e} / {e2}")
+                return {"success": False, "error": str(e) + ' | ' + str(e2)}
+
+        public_url = None
+        try:
+            url_obj = supabase.storage.from_(bucket).get_public_url(filename)
+            if isinstance(url_obj, dict):
+                public_url = url_obj.get('publicUrl') or (url_obj.get('data') or {}).get('publicUrl')
+            else:
+                public_url = url_obj
+        except Exception:
+            public_url = None
+
+        # Optionally return public url; creating public access is a Supabase bucket setting.
+        return {"success": True, "filename": filename, "public_url": public_url, "response": resp}
+
+    except Exception as e:
+        logger.error(f"Unexpected error uploading to Supabase: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def evaluate_novelty_on_processed_jsons(bucket: str = 'processed-json', model_path: str = None, max_items: int = 200):
+    """Fetch processed JSONs from Supabase and evaluate novelty for each.
+
+    Returns a list of results: { 'path', 'score', 'comments', 'why_novel' }
+    If `OPENAI_API_KEY` is set in env, will attempt LLM generation for `comments`.
+    """
+    items = fetch_processed_jsons_from_supabase(bucket=bucket, limit=max_items)
+    if not items:
+        return []
+
+    # try to load model from model_path if provided or default
+    model = None
+    embedder_local = None
+    try:
+        import torch
+        from torch import nn
+        from torch_geometric.data import Data
+        from torch_geometric.nn import GCNConv, global_mean_pool
+        PY = True
+    except Exception:
+        PY = False
+
+    if model_path is None:
+        model_path = os.path.join(os.path.dirname(__file__), '..', '..', 'pre-trained', 'gnn_novelty_model.joblib')
+        model_path = os.path.normpath(model_path)
+
+    if os.path.exists(model_path):
+        try:
+            saved = joblib.load(model_path)
+            embedder_local = saved.get('embedder')
+            if PY and 'model_state' in saved:
+                # build tiny model compatible with saved state shape
+                class TinyG(nn.Module):
+                    def __init__(self, in_dim):
+                        super().__init__()
+                        self.conv1 = GCNConv(in_dim, 128)
+                        self.conv2 = GCNConv(128, 64)
+                        self.lin = nn.Linear(64, 1)
+                        self.act = nn.ReLU()
+                    def forward(self, x, edge_index, batch=None):
+                        x = self.act(self.conv1(x, edge_index))
+                        x = self.act(self.conv2(x, edge_index))
+                        if batch is None:
+                            batch = x.new_zeros(x.size(0), dtype=torch.long)
+                        x = global_mean_pool(x, batch)
+                        out = torch.sigmoid(self.lin(x))
+                        return out.squeeze(-1)
+                model = TinyG(saved.get('embed_dim', 384))
+                model.load_state_dict(saved['model_state'])
+        except Exception as e:
+            logger.warning(f'Failed to load saved model: {e}')
+
+    results = []
+    for it in items:
+        try:
+            # use same embedder if present in saved model else module EMBEDDER
+            embedder_to_use = embedder_local if embedder_local is not None else (globals().get('EMBEDDER') if 'EMBEDDER' in globals() else None)
+            if embedder_to_use is None:
+                logger.warning('No embedder available; skipping item')
+                continue
+
+            # build graph features
+            details = extract_project_details_from_text(it.get('result', {}).get('raw_text', '') if isinstance(it.get('result'), dict) else '')
+            # fallback to simple fields
+            if not details:
+                details = {}
+                for k in ('title','abstract','description','definition_of_issue','objectives'):
+                    v = it.get(k) or it.get('result', {}).get(k)
+                    if isinstance(v, str) and v.strip():
+                        details[k] = v.strip()
+            if not details:
+                # try the generic extractor used by notebook
+                details = {}
+
+            # compute embedding features and a rough score if model missing
+            score = None
+            if model is not None and PY:
+                # convert to graph like notebook
+                node_texts = list(details.values()) if details else [json.dumps(it)[:400]]
+                emb = embedder_to_use.encode(node_texts) if hasattr(embedder_to_use, 'encode') else embedder_to_use.transform(node_texts).toarray()
+                x = (np.array(emb) / (np.linalg.norm(emb, axis=1, keepdims=True) + 1e-12)).astype(np.float32)
+                n = x.shape[0]
+                src = []
+                dst = []
+                for i in range(n):
+                    for j in range(n):
+                        if i==j: continue
+                        src.append(i); dst.append(j)
+                import torch
+                x_t = torch.tensor(x, dtype=torch.float32)
+                edge_t = torch.tensor(np.vstack([src,dst]).astype(np.int64), dtype=torch.long) if len(src)>0 else torch.empty((2,0), dtype=torch.long)
+                data = Data(x=x_t, edge_index=edge_t)
+                data.batch = torch.zeros(x_t.size(0), dtype=torch.long)
+                model.eval()
+                with torch.no_grad():
+                    out = model(data.x, data.edge_index, data.batch)
+                    score = float(out.item()*100.0)
+            else:
+                # fallback: use embedding norm heuristic
+                emb = embedder_to_use.encode(list(details.values()) or ['']) if hasattr(embedder_to_use, 'encode') else embedder_to_use.transform(list(details.values()) or ['']).toarray()
+                score = float(np.mean(np.linalg.norm(emb, axis=1))*10.0)
+                score = max(0.0, min(100.0, score))
+        
+                        # generate comments using Gemini (preferred) else deterministic
+                gemini_fn = None
+                try:
+                            # Prefer the repo wrapper if available
+                            from Model.ai_validaton.validation import call_gemini
+                            gemini_fn = lambda prompt: call_gemini(prompt)
+                except Exception:
+                            try:
+                                import google.generativeai as genai
+                                GKEY = os.getenv('GEMINI_API_KEY3') or os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+                                if GKEY:
+                                    genai.configure(api_key=GKEY)
+                                    gm = genai.GenerativeModel("gemini-2.5-flash-lite")
+                                    def _g(prompt):
+                                        try:
+                                            resp = gm.generate_content(prompt)
+                                            # resp may have .text attribute
+                                            text = getattr(resp, 'text', None) or str(resp)
+                                            return text
+                                        except Exception:
+                                            return None
+                                    gemini_fn = _g
+                            except Exception:
+                                gemini_fn = None
+        
+                if gemini_fn is not None:
+                    try:
+                        prompt = f"Novelty score {score:.1f}. Provide a 2-3 sentence comment and 1 short reason why this is novel based on JSON: {json.dumps(it)[:1000]}"
+                        text = gemini_fn(prompt)
+                        if not text:
+                            raise RuntimeError('Empty response from Gemini')
+                        parts = text.split('\n\n')
+                        comment = parts[0].strip()
+                        why = '\n\n'.join(parts[1:]).strip() if len(parts) > 1 else comment
+                    except Exception as e:
+                        logger.warning(f'Gemini generation failed: {e}')
+                        comment = f"Score: {score:.1f}/100 — automated comment not available ({e})"
+                        why = 'Novelty estimated from semantic divergence.'
+                else:
+                    benefit = 'Yes' if score >= 50 else 'No'
+                    comment = f"Score: {score:.1f}/100 Benefit to MOC: {benefit}\nAutomated summary generated."
+                    why = 'Novelty estimated from semantic divergence of key sections.'
+        
+                results.append({'path': it.get('_supabase_path'), 'score': round(score,2), 'comments': comment, 'why_novel': why})
+        except Exception as e:
+                        logger.warning(f'Failed to evaluate one item: {e}')
+                        continue
+        
+    return results
