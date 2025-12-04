@@ -6,7 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import apiClient from '../../../utils/api';
 import jsPDF from 'jspdf';
-import { Moon, Sun, MoonStar } from 'lucide-react';
+import { Moon, Sun, MoonStar, ArrowLeft } from 'lucide-react';
 
 // Import modular components
 import {
@@ -19,7 +19,8 @@ import {
   ReviewDecisionPanel,
   ReportEditorModal,
   DecisionSuccessModal,
-  ExpertOpinionSection
+  ExpertOpinionSection,
+  ExpertReviewerSelectionModal
 } from '../../../components/review-page';
 
 // Lazy load heavy components
@@ -82,17 +83,22 @@ function ReviewProposalContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasUserMadeDecision, setHasUserMadeDecision] = useState(false);
+  const [hasExpertSubmittedReport, setHasExpertSubmittedReport] = useState(false);
   
   // UI State
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showSaarthi, setShowSaarthi] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showExpertSelectionModal, setShowExpertSelectionModal] = useState(false);
   const [pendingDecision, setPendingDecision] = useState('');
   const [submittedDecision, setSubmittedDecision] = useState('');
   const [submittedReportTitle, setSubmittedReportTitle] = useState('');
   const [submittedReportPdfUrl, setSubmittedReportPdfUrl] = useState('');
   const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
+  const [isSubmittingExpertSelection, setIsSubmittingExpertSelection] = useState(false);
+  const [isSubmittingExpertReport, setIsSubmittingExpertReport] = useState(false);
+  const [isExpertReportMode, setIsExpertReportMode] = useState(false);
 
   // Role checks
   const userRoles = user?.roles || [];
@@ -154,7 +160,7 @@ function ReviewProposalContent() {
             relevantReportType = 'SSRC_REVIEW';
           }
           
-          // Find if user has submitted a report for this status
+          // Find if user has submitted a report for this status (committee member decision)
           if (relevantReportType && user?._id) {
             const userDecisionReport = allReports.find(r => 
               r.reportType === relevantReportType && 
@@ -162,6 +168,16 @@ function ReviewProposalContent() {
               r.status === 'SUBMITTED'
             );
             setHasUserMadeDecision(!!userDecisionReport);
+          }
+
+          // Check if expert has already submitted a report
+          if (user?._id) {
+            const expertReport = allReports.find(r => 
+              r.reportType === 'EXPERT_REVIEW' && 
+              r.createdBy?._id === user._id &&
+              r.status === 'SUBMITTED'
+            );
+            setHasExpertSubmittedReport(!!expertReport);
           }
         } catch (err) {
           console.warn('Could not load reports:', err);
@@ -232,9 +248,106 @@ function ReviewProposalContent() {
 
   // Handle decision submission
   const handleSubmitDecision = useCallback((decision) => {
-    setPendingDecision(decision);
+    // If decision is to send for expert review, show expert selection modal first
+    if (decision === 'CMPDI_EXPERT_REVIEW') {
+      setPendingDecision(decision);
+      setShowExpertSelectionModal(true);
+    } else {
+      // For accept/reject decisions, show report modal
+      setPendingDecision(decision);
+      setShowReportModal(true);
+    }
+  }, []);
+
+  // Handle expert reviewer selection confirmation
+  const handleExpertReviewerSelection = useCallback(async (reviewerIds) => {
+    if (!reviewerIds || reviewerIds.length === 0) return;
+    
+    setIsSubmittingExpertSelection(true);
+    
+    try {
+      // Call the new API endpoint to select expert reviewers and update status
+      await apiClient.post(`/api/workflow/${id}/select-expert-reviewers`, {
+        reviewerIds,
+        notes: 'Sent for expert review'
+      });
+      
+      // Refresh proposal data
+      const proposalResponse = await apiClient.get(`/api/proposals/${id}`);
+      setProposal(proposalResponse.data.data);
+      
+      // Close modal and show success
+      setShowExpertSelectionModal(false);
+      setPendingDecision('');
+      
+      // Show success with a custom message for expert review
+      setSubmittedDecision('CMPDI_EXPERT_REVIEW');
+      setSubmittedReportTitle('Expert reviewers assigned');
+      setSubmittedReportPdfUrl('');
+      setShowSuccessModal(true);
+      
+    } catch (err) {
+      console.error('Error selecting expert reviewers:', err);
+      alert('Failed to assign expert reviewers: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSubmittingExpertSelection(false);
+    }
+  }, [id]);
+
+  // Open expert report modal (called from ReviewDecisionPanel after confirmation)
+  const handleOpenExpertReportModal = useCallback(() => {
+    setIsExpertReportMode(true);
     setShowReportModal(true);
   }, []);
+
+  // Handle expert report submission (separate from committee decisions)
+  const handleExpertReportSubmit = useCallback(async (reportData) => {
+    if (!reportData) return;
+    
+    setIsSubmittingExpertReport(true);
+    
+    try {
+      // 1. Create the expert report with HTML content
+      const reportResponse = await apiClient.post(`/api/proposals/${id}/reports`, {
+        title: reportData.title,
+        content: reportData.content,
+        htmlContent: reportData.content,
+        textContent: reportData.textContent,
+        wordCount: reportData.wordCount,
+        characterCount: reportData.characterCount,
+        reportType: 'EXPERT_REVIEW'
+      });
+      
+      const reportId = reportResponse.data.data._id;
+      
+      // 2. Submit the report (generates PDF and uploads to S3)
+      const submitResponse = await apiClient.post(`/api/reports/${reportId}/submit`);
+      const pdfUrl = submitResponse.data.data?.fileUrl || '';
+      
+      // 3. Refresh reports to include the new expert report
+      const reportsResponse = await apiClient.get(`/api/proposals/${id}/reports`);
+      const allReports = reportsResponse.data.data || [];
+      setReports(prev => ({
+        ...prev,
+        reviewer: allReports.filter(r => r.reportType !== 'AI_REVIEW')
+      }));
+      
+      // 4. Mark that expert has submitted report
+      setHasExpertSubmittedReport(true);
+      
+      // 5. Show success modal
+      setSubmittedDecision('EXPERT_REPORT_SUBMITTED');
+      setSubmittedReportTitle(reportData.title);
+      setSubmittedReportPdfUrl(pdfUrl);
+      setShowSuccessModal(true);
+      
+    } catch (err) {
+      console.error('Error submitting expert report:', err);
+      alert('Failed to submit expert report: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSubmittingExpertReport(false);
+    }
+  }, [id]);
 
   // Handle final decision with report
   const handleFinalDecision = useCallback(async (reportData) => {
@@ -369,20 +482,33 @@ function ReviewProposalContent() {
 
   return (
     <div className={`min-h-screen ${bgClass}`}>
-      {/* Theme Toggle Button */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors`}
-        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
-      >
-        {theme === 'light' ? (
-          <Moon className={`w-5 h-5 ${textColor}`} />
-        ) : theme === 'dark' ? (
-          <MoonStar className={`w-5 h-5 ${textColor}`} />
-        ) : (
-          <Sun className={`w-5 h-5 ${textColor}`} />
-        )}
-      </button>
+      {/* Fixed Top Bar - Back Button (left) and Theme Toggle (right) */}
+      <div className="fixed top-0 left-0 right-0 z-50 px-4 py-3 flex items-center justify-between pointer-events-none">
+        {/* Back to Dashboard Button - Expands on hover */}
+        <button
+          onClick={() => router.push('/dashboard')}
+          className={`group flex items-center gap-0 p-2 ${cardBg} border rounded-lg shadow-lg ${hoverBg} transition-all duration-300 pointer-events-auto overflow-hidden`}
+          title="Back to Dashboard"
+        >
+          <ArrowLeft className={`w-5 h-5 ${textColor} flex-shrink-0`} />
+          <span className={`text-sm font-medium ${textColor} max-w-0 group-hover:max-w-40 group-hover:ml-2 group-hover:pr-1 overflow-hidden whitespace-nowrap transition-all duration-300`}>Back to Dashboard</span>
+        </button>
+
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          className={`p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors pointer-events-auto`}
+          title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
+        >
+          {theme === 'light' ? (
+            <Moon className={`w-5 h-5 ${textColor}`} />
+          ) : theme === 'dark' ? (
+            <MoonStar className={`w-5 h-5 ${textColor}`} />
+          ) : (
+            <Sun className={`w-5 h-5 ${textColor}`} />
+          )}
+        </button>
+      </div>
 
       {/* Header */}
       <ReviewHeader
@@ -433,8 +559,6 @@ function ReviewProposalContent() {
                 currentUser={user}
                 onAddComment={handleAddComment}
                 onReply={handleReplyComment}
-                onResolve={handleResolveComment}
-                canResolve={canResolveComments}
                 theme={theme}
               />
             </div>
@@ -442,13 +566,17 @@ function ReviewProposalContent() {
             {/* Right Side - Decision Panel */}
             <div className="lg:col-span-1">
               <div className="sticky top-8 space-y-6">
-                {/* Review Decision Panel - Hidden for experts */}
+                {/* Review Decision Panel - Handles both committee decisions and expert report submissions */}
                 <ReviewDecisionPanel
                   userRoles={userRoles}
                   proposalStatus={proposal.status}
                   onSubmitDecision={handleSubmitDecision}
                   isSubmitting={isSubmittingDecision}
                   hasUserMadeDecision={hasUserMadeDecision}
+                  showExpertReportSection={isExpert && !isCommitteeMember && proposal.status === 'CMPDI_EXPERT_REVIEW' && !hasExpertSubmittedReport}
+                  hasExpertSubmittedReport={hasExpertSubmittedReport}
+                  onOpenExpertReportModal={handleOpenExpertReportModal}
+                  isSubmittingExpertReport={isSubmittingExpertReport}
                   theme={theme}
                 />
 
@@ -459,20 +587,6 @@ function ReviewProposalContent() {
                   userRoles={userRoles}
                   theme={theme}
                 />
-
-                {/* Expert Info Card - Show for experts */}
-                {isExpert && !isCommitteeMember && (
-                  <div className={`${cardBg} border rounded-lg p-6`}>
-                    <h3 className={`text-lg font-semibold ${textColor} mb-3`}>Expert Review</h3>
-                    <p className={`text-sm ${textColor} mb-4`}>
-                      As an expert reviewer, you can provide comments and feedback on this proposal. 
-                      Your comments will be visible to the committee members for their decision.
-                    </p>
-                    <p className={`text-sm ${textColor}`}>
-                      Use the Communication section to add your detailed assessment and recommendations.
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -519,12 +633,27 @@ function ReviewProposalContent() {
         onClose={() => {
           setShowReportModal(false);
           setPendingDecision('');
+          setIsExpertReportMode(false);
         }}
-        onConfirm={handleFinalDecision}
-        decision={pendingDecision}
+        onConfirm={isExpertReportMode ? handleExpertReportSubmit : handleFinalDecision}
+        decision={isExpertReportMode ? 'EXPERT_REPORT' : pendingDecision}
         proposalCode={proposal.proposalCode}
         proposalTitle={proposal.title}
-        isSubmitting={isSubmittingDecision}
+        isSubmitting={isExpertReportMode ? isSubmittingExpertReport : isSubmittingDecision}
+        isExpertReport={isExpertReportMode}
+        theme={theme}
+      />
+
+      {/* Expert Reviewer Selection Modal */}
+      <ExpertReviewerSelectionModal
+        isOpen={showExpertSelectionModal}
+        onClose={() => {
+          setShowExpertSelectionModal(false);
+          setPendingDecision('');
+        }}
+        onConfirm={handleExpertReviewerSelection}
+        proposalCode={proposal.proposalCode}
+        isSubmitting={isSubmittingExpertSelection}
         theme={theme}
       />
 

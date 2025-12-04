@@ -883,6 +883,21 @@ function CreateNewProposalContent() {
     <div className={`min-h-screen ${bgClass} transition-colors duration-300`}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
+      {/* Fixed Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/5'}`}
+        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
+      >
+        {theme === 'light' ? (
+          <Moon className={`w-5 h-5 ${textColor}`} />
+        ) : theme === 'dark' ? (
+          <MoonStar className={`w-5 h-5 ${textColor}`} />
+        ) : (
+          <Sun className={`w-5 h-5 ${textColor}`} />
+        )}
+      </button>
+
       {/* Header with back button */}
       <div className={`${cardBg} border-b ${borderColor}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -906,8 +921,8 @@ function CreateNewProposalContent() {
             )}
           </div>
           
-          {/* Right side: Last saved, Date, Theme toggle */}
-          <div className="flex items-center gap-4">
+          {/* Right side: Last saved, Date */}
+          <div className="flex items-center gap-4 mr-12">
             {lastSavedTime && (
               <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-black'}`}>
                 {isAutoSaving ? (
@@ -928,19 +943,6 @@ function CreateNewProposalContent() {
             <span className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-black'}`}>
               {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-black/5 text-black'}`}
-              title={theme === 'light' ? 'Switch to Dark Mode' : theme === 'dark' ? 'Switch to Darkest Mode' : 'Switch to Light Mode'}
-            >
-              {theme === 'light' ? (
-                <Moon className="w-5 h-5" />
-              ) : theme === 'dark' ? (
-                <MoonStar className="w-5 h-5" />
-              ) : (
-                <Sun className="w-5 h-5" />
-              )}
-            </button>
           </div>
         </div>
       </div>

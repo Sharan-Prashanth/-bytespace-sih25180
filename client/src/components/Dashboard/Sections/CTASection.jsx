@@ -15,13 +15,13 @@ export default function CTASection() {
                         <Sparkles size={12} />
                         <span>PREMIUM FEATURE</span>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Upgrade to Pro Analytics</h3>
-                    <p className="text-gray-500 max-w-md">
+                    <h3 className="text-2xl font-bold text-slate-900 mb-2">Upgrade to Pro Analytics</h3>
+                    <p className="text-slate-500 max-w-md">
                         Unlock advanced AI-driven insights, unlimited proposal tracking, and custom reporting tools.
                     </p>
                 </div>
 
-                <button className="group relative px-6 py-3 bg-gray-900 text-white rounded-xl font-semibold overflow-hidden transition-all hover:shadow-lg hover:shadow-blue-500/25">
+                <button className="group relative px-6 py-3 bg-slate-900 text-white rounded-xl font-semibold overflow-hidden transition-all hover:shadow-lg hover:shadow-blue-500/25">
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     <div className="relative flex items-center gap-2">
                         <span>Upgrade Now</span>

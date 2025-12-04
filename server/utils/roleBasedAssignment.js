@@ -2,8 +2,14 @@ import User from '../models/User.js';
 
 /**
  * Utility for auto-assigning users to proposals based on their roles.
- * This ensures all users with relevant roles (CMPDI_MEMBER, EXPERT_REVIEWER, TSSRC_MEMBER, SSRC_MEMBER)
- * are automatically included as collaborators/reviewers for proposals in relevant stages.
+ * 
+ * Assignment Rules:
+ * - PI is always a collaborator (added on proposal creation)
+ * - CIs can be added by PI (max 5)
+ * - CMPDI members are added when status changes to CMPDI_REVIEW (after AI passes)
+ * - Expert reviewers are added ONLY when CMPDI explicitly assigns them (not automatically)
+ * - TSSRC members are added when CMPDI accepts (status changes to TSSRC_REVIEW)
+ * - SSRC members are added when TSSRC accepts (status changes to SSRC_REVIEW)
  */
 
 /**
@@ -56,7 +62,8 @@ export const getAllReviewersByRole = async () => {
 
 /**
  * Build collaborators array based on proposal status
- * Automatically includes all users with relevant roles
+ * Used when creating a new proposal or resetting collaborators
+ * 
  * @param {Object} options - Options for building collaborators
  * @param {string} options.status - Current proposal status
  * @param {string} options.piId - Principal Investigator user ID
@@ -99,19 +106,6 @@ export const buildCollaborators = async ({ status, piId, ciIds = [] }) => {
     'SSRC_REJECTED'
   ];
 
-  // Statuses where Expert Reviewers should be assigned
-  const expertStatuses = [
-    'CMPDI_EXPERT_REVIEW',
-    'CMPDI_ACCEPTED',
-    'CMPDI_REJECTED',
-    'TSSRC_REVIEW',
-    'TSSRC_ACCEPTED',
-    'TSSRC_REJECTED',
-    'SSRC_REVIEW',
-    'SSRC_ACCEPTED',
-    'SSRC_REJECTED'
-  ];
-
   // Statuses where TSSRC members should be assigned
   const tssrcStatuses = [
     'TSSRC_REVIEW',
@@ -140,17 +134,6 @@ export const buildCollaborators = async ({ status, piId, ciIds = [] }) => {
     });
   }
 
-  // Add Expert Reviewers
-  if (expertStatuses.includes(status)) {
-    roleUsers.expert.forEach(user => {
-      collaborators.push({
-        userId: user._id,
-        role: 'REVIEWER',
-        addedAt: new Date()
-      });
-    });
-  }
-
   // Add TSSRC members
   if (tssrcStatuses.includes(status)) {
     roleUsers.tssrc.forEach(user => {
@@ -173,61 +156,32 @@ export const buildCollaborators = async ({ status, piId, ciIds = [] }) => {
     });
   }
 
+  // NOTE: Expert reviewers are NOT added here
+  // They are added only when CMPDI explicitly selects "Send for Expert Review"
+
   return collaborators;
 };
 
 /**
- * Build assigned reviewers array with all expert reviewers
- * @param {string} assignedById - User ID of the person assigning reviewers
- * @returns {Promise<Array>} Array of assigned reviewer objects
- */
-export const buildAssignedReviewers = async (assignedById) => {
-  const expertReviewers = await getUsersByRole('EXPERT_REVIEWER');
-  
-  return expertReviewers.map(user => ({
-    reviewer: user._id,
-    assignedBy: assignedById,
-    assignedAt: new Date(),
-    dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
-    status: 'PENDING'
-  }));
-};
-
-/**
- * Update proposal collaborators when status changes
- * This should be called when a proposal status is updated
- * @param {Object} proposal - Mongoose proposal document
- * @param {string} newStatus - New status being set
+ * Update collaborators progressively based on new status
+ * Only adds users relevant to the new status, doesn't rebuild the entire list
+ * 
+ * @param {Object} proposal - Mongoose proposal document with existing collaborators
+ * @param {string} newStatus - The new status being set
  * @returns {Promise<Array>} Updated collaborators array
  */
 export const updateCollaboratorsForStatus = async (proposal, newStatus) => {
   const existingCollaborators = proposal.collaborators || [];
-  
-  // Keep PI and CIs
-  const piAndCIs = existingCollaborators.filter(c => 
-    c.role === 'PI' || c.role === 'CI'
-  );
+  const existingUserIds = existingCollaborators.map(c => c.userId?.toString());
+  const newCollaborators = [...existingCollaborators];
 
-  // Get all role-based users
+  // Get role-based users
   const roleUsers = await getAllReviewersByRole();
-  const newCollaborators = [...piAndCIs];
 
-  // Helper to check if user already exists
-  const userExists = (userId) => {
-    return newCollaborators.some(c => 
-      c.userId.toString() === userId.toString()
-    );
-  };
-
-  // Add based on status progression
-  const cmpdiStatuses = ['CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'];
-  const expertStatuses = ['CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'];
-  const tssrcStatuses = ['TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'];
-  const ssrcStatuses = ['SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'];
-
-  if (cmpdiStatuses.includes(newStatus)) {
+  // Add CMPDI members when status changes to CMPDI_REVIEW
+  if (newStatus === 'CMPDI_REVIEW' || newStatus === 'CMPDI_EXPERT_REVIEW') {
     roleUsers.cmpdi.forEach(user => {
-      if (!userExists(user._id)) {
+      if (!existingUserIds.includes(user._id.toString())) {
         newCollaborators.push({
           userId: user._id,
           role: 'CMPDI',
@@ -237,21 +191,22 @@ export const updateCollaboratorsForStatus = async (proposal, newStatus) => {
     });
   }
 
-  if (expertStatuses.includes(newStatus)) {
-    roleUsers.expert.forEach(user => {
-      if (!userExists(user._id)) {
+  // Add TSSRC members when CMPDI accepts (status changes to TSSRC_REVIEW or CMPDI_ACCEPTED)
+  if (newStatus === 'CMPDI_ACCEPTED' || newStatus === 'TSSRC_REVIEW') {
+    // Ensure CMPDI members are present
+    roleUsers.cmpdi.forEach(user => {
+      if (!existingUserIds.includes(user._id.toString())) {
         newCollaborators.push({
           userId: user._id,
-          role: 'REVIEWER',
+          role: 'CMPDI',
           addedAt: new Date()
         });
       }
     });
-  }
-
-  if (tssrcStatuses.includes(newStatus)) {
+    // Add TSSRC members
     roleUsers.tssrc.forEach(user => {
-      if (!userExists(user._id)) {
+      if (!existingUserIds.includes(user._id.toString()) && 
+          !newCollaborators.some(c => c.userId?.toString() === user._id.toString())) {
         newCollaborators.push({
           userId: user._id,
           role: 'TSSRC',
@@ -261,9 +216,33 @@ export const updateCollaboratorsForStatus = async (proposal, newStatus) => {
     });
   }
 
-  if (ssrcStatuses.includes(newStatus)) {
+  // Add SSRC members when TSSRC accepts (status changes to SSRC_REVIEW or TSSRC_ACCEPTED)
+  if (newStatus === 'TSSRC_ACCEPTED' || newStatus === 'SSRC_REVIEW') {
+    // Ensure CMPDI members are present
+    roleUsers.cmpdi.forEach(user => {
+      if (!existingUserIds.includes(user._id.toString())) {
+        newCollaborators.push({
+          userId: user._id,
+          role: 'CMPDI',
+          addedAt: new Date()
+        });
+      }
+    });
+    // Ensure TSSRC members are present
+    roleUsers.tssrc.forEach(user => {
+      if (!existingUserIds.includes(user._id.toString()) && 
+          !newCollaborators.some(c => c.userId?.toString() === user._id.toString())) {
+        newCollaborators.push({
+          userId: user._id,
+          role: 'TSSRC',
+          addedAt: new Date()
+        });
+      }
+    });
+    // Add SSRC members
     roleUsers.ssrc.forEach(user => {
-      if (!userExists(user._id)) {
+      if (!existingUserIds.includes(user._id.toString()) && 
+          !newCollaborators.some(c => c.userId?.toString() === user._id.toString())) {
         newCollaborators.push({
           userId: user._id,
           role: 'SSRC',
@@ -273,30 +252,102 @@ export const updateCollaboratorsForStatus = async (proposal, newStatus) => {
     });
   }
 
+  // NOTE: Expert reviewers are NOT added here
+  // They are added only when CMPDI explicitly selects "Send for Expert Review"
+  // via the assignExpertReviewers function
+
   return newCollaborators;
 };
 
 /**
- * Update assigned reviewers when status changes to CMPDI_EXPERT_REVIEW
- * Automatically assigns all expert reviewers
- * @param {Object} proposal - Mongoose proposal document
- * @param {string} assignedById - User ID of who is triggering the assignment
- * @returns {Promise<Array>} Updated assigned reviewers array
+ * Build assigned reviewers array with specified expert reviewers
+ * Used when CMPDI explicitly selects "Send for Expert Review"
+ * 
+ * @param {Array} reviewerIds - Array of user IDs to assign as reviewers
+ * @param {string} assignedById - User ID of the person assigning reviewers
+ * @returns {Promise<Array>} Array of assigned reviewer objects
  */
-export const updateAssignedReviewersForExpertReview = async (proposal, assignedById) => {
-  const expertReviewers = await getUsersByRole('EXPERT_REVIEWER');
+export const buildAssignedReviewers = async (reviewerIds, assignedById) => {
+  return reviewerIds.map(reviewerId => ({
+    reviewer: reviewerId,
+    assignedBy: assignedById,
+    assignedAt: new Date(),
+    dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+    status: 'PENDING'
+  }));
+};
+
+/**
+ * Assign specific expert reviewers to a proposal
+ * Called when CMPDI selects "Send for Expert Review" and chooses specific reviewers
+ * 
+ * @param {Object} proposal - Mongoose proposal document
+ * @param {Array} reviewerIds - Array of user IDs to assign
+ * @param {string} assignedById - User ID of who is triggering the assignment
+ * @returns {Promise<Object>} Object containing updated assignedReviewers and collaborators
+ */
+export const assignExpertReviewers = async (proposal, reviewerIds, assignedById) => {
   const existingReviewers = proposal.assignedReviewers || [];
+  const existingCollaborators = proposal.collaborators || [];
 
   // Get existing reviewer IDs
-  const existingReviewerIds = existingReviewers.map(r => 
-    r.reviewer.toString()
-  );
+  const existingReviewerIds = existingReviewers.map(r => r.reviewer.toString());
 
   // Add new expert reviewers that are not already assigned
-  const newAssignments = expertReviewers
-    .filter(user => !existingReviewerIds.includes(user._id.toString()))
-    .map(user => ({
-      reviewer: user._id,
+  const newAssignedReviewers = reviewerIds
+    .filter(id => !existingReviewerIds.includes(id.toString()))
+    .map(reviewerId => ({
+      reviewer: reviewerId,
+      assignedBy: assignedById,
+      assignedAt: new Date(),
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+      status: 'PENDING'
+    }));
+
+  // Add new reviewers to collaborators
+  const existingCollabIds = existingCollaborators.map(c => c.userId.toString());
+  const newCollaborators = reviewerIds
+    .filter(id => !existingCollabIds.includes(id.toString()))
+    .map(reviewerId => ({
+      userId: reviewerId,
+      role: 'REVIEWER',
+      addedAt: new Date()
+    }));
+
+  return {
+    assignedReviewers: [...existingReviewers, ...newAssignedReviewers],
+    collaborators: [...existingCollaborators, ...newCollaborators]
+  };
+};
+
+/**
+ * Update assigned reviewers when status changes to CMPDI_EXPERT_REVIEW
+ * This is called only when CMPDI explicitly sends for expert review
+ * If no specific reviewers are provided, all expert reviewers are assigned
+ * 
+ * @param {Object} proposal - Mongoose proposal document
+ * @param {string} assignedById - User ID of who is triggering the assignment
+ * @param {Array} specificReviewerIds - Optional array of specific reviewer IDs to assign
+ * @returns {Promise<Array>} Updated assigned reviewers array
+ */
+export const updateAssignedReviewersForExpertReview = async (proposal, assignedById, specificReviewerIds = null) => {
+  // If specific reviewers are provided, use them
+  // Otherwise, assign all expert reviewers (fallback for backward compatibility)
+  let reviewerIds = specificReviewerIds;
+  
+  if (!reviewerIds || reviewerIds.length === 0) {
+    const expertReviewers = await getUsersByRole('EXPERT_REVIEWER');
+    reviewerIds = expertReviewers.map(u => u._id);
+  }
+
+  const existingReviewers = proposal.assignedReviewers || [];
+  const existingReviewerIds = existingReviewers.map(r => r.reviewer.toString());
+
+  // Add new expert reviewers that are not already assigned
+  const newAssignments = reviewerIds
+    .filter(id => !existingReviewerIds.includes(id.toString()))
+    .map(reviewerId => ({
+      reviewer: reviewerId,
       assignedBy: assignedById,
       assignedAt: new Date(),
       dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
@@ -311,6 +362,7 @@ export default {
   getAllReviewersByRole,
   buildCollaborators,
   buildAssignedReviewers,
+  assignExpertReviewers,
   updateCollaboratorsForStatus,
   updateAssignedReviewersForExpertReview
 };

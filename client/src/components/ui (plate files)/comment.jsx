@@ -57,6 +57,13 @@ export function Comment(props) {
   const userInfo = usePluginOption(discussionPlugin, 'user', comment.userId);
   const currentUserId = usePluginOption(discussionPlugin, 'currentUserId');
 
+  // Trigger save when discussions change
+  const triggerSave = React.useCallback(() => {
+    if (editor._saveDiscussions) {
+      editor._saveDiscussions();
+    }
+  }, [editor]);
+
   const resolveDiscussion = async (id) => {
     const updatedDiscussions = editor
       .getOption(discussionPlugin, 'discussions')
@@ -67,6 +74,7 @@ export function Comment(props) {
         return discussion;
       });
     editor.setOption(discussionPlugin, 'discussions', updatedDiscussions);
+    triggerSave();
   };
 
   const removeDiscussion = async (id) => {
@@ -74,6 +82,7 @@ export function Comment(props) {
       .getOption(discussionPlugin, 'discussions')
       .filter((discussion) => discussion.id !== id);
     editor.setOption(discussionPlugin, 'discussions', updatedDiscussions);
+    triggerSave();
   };
 
   const updateComment = async (input) => {
@@ -97,6 +106,7 @@ export function Comment(props) {
         return discussion;
       });
     editor.setOption(discussionPlugin, 'discussions', updatedDiscussions);
+    triggerSave();
   };
 
   const { tf } = useEditorPlugin(CommentPlugin);
@@ -264,6 +274,13 @@ function CommentMoreDropdown(props) {
 
   const selectedEditCommentRef = React.useRef(false);
 
+  // Trigger save when discussions change
+  const triggerSave = React.useCallback(() => {
+    if (editor._saveDiscussions) {
+      editor._saveDiscussions();
+    }
+  }, [editor]);
+
   const onDeleteComment = React.useCallback(() => {
     if (!comment.id)
       return alert('You are operating too quickly, please try again later.');
@@ -290,10 +307,11 @@ function CommentMoreDropdown(props) {
         };
       });
 
-    // Save back to session storage
+    // Save to backend
     editor.setOption(discussionPlugin, 'discussions', updatedDiscussions);
+    triggerSave();
     onRemoveComment?.();
-  }, [comment.discussionId, comment.id, editor, onRemoveComment]);
+  }, [comment.discussionId, comment.id, editor, onRemoveComment, triggerSave]);
 
   const onEditComment = React.useCallback(() => {
     selectedEditCommentRef.current = true;
@@ -370,6 +388,13 @@ export function CommentCreateForm({
       : '', [commentValue]);
   const commentEditor = useCommentEditor();
 
+  // Trigger save when discussions change
+  const triggerSave = React.useCallback(() => {
+    if (editor._saveDiscussions) {
+      editor._saveDiscussions();
+    }
+  }, [editor]);
+
   React.useEffect(() => {
     if (commentEditor && focusOnMount) {
       commentEditor.tf.focus();
@@ -385,7 +410,7 @@ export function CommentCreateForm({
       // Get existing discussion
       const discussion = discussions.find((d) => d.id === discussionId);
       if (!discussion) {
-        // Mock creating suggestion
+        // Creating new discussion from draft
         const newDiscussion = {
           id: discussionId,
           comments: [
@@ -407,6 +432,8 @@ export function CommentCreateForm({
           ...discussions,
           newDiscussion,
         ]);
+        triggerSave();
+        console.log('[Comment] New discussion created:', newDiscussion.id);
         return;
       }
 
@@ -432,6 +459,8 @@ export function CommentCreateForm({
         .concat(updatedDiscussion);
 
       editor.setOption(discussionPlugin, 'discussions', updatedDiscussions);
+      triggerSave();
+      console.log('[Comment] Reply added to discussion:', discussionId);
 
       return;
     }
@@ -447,7 +476,7 @@ export function CommentCreateForm({
       .join('');
 
     const _discussionId = nanoid();
-    // Mock creating new discussion
+    // Creating new discussion
     const newDiscussion = {
       id: _discussionId,
       comments: [
@@ -479,7 +508,10 @@ export function CommentCreateForm({
       }, { at: path, split: true });
       editor.tf.unsetNodes([getDraftCommentKey()], { at: path });
     });
-  }, [commentValue, commentEditor.tf, discussionId, editor, discussions]);
+    
+    triggerSave();
+    console.log('[Comment] New discussion created with document content:', _discussionId);
+  }, [commentValue, commentEditor.tf, discussionId, editor, discussions, triggerSave]);
 
   return (
     <div className={cn('flex w-full', className)}>

@@ -9,18 +9,33 @@ export const submitOpinion = async (req, res) => {
     const userId = req.user._id;
     const userRoles = req.user.roles || [];
 
-    // Validate input
-    if (!rating || rating < 1 || rating > 5) {
+    // Validate input - at least rating or opinion must be provided
+    const hasRating = rating !== undefined && rating !== null && rating > 0;
+    const hasOpinion = opinion && opinion.trim().length > 0;
+
+    if (!hasRating && !hasOpinion) {
       return res.status(400).json({
         success: false,
-        message: 'Rating must be between 1 and 5'
+        message: 'Please provide a rating or an opinion (or both)'
       });
     }
 
-    if (!opinion || opinion.trim().length < 10) {
+    // Validate rating if provided (supports 0.5 increments)
+    if (hasRating) {
+      const ratingNum = parseFloat(rating);
+      if (ratingNum < 0.5 || ratingNum > 5 || (ratingNum * 2) % 1 !== 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Rating must be between 0.5 and 5 in 0.5 increments'
+        });
+      }
+    }
+
+    // Validate opinion if provided
+    if (hasOpinion && opinion.trim().length < 10) {
       return res.status(400).json({
         success: false,
-        message: 'Opinion must be at least 10 characters'
+        message: 'Opinion must be at least 10 characters if provided'
       });
     }
 
@@ -67,14 +82,22 @@ export const submitOpinion = async (req, res) => {
       });
     }
 
-    // Create new opinion
-    const newOpinion = await ExpertOpinion.create({
+    // Create new opinion with optional fields
+    const opinionData = {
       proposal: proposalId,
       reviewer: userId,
-      rating: parseInt(rating),
-      opinion: opinion.trim(),
       reviewerRole
-    });
+    };
+
+    if (hasRating) {
+      opinionData.rating = parseFloat(rating);
+    }
+
+    if (hasOpinion) {
+      opinionData.opinion = opinion.trim();
+    }
+
+    const newOpinion = await ExpertOpinion.create(opinionData);
 
     // Populate reviewer info
     await newOpinion.populate('reviewer', 'name email roles designation institution');
@@ -155,13 +178,13 @@ export const checkUserOpinion = async (req, res) => {
       userOpinion = await ExpertOpinion.findOne({
         proposal: proposalId,
         reviewer: userId
-      }).populate('reviewer', 'name email');
+      }).populate('reviewer', 'fullName email');
     }
 
     res.json({
       success: true,
       data: {
-        hasSubmitted,
+        hasOpinion: hasSubmitted,
         opinion: userOpinion
       }
     });

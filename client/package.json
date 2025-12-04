@@ -13,6 +13,7 @@
     "@ariakit/react": "^0.4.19",
     "@emoji-mart/data": "^1.2.1",
     "@faker-js/faker": "^10.1.0",
+    "@hocuspocus/provider": "^3.4.0",
     "@platejs/ai": "^51.1.1",
     "@platejs/autoformat": "^51.0.0",
     "@platejs/basic-nodes": "^51.0.0",
@@ -125,6 +126,8 @@
     "tailwind-scrollbar-hide": "^4.0.0",
     "uploadthing": "^7.7.4",
     "use-file-picker": "^2.1.2",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27",
     "zod": "^4.1.12"
   },
   "devDependencies": {

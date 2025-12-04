@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle, useRef } from 'react';
 import { normalizeNodeId } from 'platejs';
 import { Plate, usePlateEditor } from 'platejs/react';
 
@@ -8,13 +8,20 @@ import { EditorKit } from '@/components/ProposalEditor/editor (plate files)/edit
 import { Editor, EditorContainer } from '@/components/ui (plate files)/editor';
 import { FixedToolbarButtons } from '@/components/ui (plate files)/fixed-toolbar-buttons';
 import { FixedToolbar } from '@/components/ui (plate files)/fixed-toolbar';
+import { FloatingToolbar } from '@/components/ui (plate files)/floating-toolbar';
+import { CollaborateFloatingToolbarButtons } from '@/components/ProposalEditor/editor (our files)/CollaborateFloatingToolbar';
+// DISABLED: Remote cursor features - was causing maximum update depth errors
+// import { RemoteCursors, useCursorBroadcast } from '@/components/ProposalEditor/editor (our files)/RemoteCursors';
 import { TAB_CONFIGS, TAB_DEFAULT_CONTENT } from '@/components/ProposalEditor/proposal-tabs';
 import { useToast, ToastContainer } from '@/components/ui (plate files)/toast';
 import { useAuth } from '@/context/AuthContext';
-import { useSocketCollaboration, getUserColor } from '@/hooks/useSocketCollaboration';
+// Import both collaboration hooks - Yjs is preferred, Socket.io as fallback
+import { useYjsCollaboration, getUserColor } from '@/hooks/useYjsCollaboration';
+import { useSocketCollaboration, getUserColor as getSocketUserColor } from '@/hooks/useSocketCollaboration';
 import { createUsersData } from '@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit';
 import VersionHistory from '@/components/VersionHistory';
 import apiClient from '@/utils/api';
+import { getInlineDiscussions, saveInlineDiscussions } from '@/utils/commentApi';
 // Removed direct Supabase upload - now handled by parent component via backend API
 
 /**
@@ -39,9 +46,15 @@ const AdvancedProposalEditor = forwardRef(({
   showStats = true,
   showVersionHistory = false, // Control version history button externally
   onToggleVersionHistory = () => { }, // Callback to toggle version history
+  canEdit = true, // Whether user can edit content (PI, CI, Super Admin)
+  canSuggest = false, // Whether user is in suggestion mode (Reviewers, Committee Members)
   readOnly = false, // Force read-only mode
   theme = 'light', // Theme prop: 'light', 'dark', 'darkest'
   className = '',
+  // Collaboration callbacks - notify parent of Yjs state changes
+  onCollaborationStateChange = () => {}, // Called when connection/users change
+  onUserJoined = () => {}, // Called when a user joins
+  onUserLeft = () => {}, // Called when a user leaves
 }, ref) => {
   const { user } = useAuth(); // Get current logged-in user
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -52,6 +65,9 @@ const AdvancedProposalEditor = forwardRef(({
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isManualSaving, setIsManualSaving] = useState(false);
+
+  // Ref for editor container (for cursor positioning)
+  const editorContainerRef = useRef(null);
 
   // Theme helper variables
   const isDark = theme === 'dark' || theme === 'darkest';
@@ -107,15 +123,13 @@ const AdvancedProposalEditor = forwardRef(({
       });
   }, []);
 
-  // Get initial value - prioritize initialContent prop for create/edit mode
-  const getInitialValue = useCallback(() => {
-    console.log('getInitialValue called with:', {
-      hasInitialContent: !!initialContent,
-      initialContentType: typeof initialContent,
-      isArray: Array.isArray(initialContent),
-      isNewProposal,
-      mode
-    });
+  // Use ref to store initial value - computed only once on mount
+  const initialValueRef = useRef(null);
+  const hasInitializedRef = useRef(false);
+
+  // Compute initial value only once
+  if (!hasInitializedRef.current) {
+    hasInitializedRef.current = true;
     
     let content = null;
     
@@ -123,83 +137,172 @@ const AdvancedProposalEditor = forwardRef(({
     if (initialContent) {
       // Check if initialContent has the formi structure (lowercase)
       if (initialContent.formi && initialContent.formi.content && Array.isArray(initialContent.formi.content) && initialContent.formi.content.length > 0) {
-        console.log('Using initialContent.formi.content for editor', initialContent.formi.content.length, 'nodes');
         content = initialContent.formi.content;
       }
       // Check if initialContent is the content array directly
       else if (Array.isArray(initialContent) && initialContent.length > 0) {
-        console.log('Using initialContent array directly for editor', initialContent.length, 'nodes');
         content = initialContent;
       }
       // Check if initialContent has formI (uppercase I - from database format)
       else if (initialContent.formI) {
         if (initialContent.formI.editorContent && Array.isArray(initialContent.formI.editorContent) && initialContent.formI.editorContent.length > 0) {
-          console.log('Using initialContent.formI.editorContent for editor');
           content = initialContent.formI.editorContent;
         } else if (initialContent.formI.content && Array.isArray(initialContent.formI.content) && initialContent.formI.content.length > 0) {
-          console.log('Using initialContent.formI.content for editor');
           content = initialContent.formI.content;
         } else if (Array.isArray(initialContent.formI) && initialContent.formI.length > 0) {
-          console.log('Using initialContent.formI array directly for editor');
           content = initialContent.formI;
         }
       }
       // Check for nested object structure
       else if (initialContent.content && Array.isArray(initialContent.content) && initialContent.content.length > 0) {
-        console.log('Using initialContent.content for editor');
         content = initialContent.content;
       }
       // Check if initialContent is an object with editorContent
       else if (initialContent.editorContent && Array.isArray(initialContent.editorContent) && initialContent.editorContent.length > 0) {
-        console.log('Using initialContent.editorContent for editor');
         content = initialContent.editorContent;
-      }
-    }
-    
-    // Fallback to formDataStore if available
-    if (!content) {
-      const storedData = formDataStore['formi'];
-      if (storedData && storedData.content && Array.isArray(storedData.content) && storedData.content.length > 0) {
-        console.log('Using formDataStore.formi.content for editor');
-        content = storedData.content;
       }
     }
     
     // Only use default template content for NEW proposals (isNewProposal === true)
     if (!content && isNewProposal) {
-      console.log('Using TAB_DEFAULT_CONTENT for new proposal');
       content = TAB_DEFAULT_CONTENT['formi'] || [{ type: 'p', children: [{ text: '' }] }];
     }
     
     // For existing drafts with no content, show empty editor (not template)
     if (!content) {
-      console.log('Using empty content as fallback for existing draft');
       content = [{ type: 'p', children: [{ text: '' }] }];
     }
     
-    // Filter out invalid image nodes before returning
-    return filterInvalidImageNodes(content);
-  }, [formDataStore, initialContent, isNewProposal, mode, filterInvalidImageNodes]);
+    // Filter out invalid image nodes before storing
+    initialValueRef.current = filterInvalidImageNodes(content);
+  }
 
-  // Determine editor behavior based on mode
-  const isViewMode = mode === 'view' || readOnly;
+  // Determine editor behavior based on mode and permissions
+  // isViewMode: fully read-only - can't interact at all (no selection, no comments)
+  // isSuggestionModeActive: can select text and add comments, but NOT type/edit text
+  const isSuggestionModeActive = canSuggest && !canEdit;
+  const isViewMode = mode === 'view' || readOnly || (!canEdit && !canSuggest);
+  
+  // For suggestion mode: We set Plate's readOnly to FALSE so that comment/suggestion
+  // transforms (setDraft, etc.) can work. But we'll block text input via onKeyDown.
+  // For view mode: Full read-only (no transforms at all)
+  const editorReadOnly = isViewMode;
   const enableCollaboration = mode === 'collaborate' && !isViewMode;
 
+  // Debug logging for editor permissions
+  console.log('[AdvancedProposalEditor] Permission state:', {
+    mode,
+    canEdit,
+    canSuggest,
+    readOnly,
+    isViewMode,
+    isSuggestionModeActive,
+    editorReadOnly,
+    enableCollaboration
+  });
+
+  // Determine display role for current user based on permissions
+  // PI/CI is determined by proposal context (canEdit), not user.roles
+  // Memoized to prevent unnecessary reconnections
+  const displayRole = useMemo(() => {
+    const specialRoles = ['SUPER_ADMIN', 'CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER', 'EXPERT_REVIEWER'];
+    const userRole = user?.roles?.[0];
+    if (specialRoles.includes(userRole)) return userRole;
+    if (canEdit) return 'PI'; // PI or CI who can edit
+    if (canSuggest) return 'Reviewer';
+    return 'USER';
+  }, [user?.roles, canEdit, canSuggest]);
+
+  // TEMPORARILY DISABLED: Yjs collaboration causes focus loss issues
+  // The awareness state updates trigger React re-renders that steal focus from the editor
+  // TODO: Re-enable once proper Yjs-Plate integration is implemented
+  const yjsConnected = false;
+  const yjsSynced = false;
+  const yjsUsers = [];
+  const yjsAwareness = null;
+  const yjsSendUpdate = useCallback(() => false, []);
+  const yjsSaveProposal = useCallback(async () => ({ success: false }), []);
+  const yjsError = null;
+  
+  /*
   const {
-    connected: socketConnected,
-    activeUsers: collaborationUsers,
-    sendUpdate: sendCollaborationUpdate,
-    saveProposal: saveCollaborationProposal
-  } = useSocketCollaboration({
+    connected: yjsConnected,
+    synced: yjsSynced,
+    activeUsers: yjsUsers,
+    awareness: yjsAwareness,
+    sendUpdate: yjsSendUpdate,
+    saveProposal: yjsSaveProposal,
+    error: yjsError
+  } = useYjsCollaboration({
     proposalId: enableCollaboration ? proposalId : null,
-    formId: enableCollaboration ? 'formi' : null,
+    formId: 'formi',
     user: enableCollaboration ? user : null,
+    displayRole: enableCollaboration ? displayRole : null,
     enabled: enableCollaboration,
     onContentUpdate: (data) => {
-      // Handle incoming content updates from other users
-      console.log(`📥 Received content update for form ${data.formId}`);
+      console.log(`[Yjs] Received content update for form ${data.formId}`);
+      setFormDataStore(prev => ({
+        ...prev,
+        [data.formId]: {
+          content: data.editorContent,
+          wordCount: prev[data.formId]?.wordCount || 0,
+          characterCount: prev[data.formId]?.characterCount || 0
+        }
+      }));
+    },
+    onUserJoined: (data) => {
+      console.log(`[Yjs] User joined:`, data);
+      onUserJoined(data);
+    },
+    onUserLeft: (data) => {
+      console.log(`[Yjs] User left:`, data);
+      onUserLeft(data);
+    }
+  });
+  */
 
-      // Update form data store with remote changes
+  // Notify parent of collaboration state changes
+  // Only runs when connection state or user list changes (not on every awareness update)
+  useEffect(() => {
+    if (enableCollaboration && onCollaborationStateChange) {
+      // Include current user in the user list
+      const currentUserData = user ? {
+        id: user._id,
+        name: user.fullName,
+        email: user.email,
+        role: displayRole,
+        color: getUserColor(user._id)
+      } : null;
+      
+      // Combine current user with other Yjs users (deduplicated)
+      const allUsers = currentUserData 
+        ? [currentUserData, ...(yjsUsers || []).filter(u => u.id !== user?._id)]
+        : (yjsUsers || []);
+      
+      onCollaborationStateChange({
+        connected: yjsConnected,
+        synced: yjsSynced,
+        users: allUsers,
+        awareness: yjsAwareness
+      });
+    }
+  // Note: yjsAwareness excluded from deps - object reference is stable, only connection/sync/users matter
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enableCollaboration, yjsConnected, yjsSynced, yjsUsers, user?._id, onCollaborationStateChange, displayRole]);
+
+  // Socket.io collaboration (fallback when Yjs unavailable)
+  const {
+    connected: socketConnected,
+    activeUsers: socketUsers,
+    sendUpdate: socketSendUpdate,
+    saveProposal: socketSaveProposal
+  } = useSocketCollaboration({
+    proposalId: (enableCollaboration && !yjsConnected) ? proposalId : null,
+    formId: 'formi',
+    user: (enableCollaboration && !yjsConnected) ? user : null,
+    enabled: enableCollaboration && !yjsConnected,
+    onContentUpdate: (data) => {
+      console.log(`[Socket] Received content update for form ${data.formId}`);
       setFormDataStore(prev => ({
         ...prev,
         [data.formId]: {
@@ -210,40 +313,122 @@ const AdvancedProposalEditor = forwardRef(({
       }));
     },
     onUserJoined: (data) => {
-      console.log(`👋 User joined: ${data.user.fullName}`);
+      console.log(`[Socket] User joined: ${data.user?.fullName}`);
     },
     onUserLeft: (data) => {
-      console.log(`👋 User left: ${data.user.fullName}`);
+      console.log(`[Socket] User left: ${data.user?.fullName}`);
     }
   });
 
-  // Create Plate.js editor with Form I content
+  // Unified collaboration state - prefer Yjs, fallback to Socket.io
+  const collaborationConnected = yjsConnected || socketConnected;
+  const collaborationUsers = yjsConnected ? yjsUsers : socketUsers;
+  const sendCollaborationUpdate = yjsConnected ? yjsSendUpdate : socketSendUpdate;
+  const saveCollaborationProposal = yjsConnected ? yjsSaveProposal : socketSaveProposal;
+
+  // Create Plate.js editor with Form I content - only recreate on initialContent or isNewProposal changes
   const editor = usePlateEditor({
     plugins: EditorKit,
-    value: getInitialValue(),
-  }, [formDataStore, initialContent, isNewProposal]); // Recreate when data, initialContent, or isNewProposal changes
+    value: initialValueRef.current,
+  }, [initialContent, isNewProposal]); // Don't include formDataStore to avoid infinite loops
+
+  // Configure discussion and suggestion plugins with current user data
+  // This effect runs when the editor is ready
+  useEffect(() => {
+    if (!editor || !user) return;
+    
+    const setupPlugins = async () => {
+      try {
+        // Import the local plugin instances that are actually used in EditorKit
+        // These must be imported synchronously at the top of the module to get the same instance
+        const { suggestionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/suggestion-kit');
+        const { discussionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit');
+        
+        // Set current user ID for discussion plugin (needed for comments)
+        editor.setOption(discussionPlugin, 'currentUserId', user._id);
+        
+        // Set users data for discussion plugin
+        const usersData = {
+          [user._id]: {
+            id: user._id,
+            avatarUrl: `https://api.dicebear.com/9.x/glass/svg?seed=${user.email || user._id}`,
+            name: user.fullName || 'Anonymous',
+          }
+        };
+        editor.setOption(discussionPlugin, 'users', usersData);
+        
+        // Set current user ID for suggestion plugin (needed for tracking who made suggestions)
+        editor.setOption(suggestionPlugin, 'currentUserId', user._id);
+        
+        // Enable suggestion mode for committee members and experts
+        if (isSuggestionModeActive) {
+          editor.setOption(suggestionPlugin, 'isSuggesting', true);
+          console.log('[Editor] Suggestion mode enabled for reviewer/committee member');
+        }
+        
+        // Load discussions from backend if proposalId exists
+        if (proposalId) {
+          try {
+            const discussionsData = await getInlineDiscussions(proposalId, 'formi');
+            if (discussionsData && discussionsData.discussions) {
+              editor.setOption(discussionPlugin, 'discussions', discussionsData.discussions);
+              console.log('[Editor] Loaded', discussionsData.discussions.length, 'discussions from backend');
+            }
+          } catch (loadError) {
+            console.warn('[Editor] Could not load discussions:', loadError);
+            editor.setOption(discussionPlugin, 'discussions', []);
+          }
+        } else {
+          // Initialize empty discussions array for new proposals
+          editor.setOption(discussionPlugin, 'discussions', []);
+        }
+        
+        console.log('[Editor] Discussion and suggestion plugins configured with user:', user._id);
+      } catch (e) {
+        console.warn('[Editor] Could not configure plugins:', e);
+      }
+    };
+    
+    setupPlugins();
+  }, [editor, user, isSuggestionModeActive, proposalId]);
+
+  // DISABLED: Cursor broadcasting was causing maximum update depth errors
+  // The useCursorBroadcast hook and related useEffect are disabled
+  // TODO: Implement cursor sync using Yjs cursor plugin instead of manual awareness broadcasting
+  /*
+  const { broadcastCursor, clearCursor } = useCursorBroadcast({
+    awareness: yjsAwareness,
+    editorRef: editorContainerRef,
+    enabled: enableCollaboration && yjsConnected
+  });
+
+  useEffect(() => {
+    if (!enableCollaboration || !yjsAwareness || !editorContainerRef.current) return;
+    // Cursor broadcasting disabled
+  }, [enableCollaboration, yjsAwareness, yjsConnected]);
+  */
 
   // Save current form content to store
   const saveCurrentFormToStore = useCallback(() => {
-    if (editor && editor.children) {
-      setFormDataStore(prev => {
-        const words = wordCount;
-        const chars = characterCount;
-
-        return {
-          ...prev,
-          'formi': {
-            content: editor.children,
-            wordCount: words,
-            characterCount: chars,
-            signature: headSignature,
-            seal: institutionSeal,
-          }
-        };
-      });
-      console.log('Saved Form I to store');
-    }
-  }, [editor, wordCount, characterCount, headSignature, institutionSeal]);
+    if (!editor?.children) return;
+    
+    const currentContent = editor.children;
+    const text = extractPlainText(currentContent);
+    const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
+    const chars = text.length;
+    
+    setFormDataStore(prev => ({
+      ...prev,
+      'formi': {
+        content: currentContent,
+        wordCount: words,
+        characterCount: chars,
+        signature: headSignature,
+        seal: institutionSeal,
+      }
+    }));
+    console.log('Saved Form I to store');
+  }, [extractPlainText, headSignature, institutionSeal]); // Removed editor, wordCount, characterCount from deps
 
   // Load saved draft forms when component mounts or initialContent changes
   useEffect(() => {
@@ -396,6 +581,9 @@ const AdvancedProposalEditor = forwardRef(({
     loadDraftForms();
   }, [proposalId, initialContent]);
 
+  // Track last word/char counts to avoid unnecessary updates
+  const lastStatsRef = useRef({ words: 0, chars: 0 });
+
   // Real-time word/character count update + collaboration sync
   useEffect(() => {
     if (!editor || !editor.children) return;
@@ -409,13 +597,17 @@ const AdvancedProposalEditor = forwardRef(({
         const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
         const chars = text.length;
 
-        setWordCount(words);
-        setCharacterCount(chars);
-        onWordCountChange(words);
-        onCharacterCountChange(chars);
+        // Only update state if values actually changed
+        if (lastStatsRef.current.words !== words || lastStatsRef.current.chars !== chars) {
+          lastStatsRef.current = { words, chars };
+          setWordCount(words);
+          setCharacterCount(chars);
+          onWordCountChange(words);
+          onCharacterCountChange(chars);
+        }
 
         // Send real-time update to other collaborators (debounced in hook)
-        if (enableCollaboration && socketConnected && sendCollaborationUpdate) {
+        if (enableCollaboration && collaborationConnected && sendCollaborationUpdate) {
           sendCollaborationUpdate(currentValue, words, chars);
         }
       } catch (error) {
@@ -428,7 +620,7 @@ const AdvancedProposalEditor = forwardRef(({
     updateStats(); // Initial update
 
     return () => clearInterval(interval);
-  }, [editor, extractPlainText, onWordCountChange, onCharacterCountChange, enableCollaboration, socketConnected, sendCollaborationUpdate]);
+  }, [editor, extractPlainText, onWordCountChange, onCharacterCountChange, enableCollaboration, collaborationConnected, sendCollaborationUpdate]);
 
   // Auto-save functionality - calls parent's onAutoSave callback
   useEffect(() => {
@@ -496,6 +688,105 @@ const AdvancedProposalEditor = forwardRef(({
       clearTimeout(initialTimeout);
     };
   }, [editor, extractPlainText, onWordCountChange, onCharacterCountChange, onContentChange, onAutoSave, headSignature, institutionSeal]);
+
+  // Track discussions changes and save to backend
+  const lastSavedDiscussionsRef = useRef(null);
+  const saveTimeoutRef = useRef(null);
+  
+  // Debounced save function for discussions
+  const debouncedSaveDiscussions = useCallback(async () => {
+    if (!proposalId || !editor) return;
+    
+    try {
+      const { discussionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit');
+      const discussions = editor.getOption(discussionPlugin, 'discussions') || [];
+      
+      // Only save if discussions have changed
+      const discussionsJson = JSON.stringify(discussions);
+      if (discussionsJson === lastSavedDiscussionsRef.current) {
+        return; // No changes, skip save
+      }
+      
+      console.log('[Editor] Saving', discussions.length, 'discussions to backend');
+      const result = await saveInlineDiscussions(proposalId, 'formi', discussions, []);
+      
+      if (result) {
+        lastSavedDiscussionsRef.current = discussionsJson;
+        console.log('[Editor] Discussions saved successfully');
+      } else {
+        console.warn('[Editor] Failed to save discussions - API returned false');
+      }
+    } catch (error) {
+      console.error('[Editor] Failed to save discussions:', error);
+    }
+  }, [proposalId, editor]);
+  
+  // Schedule a debounced save when discussions change
+  const scheduleSaveDiscussions = useCallback(() => {
+    // Clear any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    // Save after 2 second debounce
+    saveTimeoutRef.current = setTimeout(debouncedSaveDiscussions, 2000);
+  }, [debouncedSaveDiscussions]);
+  
+  // Expose save function for external triggers (like when comment is added)
+  useEffect(() => {
+    if (!editor) return;
+    
+    // Store the save function on the editor for comment.jsx to call
+    editor._saveDiscussions = scheduleSaveDiscussions;
+    
+    return () => {
+      delete editor._saveDiscussions;
+    };
+  }, [editor, scheduleSaveDiscussions]);
+  
+  // Periodically save inline discussions (comments and suggestions) to backend
+  useEffect(() => {
+    if (!proposalId || !editor) return;
+    
+    // Save discussions every 10 seconds as backup
+    const interval = setInterval(debouncedSaveDiscussions, 10000);
+    
+    // Save before page unload
+    const handleBeforeUnload = () => {
+      // Use sendBeacon for reliable saving on page close
+      try {
+        const { discussionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit');
+        const discussions = editor.getOption(discussionPlugin, 'discussions') || [];
+        if (discussions.length > 0) {
+          const token = localStorage.getItem('token');
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+          const data = JSON.stringify({ formId: 'formi', discussions, suggestions: [] });
+          navigator.sendBeacon(
+            `${apiBaseUrl}/api/proposals/${proposalId}/discussions?token=${token}`,
+            new Blob([data], { type: 'application/json' })
+          );
+          console.log('[Editor] Beacon sent with', discussions.length, 'discussions');
+        }
+      } catch (e) {
+        console.error('[Editor] Beacon save failed:', e);
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Initial save after 3 seconds
+    const initialSaveTimeout = setTimeout(debouncedSaveDiscussions, 3000);
+    
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initialSaveTimeout);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Save one last time on cleanup
+      debouncedSaveDiscussions();
+    };
+  }, [proposalId, editor, debouncedSaveDiscussions]);
 
   // Handle signature save (base64, will upload on submission)
   const handleSignatureSave = (signatureData) => {
@@ -763,28 +1054,34 @@ const AdvancedProposalEditor = forwardRef(({
 
   // Manual save function
   const handleManualSave = useCallback(async () => {
-    if (isManualSaving) return;
+    if (isManualSaving || !editor?.children) return;
 
     try {
       setIsManualSaving(true);
       // Ensure current form is saved to store before calling parent save
       saveCurrentFormToStore();
 
+      // Get the current editor content
+      const currentContent = editor.children;
+      const text = extractPlainText(currentContent);
+      const words = text.trim().split(/\s+/).filter(word => word.length > 0).length;
+      const chars = text.length;
+
       // Get the updated state
-      let latestFormDataStore = {};
-      setFormDataStore(prev => {
-        latestFormDataStore = {
-          ...prev,
-          'formi': {
-            content: editor.children,
-            wordCount: wordCount,
-            characterCount: characterCount,
-            signature: headSignature,
-            seal: institutionSeal,
-          }
-        };
-        return latestFormDataStore;
-      });
+      const latestFormDataStore = {
+        'formi': {
+          content: currentContent,
+          wordCount: words,
+          characterCount: chars,
+          signature: headSignature,
+          seal: institutionSeal,
+        }
+      };
+
+      setFormDataStore(prev => ({
+        ...prev,
+        ...latestFormDataStore
+      }));
 
 
       // Call parent's onManualSave if provided
@@ -800,8 +1097,11 @@ const AdvancedProposalEditor = forwardRef(({
     } finally {
       setIsManualSaving(false);
     }
-  }, [isManualSaving, saveCurrentFormToStore, onManualSave, success, editor?.children, wordCount, characterCount, headSignature, institutionSeal]);
+  }, [isManualSaving, saveCurrentFormToStore, onManualSave, success, extractPlainText, headSignature, institutionSeal]);
 
+
+  // Track last form completion status to avoid unnecessary updates
+  const lastFormStatusRef = useRef(null);
 
   // Check if current form has content
   const checkFormCompletion = useCallback(() => {
@@ -810,25 +1110,35 @@ const AdvancedProposalEditor = forwardRef(({
     const text = extractPlainText(editor.children);
     const hasContent = text.trim().length > 50; // At least 50 characters
 
-    // Notify parent about form status
-    if (onFormStatusChange) {
+    // Only notify parent if status actually changed
+    if (onFormStatusChange && lastFormStatusRef.current !== hasContent) {
+      lastFormStatusRef.current = hasContent;
       onFormStatusChange('formi', hasContent);
     }
 
     return hasContent;
-  }, [editor, extractPlainText, onFormStatusChange]);
+  }, [extractPlainText, onFormStatusChange]); // Removed editor from deps - we check it inside
 
-  // Auto-check form completion on content change
+  // Auto-check form completion on content change - debounced
+  const formCompletionTimeoutRef = useRef(null);
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
+    if (!editor || !editor.children) return;
+
+    // Clear previous timeout
+    if (formCompletionTimeoutRef.current) {
+      clearTimeout(formCompletionTimeoutRef.current);
+    }
+
+    formCompletionTimeoutRef.current = setTimeout(() => {
       checkFormCompletion();
     }, 1000); // Debounce by 1 second
 
-    // Use editor as a dependency if Plate's children aren't directly available outside
-    if (!editor) return;
-
-    return () => clearTimeout(timeoutId);
-  }, [editor?.children, checkFormCompletion, editor]);
+    return () => {
+      if (formCompletionTimeoutRef.current) {
+        clearTimeout(formCompletionTimeoutRef.current);
+      }
+    };
+  }, [checkFormCompletion]); // Only depend on checkFormCompletion, not editor
 
   // Export to PDF function - exports Form I only
   const handleExportPDF = useCallback(async () => {
@@ -1014,14 +1324,14 @@ const AdvancedProposalEditor = forwardRef(({
             {/* Collaboration Status - Connection indicator only (online count shown in parent component) */}
             {proposalId && enableCollaboration && (
               <div className="flex items-center gap-3">
-                {/* Connection Status */}
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${socketConnected
+                {/* Connection Status - Shows Yjs or Socket.io status */}
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${collaborationConnected
                   ? isDark ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : isDark ? 'bg-red-900/30 text-red-400 border border-red-800' : 'bg-red-50 text-red-700 border border-red-200'
                   }`}>
-                  <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                  <div className={`w-2 h-2 rounded-full ${collaborationConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
                     }`} />
-                  {socketConnected ? 'Connected' : 'Disconnected'}
+                  {collaborationConnected ? (yjsConnected ? 'Synced' : 'Connected') : 'Disconnected'}
                 </div>
               </div>
             )}
@@ -1032,28 +1342,95 @@ const AdvancedProposalEditor = forwardRef(({
             <Plate
               key="formi"
               editor={editor}
-              readOnly={isViewMode}
+              readOnly={editorReadOnly}
             >
-              {/* Hide toolbar in view mode */}
-              {!isViewMode && (
+              {/* Hide fixed toolbar in view mode - show simplified toolbar for suggestion mode */}
+              {!isViewMode && !isSuggestionModeActive && (
                 <FixedToolbar theme={theme}>
                   <FixedToolbarButtons />
                 </FixedToolbar>
               )}
 
-              <EditorContainer className="pt-4 pb-2" theme={theme}>
+              {/* Simplified toolbar for suggestion mode users */}
+              {!isViewMode && isSuggestionModeActive && (
+                <div className={`sticky top-0 z-30 px-4 py-2 border-b flex items-center justify-between ${
+                  isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-emerald-50 border-emerald-200'
+                }`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${
+                      isDark ? 'bg-emerald-900/50 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                      Comment Mode
+                    </span>
+                    <span className={`text-sm hidden md:inline ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Select text to add comments
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <EditorContainer className="pt-4 pb-2 relative" theme={theme} ref={editorContainerRef}>
                 <Editor
                   variant="default"
                   theme={theme}
                   className={`min-h-[500px] focus:outline-none leading-relaxed pb-4 px-4 ${isDark ? 'text-white' : 'text-black'}`}
-                  readOnly={isViewMode}
+                  readOnly={editorReadOnly}
+                  onKeyDown={isSuggestionModeActive ? (e) => {
+                    // Allow navigation keys, selection keys, and comment shortcut
+                    const allowedKeys = [
+                      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                      'Home', 'End', 'PageUp', 'PageDown',
+                      'Tab', 'Escape',
+                      'Shift', 'Control', 'Alt', 'Meta',
+                    ];
+                    
+                    // Allow Ctrl+A (select all), Ctrl+C (copy), Ctrl+Shift+M (comment)
+                    if (e.ctrlKey || e.metaKey) {
+                      if (e.key === 'a' || e.key === 'c' || (e.shiftKey && e.key === 'm')) {
+                        return; // Allow these shortcuts
+                      }
+                    }
+                    
+                    // Block all other keys that would modify content
+                    if (!allowedKeys.includes(e.key) && !e.ctrlKey && !e.metaKey) {
+                      e.preventDefault();
+                      console.log('[Editor] Input blocked for committee member - use comments instead');
+                    }
+                  } : undefined}
                 />
+                {/* DISABLED: Remote Cursors - was causing maximum update depth errors
+                    The awareness listener triggers React state updates that create infinite loops
+                    TODO: Re-enable once cursor sync is properly implemented with debouncing
+                {enableCollaboration && yjsAwareness && (
+                  <RemoteCursors
+                    awareness={yjsAwareness}
+                    editorRef={editorContainerRef}
+                    theme={theme}
+                  />
+                )}
+                */}
               </EditorContainer>
+
+              {/* Floating Toolbar - Shows on text selection */}
+              {/* Available for editors (PI/CI) and reviewers (for comments) */}
+              {!isViewMode && (
+                <FloatingToolbar>
+                  <CollaborateFloatingToolbarButtons
+                    userRole={user?.roles?.[0] || 'USER'}
+                    canEdit={canEdit}
+                    canSuggest={canSuggest}
+                    theme={theme}
+                  />
+                </FloatingToolbar>
+              )}
             </Plate>
           </div>
 
-          {/* Action Bar with Save and Export - Show only Export in view mode */}
-          {!isViewMode && (
+          {/* Action Bar with Save and Export - Hide in view mode and suggestion mode */}
+          {!isViewMode && !isSuggestionModeActive && (
             <div className={`mt-4 flex items-center justify-between p-4 rounded-lg border ${isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center gap-4">
                 {/* Save Button */}
@@ -1126,8 +1503,8 @@ const AdvancedProposalEditor = forwardRef(({
             </div>
           )}
 
-          {/* Export Button Only for View Mode */}
-          {isViewMode && (
+          {/* Export Button Only for View Mode and Suggestion Mode */}
+          {(isViewMode || isSuggestionModeActive) && (
             <div className={`mt-4 flex items-center justify-center p-4 rounded-lg border ${isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
               <button
                 type="button"

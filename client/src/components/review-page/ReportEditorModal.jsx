@@ -20,6 +20,7 @@ const ReportEditorModal = ({
   proposalCode,
   proposalTitle,
   isSubmitting = false,
+  isExpertReport = false,
   theme = 'light'
 }) => {
   const [reportTitle, setReportTitle] = useState('');
@@ -72,6 +73,7 @@ const ReportEditorModal = ({
   if (!mounted || !show) return null;
 
   const getDecisionLabel = () => {
+    if (isExpertReport) return 'Expert Review';
     if (!decision) return 'Unknown';
     if (decision.includes('ACCEPTED')) return 'Acceptance';
     if (decision.includes('REJECTED')) return 'Rejection';
@@ -80,6 +82,7 @@ const ReportEditorModal = ({
   };
 
   const getDecisionColor = () => {
+    if (isExpertReport) return 'bg-purple-100 text-purple-800 border-purple-200';
     if (!decision) return isDark ? 'bg-white/10 text-white' : 'bg-black/10 text-black';
     if (decision.includes('ACCEPTED')) return 'bg-green-100 text-green-800 border-green-200';
     if (decision.includes('REJECTED')) return 'bg-red-100 text-red-800 border-red-200';
@@ -135,12 +138,19 @@ const ReportEditorModal = ({
             </div>
             <div>
               <h2 className={`text-xl font-semibold ${textColor}`}>
-                {confirmStep === 1 ? 'Write Review Report' : 'Confirm Decision'}
+                {confirmStep === 1 
+                  ? (isExpertReport ? 'Write Expert Review Report' : 'Write Review Report') 
+                  : (isExpertReport ? 'Confirm Report Submission' : 'Confirm Decision')
+                }
               </h2>
               <p className={`text-sm ${textColor}`}>
                 {confirmStep === 1 
-                  ? 'Provide detailed justification for your decision' 
-                  : 'Review and confirm your decision'
+                  ? (isExpertReport 
+                      ? 'Provide your detailed assessment and recommendations' 
+                      : 'Provide detailed justification for your decision')
+                  : (isExpertReport 
+                      ? 'Review and confirm your expert report' 
+                      : 'Review and confirm your decision')
                 }
               </p>
             </div>
@@ -214,8 +224,9 @@ const ReportEditorModal = ({
                 <div>
                   <p className={`text-sm font-medium ${textColor}`}>Final Confirmation Required</p>
                   <p className={`text-sm ${textColor} mt-1`}>
-                    This action is permanent and cannot be undone. Your report will be converted to PDF 
-                    and stored as a supporting document for this proposal.
+                    {isExpertReport 
+                      ? 'This action is permanent. Your expert report will be converted to PDF, stored, and shared with the CMPDI committee for their decision-making process.'
+                      : 'This action is permanent and cannot be undone. Your report will be converted to PDF and stored as a supporting document for this proposal.'}
                   </p>
                 </div>
               </div>
@@ -223,7 +234,7 @@ const ReportEditorModal = ({
               {/* Summary */}
               <div className="space-y-4">
                 <div className={`${cardBg} rounded-lg p-4`}>
-                  <h3 className={`font-semibold ${textColor} mb-3`}>Decision Summary</h3>
+                  <h3 className={`font-semibold ${textColor} mb-3`}>{isExpertReport ? 'Report Summary' : 'Decision Summary'}</h3>
                   
                   <div className="space-y-2">
                     <div className="flex justify-between">
@@ -231,7 +242,7 @@ const ReportEditorModal = ({
                       <span className={`text-sm font-medium ${textColor}`}>{proposalCode}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className={`text-sm ${textColor}`}>Decision:</span>
+                      <span className={`text-sm ${textColor}`}>{isExpertReport ? 'Report Type:' : 'Decision:'}</span>
                       <span className={`text-sm font-medium px-2 py-0.5 rounded ${getDecisionColor()}`}>
                         {getDecisionLabel()}
                       </span>
@@ -303,7 +314,7 @@ const ReportEditorModal = ({
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    Submit Decision
+                    {isExpertReport ? 'Submit Report' : 'Submit Decision'}
                   </>
                 )}
               </button>

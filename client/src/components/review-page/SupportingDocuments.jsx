@@ -8,8 +8,8 @@ import {
   Download, 
   ChevronDown,
   Upload,
-  Bot,
-  UserCheck
+  Cpu,
+  ClipboardCheck
 } from 'lucide-react';
 
 const SupportingDocuments = ({ 
@@ -33,25 +33,7 @@ const SupportingDocuments = ({
   const inactiveBtnBg = isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-black/5 text-black hover:bg-black/10';
   const docItemBg = isDarkest ? 'bg-neutral-800 border-neutral-700 hover:bg-neutral-700' : isDark ? 'bg-slate-700 border-slate-600 hover:bg-slate-600' : 'bg-black/5 border-black/10 hover:bg-black/10';
   const viewBtnBg = isDark ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-black/10 hover:bg-black/20 text-black';
-
-  const getDocumentTypeStyles = (type) => {
-    switch (type) {
-      case 'proposal':
-        return 'bg-orange-100 text-orange-600 border-orange-200';
-      case 'technical':
-        return 'bg-blue-100 text-blue-600 border-blue-200';
-      case 'financial':
-        return 'bg-green-100 text-green-600 border-green-200';
-      case 'research':
-        return 'bg-purple-100 text-purple-600 border-purple-200';
-      case 'ai':
-        return 'bg-indigo-100 text-indigo-600 border-indigo-200';
-      case 'reviewer':
-        return 'bg-teal-100 text-teal-600 border-teal-200';
-      default:
-        return isDark ? 'bg-white/10 text-white border-white/20' : 'bg-black/5 text-black border-black/10';
-    }
-  };
+  const docIconBg = isDark ? 'bg-white/10 border-white/20' : 'bg-black/5 border-black/10';
 
   const formatFileSize = (bytes) => {
     if (!bytes) return 'N/A';
@@ -84,8 +66,8 @@ const SupportingDocuments = ({
 
   const tabs = [
     { id: 'user', label: 'User Uploads', icon: Upload, count: displayUserDocs.length },
-    { id: 'ai', label: 'AI Reports', icon: Bot, count: displayAIReports.length },
-    { id: 'reviewer', label: 'Reviewer Reports', icon: UserCheck, count: displayReviewerReports.length }
+    { id: 'ai', label: 'AI Reports', icon: Cpu, count: displayAIReports.length },
+    { id: 'reviewer', label: 'Reviewer Reports', icon: ClipboardCheck, count: displayReviewerReports.length }
   ];
 
   const getActiveDocuments = () => {
@@ -173,8 +155,8 @@ const SupportingDocuments = ({
                   className={`flex items-center justify-between p-4 ${docItemBg} border rounded-lg transition-colors`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${getDocumentTypeStyles(doc.type || activeTab)}`}>
-                      <FileText className="w-5 h-5" />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${docIconBg}`}>
+                      <FileText className={`w-5 h-5 ${textColor}`} />
                     </div>
                     <div>
                       <div className={`${textColor} font-medium text-sm`}>

@@ -30,6 +30,11 @@ const checkProposalAccess = (proposal, user) => {
   const createdById = proposal.createdBy?._id || proposal.createdBy;
   const isPI = createdById.toString() === user._id.toString();
   
+  // For DRAFT proposals, only the creator (PI) can access
+  if (proposal.status === 'DRAFT') {
+    return isPI;
+  }
+  
   // Handle populated co-investigators
   const isCI = proposal.coInvestigators?.some(ci => {
     const ciId = ci._id || ci;
@@ -1215,4 +1220,399 @@ export const beaconSave = asyncHandler(async (req, res) => {
       error: error.message
     });
   }
+});
+
+/**
+ * @route   GET /api/proposals/:proposalId/discussions
+ * @desc    Get inline discussions (comments and suggestions) for a proposal
+ * @access  Private
+ */
+export const getInlineDiscussions = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { formId = 'formi' } = req.query;
+  
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+  
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+  
+  const discussions = proposal.inlineDiscussions?.[formId] || {
+    discussions: [],
+    suggestions: []
+  };
+  
+  res.json({
+    success: true,
+    data: discussions
+  });
+});
+
+/**
+ * @route   POST /api/proposals/:proposalId/discussions
+ * @desc    Save inline discussions (comments and suggestions) for a proposal
+ * @access  Private
+ */
+export const saveInlineDiscussions = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { formId = 'formi', discussions, suggestions } = req.body;
+  
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+  
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+  
+  // Initialize inlineDiscussions if it doesn't exist
+  if (!proposal.inlineDiscussions) {
+    proposal.inlineDiscussions = {};
+  }
+  
+  // Save discussions for the specific form
+  proposal.inlineDiscussions[formId] = {
+    discussions: discussions || [],
+    suggestions: suggestions || [],
+    lastUpdatedBy: req.user._id,
+    lastUpdatedAt: new Date()
+  };
+  
+  // Mark as modified since it's a Mixed type
+  proposal.markModified('inlineDiscussions');
+  await proposal.save({ validateModifiedOnly: true });
+  
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'UPDATE_DISCUSSIONS',
+    proposalId: proposal._id,
+    details: { 
+      proposalCode: proposal.proposalCode,
+      formId,
+      discussionsCount: discussions?.length || 0,
+      suggestionsCount: suggestions?.length || 0
+    },
+    ipAddress: req.ip
+  });
+  
+  res.json({
+    success: true,
+    message: 'Discussions saved successfully',
+    data: proposal.inlineDiscussions[formId]
+  });
+});
+
+/**
+ * @route   POST /api/proposals/:proposalId/discussions/comment
+ * @desc    Add a single comment to a discussion
+ * @access  Private
+ */
+export const addInlineComment = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { formId = 'formi', discussionId, comment } = req.body;
+  
+  if (!discussionId || !comment) {
+    return res.status(400).json({
+      success: false,
+      message: 'Discussion ID and comment are required'
+    });
+  }
+  
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+  
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+  
+  // Initialize inlineDiscussions if it doesn't exist
+  if (!proposal.inlineDiscussions) {
+    proposal.inlineDiscussions = {};
+  }
+  if (!proposal.inlineDiscussions[formId]) {
+    proposal.inlineDiscussions[formId] = { discussions: [], suggestions: [] };
+  }
+  
+  // Find the discussion
+  const discussions = proposal.inlineDiscussions[formId].discussions || [];
+  const discussionIndex = discussions.findIndex(d => d.id === discussionId);
+  
+  if (discussionIndex === -1) {
+    // Create new discussion with this comment
+    const newDiscussion = {
+      id: discussionId,
+      comments: [{
+        id: `comment-${Date.now()}`,
+        contentRich: comment.contentRich || [{ type: 'p', children: [{ text: comment.text || '' }] }],
+        createdAt: new Date(),
+        userId: req.user._id.toString(),
+        isEdited: false
+      }],
+      createdAt: new Date(),
+      isResolved: false,
+      userId: req.user._id.toString()
+    };
+    discussions.push(newDiscussion);
+  } else {
+    // Add comment to existing discussion
+    const newComment = {
+      id: `comment-${Date.now()}`,
+      contentRich: comment.contentRich || [{ type: 'p', children: [{ text: comment.text || '' }] }],
+      createdAt: new Date(),
+      discussionId: discussionId,
+      userId: req.user._id.toString(),
+      isEdited: false
+    };
+    discussions[discussionIndex].comments.push(newComment);
+  }
+  
+  proposal.inlineDiscussions[formId].discussions = discussions;
+  proposal.inlineDiscussions[formId].lastUpdatedBy = req.user._id;
+  proposal.inlineDiscussions[formId].lastUpdatedAt = new Date();
+  
+  // Mark as modified since it's a Mixed type
+  proposal.markModified('inlineDiscussions');
+  await proposal.save({ validateModifiedOnly: true });
+  
+  res.json({
+    success: true,
+    message: 'Comment added successfully',
+    data: proposal.inlineDiscussions[formId]
+  });
+});
+
+/**
+ * @route   POST /api/proposals/:proposalId/discussions/resolve
+ * @desc    Resolve a discussion
+ * @access  Private
+ */
+export const resolveDiscussion = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { formId = 'formi', discussionId, isResolved = true } = req.body;
+  
+  if (!discussionId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Discussion ID is required'
+    });
+  }
+  
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+  
+  // Check access
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+  
+  // Find and update the discussion
+  const discussions = proposal.inlineDiscussions?.[formId]?.discussions || [];
+  const discussionIndex = discussions.findIndex(d => d.id === discussionId);
+  
+  if (discussionIndex === -1) {
+    return res.status(404).json({
+      success: false,
+      message: 'Discussion not found'
+    });
+  }
+  
+  discussions[discussionIndex].isResolved = isResolved;
+  discussions[discussionIndex].resolvedBy = req.user._id.toString();
+  discussions[discussionIndex].resolvedAt = new Date();
+  
+  proposal.inlineDiscussions[formId].discussions = discussions;
+  proposal.inlineDiscussions[formId].lastUpdatedBy = req.user._id;
+  proposal.inlineDiscussions[formId].lastUpdatedAt = new Date();
+  
+  // Mark as modified since it's a Mixed type
+  proposal.markModified('inlineDiscussions');
+  await proposal.save({ validateModifiedOnly: true });
+  
+  res.json({
+    success: true,
+    message: isResolved ? 'Discussion resolved' : 'Discussion reopened',
+    data: proposal.inlineDiscussions[formId]
+  });
+});
+
+/**
+ * @route   GET /api/proposals/assigned-to-me
+ * @desc    Get proposals assigned to current user as expert reviewer
+ * @access  Private (Expert Reviewers)
+ */
+export const getAssignedProposals = asyncHandler(async (req, res) => {
+  const user = req.user;
+  const { status, page = 1, limit = 50 } = req.query;
+
+  // Check if user is an expert reviewer
+  if (!user.roles.includes('EXPERT_REVIEWER')) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only expert reviewers can access this endpoint'
+    });
+  }
+
+  // Find proposals where current user is assigned as reviewer
+  const query = {
+    isDeleted: false,
+    'assignedReviewers.reviewer': user._id
+  };
+
+  // Filter by assignment status if provided
+  if (status) {
+    query['assignedReviewers'] = {
+      $elemMatch: {
+        reviewer: user._id,
+        status: status
+      }
+    };
+  }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const [proposals, total] = await Promise.all([
+    Proposal.find(query)
+      .sort({ 'assignedReviewers.assignedAt': -1, createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip(skip)
+      .populate('createdBy', 'fullName email')
+      .populate('coInvestigators', 'fullName email')
+      .populate('assignedReviewers.reviewer', 'fullName email')
+      .populate('assignedReviewers.assignedBy', 'fullName email')
+      .select('-forms -yjsState')
+      .lean(),
+    Proposal.countDocuments(query)
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      proposals,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    }
+  });
+});
+
+/**
+ * @route   PATCH /api/proposals/:proposalId/review-status
+ * @desc    Update expert reviewer's review status on a proposal
+ * @access  Private (Expert Reviewers)
+ */
+export const updateReviewStatus = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { status } = req.body;
+  const user = req.user;
+
+  // Validate status
+  const validStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
+  if (!status || !validStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid status. Must be one of: PENDING, IN_PROGRESS, COMPLETED'
+    });
+  }
+
+  // Check if user is an expert reviewer
+  if (!user.roles.includes('EXPERT_REVIEWER')) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only expert reviewers can update review status'
+    });
+  }
+
+  const proposal = await findProposal(proposalId);
+
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Find the reviewer's assignment
+  const assignmentIndex = proposal.assignedReviewers.findIndex(
+    ar => ar.reviewer.toString() === user._id.toString()
+  );
+
+  if (assignmentIndex === -1) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not assigned to review this proposal'
+    });
+  }
+
+  // Update the status
+  proposal.assignedReviewers[assignmentIndex].status = status;
+  
+  if (status === 'COMPLETED') {
+    proposal.assignedReviewers[assignmentIndex].completedAt = new Date();
+  }
+
+  await proposal.save();
+
+  // Log activity
+  await activityLogger.log({
+    user: user._id,
+    action: 'REVIEW_STATUS_UPDATED',
+    details: {
+      proposalId: proposal._id,
+      proposalCode: proposal.proposalCode,
+      newStatus: status
+    },
+    ipAddress: req.ip
+  });
+
+  res.json({
+    success: true,
+    message: `Review status updated to ${status}`,
+    data: {
+      proposalId: proposal._id,
+      proposalCode: proposal.proposalCode,
+      reviewStatus: status
+    }
+  });
 });

@@ -66,6 +66,17 @@ export const inviteCoInvestigator = asyncHandler(async (req, res) => {
     });
   }
 
+  // Check if user has USER role only (not committee members, experts, or admins)
+  const restrictedRoles = ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER', 'EXPERT_REVIEWER', 'SUPER_ADMIN'];
+  const hasRestrictedRole = user.roles.some(role => restrictedRoles.includes(role));
+  
+  if (hasRestrictedRole) {
+    return res.status(400).json({
+      success: false,
+      message: 'Committee members, expert reviewers, and administrators cannot be invited as co-investigators'
+    });
+  }
+
   // Check if already added
   if (proposal.coInvestigators.includes(user._id)) {
     return res.status(400).json({

@@ -1,4 +1,5 @@
 import { AuthProvider } from "../context/AuthContext";
+import { TooltipProvider } from "../components/ui (plate files)/tooltip";
 import LoadingScreen from "../components/LoadingScreen";
 import "../styles/globals.css";
 import 'leaflet/dist/leaflet.css';
@@ -27,7 +28,9 @@ gtag('js', new Date());
 gtag('config', 'G-KJ636M5C63', { page_path: window.location.pathname });`}
       </Script>
     <AuthProvider>
-      <Component {...pageProps} />
+      <TooltipProvider delayDuration={200}>
+        <Component {...pageProps} />
+      </TooltipProvider>
     </AuthProvider>
     </>
   );

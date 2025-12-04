@@ -402,65 +402,43 @@ export const initializeCollaborationSockets = (io) => {
       try {
         const { proposalId, comment } = data;
 
-        // Import Comment model
-        const Comment = (await import('../models/Comment.js')).default;
-        const Proposal = (await import('../models/Proposal.js')).default;
+        // The comment is already saved to DB via API call from the client
+        // This socket event is ONLY for broadcasting to other users
+        // Do NOT create a new comment here - that causes duplicates
 
-        // Find proposal
-        const proposal = await Proposal.findOne({
-          $or: [
-            { _id: proposalId.length === 24 ? proposalId : null },
-            { proposalCode: proposalId }
-          ]
-        });
-
-        if (!proposal) {
-          if (callback) callback({ success: false, error: 'Proposal not found' });
-          return;
-        }
-
-        // Create comment in database
-        const newComment = await Comment.create({
-          proposalId: proposal._id,
-          author: socket.user._id,
+        // Build comment data for broadcast from the data passed by client
+        const commentData = {
+          _id: comment._id,
           content: comment.content,
           type: comment.type || 'COMMENT',
           isInline: comment.isInline || false,
           inlinePosition: comment.inlinePosition || null,
-          formName: comment.formName || null
-        });
-
-        await newComment.populate('author', 'fullName email roles');
-
-        // Broadcast to all users in room
-        io.to(`proposal-${proposalId}`).emit('new-comment', {
-          proposalId,
-          comment: {
-            _id: newComment._id,
-            content: newComment.content,
-            type: newComment.type,
-            isInline: newComment.isInline,
-            inlinePosition: newComment.inlinePosition,
-            formName: newComment.formName,
-            resolved: newComment.resolved,
-            createdAt: newComment.createdAt,
-            author: {
-              _id: newComment.author._id,
-              fullName: newComment.author.fullName,
-              email: newComment.author.email,
-              role: newComment.author.roles?.[0] || 'USER'
-            },
-            replies: []
+          formName: comment.formName || null,
+          resolved: comment.resolved || false,
+          isResolved: comment.isResolved || false,
+          createdAt: comment.createdAt || new Date().toISOString(),
+          author: comment.author || {
+            _id: socket.user._id,
+            fullName: socket.user.fullName,
+            email: socket.user.email,
+            role: socket.user.roles?.[0] || 'USER'
           },
+          replies: comment.replies || []
+        };
+
+        // Broadcast to OTHER users in room (not the sender - they already added it locally)
+        socket.broadcast.to(`proposal-${proposalId}`).emit('new-comment', {
+          proposalId,
+          comment: commentData,
           timestamp: Date.now()
         });
 
         if (callback) {
-          callback({ success: true, comment: newComment });
+          callback({ success: true, comment: commentData });
         }
 
       } catch (error) {
-        console.error('Error adding comment:', error);
+        console.error('Error broadcasting comment:', error);
         if (callback) {
           callback({
             success: false,

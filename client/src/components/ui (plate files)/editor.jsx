@@ -31,12 +31,12 @@ const editorContainerVariants = cva(
   }
 );
 
-export function EditorContainer({
+export const EditorContainer = React.forwardRef(({
   className,
   variant,
   theme = 'light',
   ...props
-}) {
+}, ref) => {
   const isDark = theme === 'dark' || theme === 'darkest';
   const isDarkest = theme === 'darkest';
   const bgClass = isDarkest ? 'bg-neutral-900' : isDark ? 'bg-slate-800' : 'bg-white';
@@ -45,6 +45,7 @@ export function EditorContainer({
   
   return (
     <PlateContainer
+      ref={ref}
       className={cn(
         'ignore-click-outside/toolbar',
         editorContainerVariants({ variant }),
@@ -54,7 +55,9 @@ export function EditorContainer({
       style={{ '--table-cell-bg': tableCellBg, '--table-border-color': tableBorderColor }}
       {...props} />
   );
-}
+});
+
+EditorContainer.displayName = 'EditorContainer';
 
 const editorVariants = cva(cn(
   'group/editor',

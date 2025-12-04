@@ -9,24 +9,50 @@ import {
     Home,
     LogOut,
     Map,
-    Shield,
-    Users
+    UserCheck,
+    Info,
+    X
 } from 'lucide-react';
 import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
 
 const MENU_ITEMS = [
     { id: 'overview', label: 'Home', icon: Home, section: 'overview' },
     { id: 'projects', label: 'Projects', icon: Folder, section: 'projects' },
     { id: 'proposals', label: 'Proposals', icon: Briefcase, section: 'proposals' },
+    { id: 'experts', label: 'Experts', icon: UserCheck, section: 'experts' },
     { id: 'finance', label: 'Finance', icon: DollarSign, section: 'finance' },
-    { id: 'staff', label: 'Staff', icon: Users, section: 'staff' },
-    { id: 'roles', label: 'Roles', icon: Shield, section: 'roles' },
     { id: 'safety', label: 'Safety', icon: AlertTriangle, section: 'safety' },
     { id: 'gis', label: 'GIS Map', icon: Map, section: 'gis' },
 ];
 
+// Toast Component
+function Toast({ message, onClose, theme }) {
+    const isDark = theme === 'dark' || theme === 'darkest';
+    
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            onClose();
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+    
+    return (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-bottom-4 fade-in duration-300">
+            <div className={`flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-black'}`}>
+                <Info size={18} className={isDark ? 'text-blue-400' : 'text-blue-600'} />
+                <span className="text-sm font-medium">{message}</span>
+                <button onClick={onClose} className={`p-1 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}>
+                    <X size={16} className={isDark ? 'text-slate-400' : 'text-black'} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export default function CMPDISidebar({ activeSection, setActiveSection, onLogout, theme }) {
     const router = useRouter();
+    const [showToast, setShowToast] = useState(false);
 
     const handleNavigation = (item) => {
         if (setActiveSection) {
@@ -93,7 +119,9 @@ export default function CMPDISidebar({ activeSection, setActiveSection, onLogout
 
             {/* Bottom Actions */}
             <div className="space-y-1">
-                <button className={`w-full flex items-center gap-3 p-3 transition-colors rounded-xl
+                <button 
+                    onClick={() => setShowToast(true)}
+                    className={`w-full flex items-center gap-3 p-3 transition-colors rounded-xl
                     ${isDarkest ? 'text-neutral-400 hover:text-white hover:bg-neutral-900' :
                         isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' :
                             'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}
@@ -111,6 +139,14 @@ export default function CMPDISidebar({ activeSection, setActiveSection, onLogout
                     <span className="text-sm font-medium">Log out</span>
                 </button>
             </div>
+            
+            {showToast && (
+                <Toast 
+                    message="Help & Information coming soon" 
+                    onClose={() => setShowToast(false)} 
+                    theme={theme} 
+                />
+            )}
         </div>
     );
 }

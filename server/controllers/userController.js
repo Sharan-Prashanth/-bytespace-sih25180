@@ -565,3 +565,36 @@ export const changePassword = asyncHandler(async (req, res) => {
     message: 'Password changed successfully'
   });
 });
+
+/**
+ * @route   GET /api/users/experts/list
+ * @desc    Get list of expert reviewers (Committee members can access)
+ * @access  Private (Committee members + Admin)
+ */
+export const getExpertsList = asyncHandler(async (req, res) => {
+  const { search, limit = 50 } = req.query;
+
+  const query = {
+    roles: 'EXPERT_REVIEWER',
+    isActive: true
+  };
+
+  if (search) {
+    query.$or = [
+      { fullName: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { expertiseDomains: { $elemMatch: { $regex: search, $options: 'i' } } }
+    ];
+  }
+
+  const experts = await User.find(query)
+    .select('fullName email expertiseDomains designation organisationName createdAt')
+    .sort({ fullName: 1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  res.json({
+    success: true,
+    data: experts
+  });
+});

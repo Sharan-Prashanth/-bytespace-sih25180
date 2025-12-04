@@ -17,7 +17,7 @@ export default function CircularProgress({ value, max = 100, size = 120, strokeW
                         stroke="currentColor"
                         strokeWidth={strokeWidth}
                         fill="transparent"
-                        className="text-gray-100"
+                        className="text-slate-100"
                     />
                     {/* Progress Circle */}
                     <circle
@@ -34,10 +34,10 @@ export default function CircularProgress({ value, max = 100, size = 120, strokeW
                     />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-bold text-gray-800">{value}%</span>
+                    <span className="text-2xl font-bold text-slate-800">{value}%</span>
                 </div>
             </div>
-            <span className="mt-2 text-sm font-medium text-gray-500">{label}</span>
+            <span className="mt-2 text-sm font-medium text-slate-500">{label}</span>
         </div>
     );
 }
