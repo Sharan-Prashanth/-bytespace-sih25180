@@ -402,20 +402,61 @@ export const initializeCollaborationSockets = (io) => {
       try {
         const { proposalId, comment } = data;
 
+        // Import Comment model
+        const Comment = (await import('../models/Comment.js')).default;
+        const Proposal = (await import('../models/Proposal.js')).default;
+
+        // Find proposal
+        const proposal = await Proposal.findOne({
+          $or: [
+            { _id: proposalId.length === 24 ? proposalId : null },
+            { proposalCode: proposalId }
+          ]
+        });
+
+        if (!proposal) {
+          if (callback) callback({ success: false, error: 'Proposal not found' });
+          return;
+        }
+
+        // Create comment in database
+        const newComment = await Comment.create({
+          proposalId: proposal._id,
+          author: socket.user._id,
+          content: comment.content,
+          type: comment.type || 'COMMENT',
+          isInline: comment.isInline || false,
+          inlinePosition: comment.inlinePosition || null,
+          formName: comment.formName || null
+        });
+
+        await newComment.populate('author', 'fullName email roles');
+
         // Broadcast to all users in room
         io.to(`proposal-${proposalId}`).emit('new-comment', {
           proposalId,
-          comment,
-          author: {
-            userId: socket.user._id,
-            fullName: socket.user.fullName,
-            email: socket.user.email
+          comment: {
+            _id: newComment._id,
+            content: newComment.content,
+            type: newComment.type,
+            isInline: newComment.isInline,
+            inlinePosition: newComment.inlinePosition,
+            formName: newComment.formName,
+            resolved: newComment.resolved,
+            createdAt: newComment.createdAt,
+            author: {
+              _id: newComment.author._id,
+              fullName: newComment.author.fullName,
+              email: newComment.author.email,
+              role: newComment.author.roles?.[0] || 'USER'
+            },
+            replies: []
           },
           timestamp: Date.now()
         });
 
         if (callback) {
-          callback({ success: true });
+          callback({ success: true, comment: newComment });
         }
 
       } catch (error) {
@@ -425,6 +466,104 @@ export const initializeCollaborationSockets = (io) => {
             success: false,
             error: error.message
           });
+        }
+      }
+    });
+
+    /**
+     * Reply to comment
+     */
+    socket.on('reply-to-comment', async (data, callback) => {
+      try {
+        const { proposalId, commentId, content } = data;
+
+        const Comment = (await import('../models/Comment.js')).default;
+
+        // Create reply
+        const parentComment = await Comment.findById(commentId);
+        if (!parentComment) {
+          if (callback) callback({ success: false, error: 'Comment not found' });
+          return;
+        }
+
+        const reply = await Comment.create({
+          proposalId: parentComment.proposalId,
+          author: socket.user._id,
+          content,
+          parentComment: commentId,
+          type: parentComment.type,
+          formName: parentComment.formName
+        });
+
+        await reply.populate('author', 'fullName email roles');
+
+        // Broadcast reply to all users
+        io.to(`proposal-${proposalId}`).emit('comment-reply-added', {
+          proposalId,
+          commentId,
+          reply: {
+            _id: reply._id,
+            content: reply.content,
+            createdAt: reply.createdAt,
+            author: {
+              _id: reply.author._id,
+              fullName: reply.author.fullName
+            }
+          },
+          timestamp: Date.now()
+        });
+
+        if (callback) {
+          callback({ success: true, reply });
+        }
+
+      } catch (error) {
+        console.error('Error replying to comment:', error);
+        if (callback) {
+          callback({ success: false, error: error.message });
+        }
+      }
+    });
+
+    /**
+     * Resolve comment
+     */
+    socket.on('resolve-comment', async (data, callback) => {
+      try {
+        const { proposalId, commentId } = data;
+
+        const Comment = (await import('../models/Comment.js')).default;
+
+        const comment = await Comment.findById(commentId);
+        if (!comment) {
+          if (callback) callback({ success: false, error: 'Comment not found' });
+          return;
+        }
+
+        comment.resolved = true;
+        comment.resolvedBy = socket.user._id;
+        comment.resolvedAt = new Date();
+        await comment.save();
+
+        // Broadcast to all users
+        io.to(`proposal-${proposalId}`).emit('comment-resolved', {
+          proposalId,
+          commentId,
+          resolvedBy: {
+            _id: socket.user._id,
+            fullName: socket.user.fullName
+          },
+          timestamp: Date.now()
+        });
+
+        if (callback) {
+          callback({ success: true });
+        }
+
+      } catch (error) {
+        console.error('Error resolving comment:', error);
+        if (callback) {
+          callback({ success: false, error: error.message });
         }
       }
     });

@@ -1,0 +1,18 @@
+# Non-OCR PDF to OCR PDF Converter - Requirements
+
+# Core dependencies
+reportlab>=3.6.0
+PyPDF2>=3.0.0
+pillow>=10.0.0
+numpy>=1.24.0
+
+# OCR Engine
+paddlepaddle>=2.5.0
+paddleocr>=2.7.0
+
+# PDF to Image conversion
+pdf2image>=1.16.0
+
+# FastAPI (already in main requirements)
+fastapi>=0.104.0
+python-multipart>=0.0.6

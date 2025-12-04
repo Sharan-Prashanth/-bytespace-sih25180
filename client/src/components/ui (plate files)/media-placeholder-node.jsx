@@ -90,6 +90,7 @@ export const PlaceholderElement = withHOC(PlaceholderProvider, function Placehol
         placeholderId: element.id,
         type: element.mediaType,
         url: uploadedFile.url,
+        s3Key: uploadedFile.s3Key, // Store s3Key for deletion
       };
 
       editor.tf.insertNodes(node, { at: path });

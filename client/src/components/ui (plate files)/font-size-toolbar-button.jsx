@@ -86,7 +86,7 @@ export function FontSizeToolbarButton() {
   const displayValue = isFocused ? inputValue : cursorFontSize;
 
   return (
-    <div className="flex h-7 items-center gap-1 rounded-md bg-muted/60 p-0">
+    <div className="flex h-7 items-center gap-1 rounded-md bg-[var(--toolbar-hover-bg,rgba(0,0,0,0.05))] p-0">
       <ToolbarButton onClick={() => handleFontSizeChange(-1)}>
         <Minus />
       </ToolbarButton>
@@ -94,7 +94,8 @@ export function FontSizeToolbarButton() {
         <PopoverTrigger asChild>
           <input
             className={cn(
-              'h-full w-10 shrink-0 bg-transparent px-1 text-center text-sm hover:bg-muted'
+              'h-full w-10 shrink-0 rounded px-1 text-center text-sm text-inherit',
+              'bg-[var(--input-bg,white)] hover:bg-[var(--toolbar-hover-bg,rgba(0,0,0,0.1))]'
             )}
             value={displayValue}
             onBlur={() => {

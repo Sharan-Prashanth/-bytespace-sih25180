@@ -8,6 +8,7 @@ from RAG import plag
 from RAG import rag_chat_guidlines
 from RAG import rag_chat_specialist
 from RAG import timeline
+from Common.Technical_fesability import fesability
 try:
     # Prefer relative import when running as a package (helps editors/linters)
     from . import non_ocr
@@ -18,6 +19,7 @@ except Exception:
 # from live_checker import online_checker
 
 from Json_extraction import extractor
+from Json_extraction import ocr_extraction
 import uvicorn
 from data_files import file_storage
 from Common.ai_validator import ai_detector_pipeline
@@ -44,7 +46,9 @@ app.include_router(validation.router)
 app.include_router(rag_chat_guidlines.router)
 app.include_router(rag_chat_specialist.router)
 app.include_router(extractor.router)
+app.include_router(ocr_extraction.router)
 app.include_router(novelty.router)
+app.include_router(fesability.router)
 app.include_router(cost_estimator.router)
 app.include_router(plag.router)
 app.include_router(file_storage.router)

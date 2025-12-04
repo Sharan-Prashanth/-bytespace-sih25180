@@ -76,3 +76,39 @@ export const optionalAuthenticate = async (req, res, next) => {
     next();
   }
 };
+
+// Beacon authentication - uses token from query string (for sendBeacon API)
+export const authenticateBeacon = async (req, res, next) => {
+  try {
+    let token = req.query.token;
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Get user from database
+    const user = await User.findById(decoded.id).select('-passwordHash');
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found or inactive'
+      });
+    }
+
+    // Attach user to request
+    req.user = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired token'
+    });
+  }
+};

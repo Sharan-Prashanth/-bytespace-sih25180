@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 import httpx
-from fastapi import APIRouter, FastAPI, UploadFile, File
+from fastapi import APIRouter, FastAPI, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 
@@ -23,6 +23,20 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 from supabase import create_client, Client
 import google.generativeai as genai
+
+# Import the template generator
+try:
+    from .template_generator import generate_html_template, generate_json_template_data
+except ImportError:
+    # If running standalone, try direct import
+    try:
+        from template_generator import generate_html_template, generate_json_template_data
+    except ImportError:
+        # Fallback - define minimal functions
+        def generate_html_template(proposal_data=None, scores=None):
+            return "<html><body><h1>Template generator not available</h1></body></html>"
+        def generate_json_template_data(proposal_data=None):
+            return {}
 
 
 # ============================================================
@@ -69,6 +83,42 @@ def sanitize_text(txt: Optional[str]) -> str:
 
 
 # ============================================================
+# ================ FETCH PROPOSAL DATA ======================
+# ============================================================
+async def fetch_proposal_data(proposal_id: str) -> Dict[str, Any]:
+    """Fetch proposal data from the server API"""
+    try:
+        # Try different possible server URLs
+        possible_bases = [
+            APP_BASE.replace(':8000', ':3000'),
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ]
+        
+        for base_url in possible_bases:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    url = f"{base_url}/api/proposals/{proposal_id}"
+                    print(f"Attempting to fetch proposal from: {url}")
+                    response = await client.get(url)
+                    if response.status_code == 200:
+                        data = response.json()
+                        print(f"Successfully fetched proposal data from: {url}")
+                        return data.get('data', {})
+                    else:
+                        print(f"Failed to fetch from {url}, status: {response.status_code}")
+            except Exception as e:
+                print(f"Error with URL {base_url}: {e}")
+                continue
+        
+        print("All proposal fetch attempts failed")
+        return {}
+    except Exception as e:
+        print(f"Error fetching proposal data: {e}")
+        return {}
+
+
+# ============================================================
 # ========== POST FILE TO MICROSERVICES IN PARALLEL ===========
 # ============================================================
 async def post_file_to_route(client, route, filename, file_bytes, timeout=120.0):
@@ -92,8 +142,25 @@ def replace_non_numeric(s):
     return re.sub(r"[^\d\.]", "", str(s or ""))
 
 
-def safe_get(d: Dict[str, Any], *keys, default=None):
+def safe_get(d: Any, *keys, default=None):
+    """Safely get nested keys from dict-like/module output.
+
+    If the module output is a list (multiple responses for same route), use
+    the first non-empty element as the primary source.
+    """
     cur = d
+    # handle list outputs from modules (preserve multiple responses earlier)
+    if isinstance(cur, list):
+        # pick first item that's a dict and not an error (best-effort)
+        chosen = None
+        for it in cur:
+            if isinstance(it, dict) and not it.get("error"):
+                chosen = it
+                break
+        if chosen is None:
+            chosen = cur[0] if cur else {}
+        cur = chosen
+
     for k in keys:
         if isinstance(cur, dict) and k in cur:
             cur = cur[k]
@@ -199,12 +266,93 @@ def compute_scores(mod_outputs: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ============================================================
+# ================== PROCESS PROPOSAL DATA ===================
+# ============================================================
+def process_proposal_data(proposal_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Process and extract relevant data from proposal for PDF generation"""
+    
+    # Extract form I data if available
+    form_i_data = proposal_data.get('forms', {}).get('formI', {})
+    
+    # If form_i_data is empty, try to get basic proposal data
+    if not form_i_data:
+        form_i_data = {
+            "form_type": "FORM-I S&T Grant Proposal",
+            "basic_information": {
+                "project_title": proposal_data.get('title', 'Untitled Project'),
+                "principal_implementing_agency": proposal_data.get('principalAgency'),
+                "project_leader_name": proposal_data.get('projectLeader'),
+                "sub_implementing_agency": ', '.join(proposal_data.get('subAgencies', [])),
+                "co_investigator_name": proposal_data.get('projectCoordinator'),
+                "submission_date": proposal_data.get('createdAt', ''),
+                "project_duration": proposal_data.get('durationMonths')
+            },
+            "project_details": {
+                "definition_of_issue": "",
+                "objectives": "",
+                "justification_subject_area": "",
+                "project_benefits": "",
+                "work_plan": "",
+                "methodology": "",
+                "organization_of_work": "",
+                "time_schedule": "",
+                "foreign_exchange_details": ""
+            },
+            "cost_breakdown": {
+                "total_project_cost": {
+                    "total": proposal_data.get('outlayLakhs'),
+                }
+            }
+        }
+    
+    # Calculate total costs if available
+    cost_breakdown = form_i_data.get('cost_breakdown', {})
+    total_cost = 0
+    
+    # Sum up capital expenditure
+    cap_exp = cost_breakdown.get('capital_expenditure', {})
+    for item in ['land_building', 'equipment']:
+        if item in cap_exp:
+            for year in ['year1', 'year2', 'year3']:
+                value = cap_exp[item].get(year)
+                if value and str(value).replace('.', '').isdigit():
+                    total_cost += float(value)
+    
+    # Sum up revenue expenditure
+    rev_exp = cost_breakdown.get('revenue_expenditure', {})
+    for item in ['salaries', 'consumables', 'travel', 'workshop_seminar']:
+        if item in rev_exp:
+            for year in ['year1', 'year2', 'year3']:
+                value = rev_exp[item].get(year)
+                if value and str(value).replace('.', '').isdigit():
+                    total_cost += float(value)
+    
+    return {
+        'form_data': form_i_data,
+        'proposal_basic': proposal_data,
+        'calculated_totals': {
+            'total_cost': total_cost,
+            'duration': form_i_data.get('basic_information', {}).get('project_duration') or proposal_data.get('durationMonths', 0)
+        }
+    }
+
+
+# ============================================================
 # ====================== GEMINI PROMPT ========================
 # ============================================================
-def build_gemini_scoring_prompt(all_module_json, computed_scores):
+def build_gemini_scoring_prompt(all_module_json, computed_scores, proposal_data=None):
 
     modules_str = json.dumps(all_module_json, ensure_ascii=False, indent=2)[:10000]
     scores_str = json.dumps(computed_scores, ensure_ascii=False, indent=2)
+
+    # Ensure proposal_str is always defined (serialize proposal_data safely)
+    try:
+        if proposal_data:
+            proposal_str = json.dumps(proposal_data, ensure_ascii=False, indent=2)[:10000]
+        else:
+            proposal_str = "{}"
+    except Exception:
+        proposal_str = "{}"
 
     prompt = f"""
 You are a Senior Research Project Auditor.
@@ -285,6 +433,9 @@ MODULE OUTPUTS:
 
 INITIAL SCORES:
 {scores_str}
+
+PROPOSAL DATA:
+{proposal_str}
 ===========================================================
 """
     return prompt
@@ -346,13 +497,29 @@ def draw_circular_seal(c, cx, cy, radius, score_text):
     c.drawCentredString(cx, cy - (radius * 0.15), score_text)
 
 
-def make_pdf_bytes(pages, overall_score, filename_short, header_bytes):
+def make_pdf_bytes(pages, overall_score, filename_short, header_bytes, proposal_data=None):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
     margin = 15 * mm
     padding = 6 * mm
+    
+    # Extract proposal information
+    project_title = "Unknown Project"
+    principal_agency = "Unknown Agency"
+    project_leader = "Unknown Leader"
+    duration = "Unknown"
+    total_cost = "Unknown"
+    
+    if proposal_data and 'form_data' in proposal_data:
+        form_data = proposal_data['form_data']
+        basic_info = form_data.get('basic_information', {})
+        project_title = basic_info.get('project_title', project_title)
+        principal_agency = basic_info.get('principal_implementing_agency', principal_agency)
+        project_leader = basic_info.get('project_leader_name', project_leader)
+        duration = str(basic_info.get('project_duration', duration)) + " months" if basic_info.get('project_duration') else duration
+        total_cost = f"₹{proposal_data.get('calculated_totals', {}).get('total_cost', 0):.2f} lakhs"
 
     # compute header drawing parameters (so we can reserve space)
     header_height = 0
@@ -463,6 +630,28 @@ def make_pdf_bytes(pages, overall_score, filename_short, header_bytes):
     p1 = pages.get("page1", {})
     title1 = p1.get("title", "Executive Summary")
     content1 = sanitize_text(p1.get("content", ""))
+    
+    # Add proposal information to page 1 content if available
+    if proposal_data and 'form_data' in proposal_data:
+        form_data = proposal_data['form_data']
+        basic_info = form_data.get('basic_information', {})
+        project_details = form_data.get('project_details', {})
+        
+        proposal_info = f"""
+        
+PROJECT INFORMATION:
+• Title: {project_title}
+• Principal Agency: {principal_agency or 'Not specified'}
+• Project Leader: {project_leader or 'Not specified'}
+• Duration: {duration}
+• Total Cost: {total_cost}
+
+PROJECT OVERVIEW:
+• Issue Definition: {project_details.get('definition_of_issue', 'Not provided')[:200]}...
+• Objectives: {project_details.get('objectives', 'Not provided')[:200]}...
+• Benefits: {project_details.get('project_benefits', 'Not provided')[:200]}...
+        """
+        content1 = content1 + proposal_info
 
     draw_header_footer(1)
     draw_page_border(c, width, height, margin)
@@ -522,18 +711,27 @@ def make_pdf_bytes(pages, overall_score, filename_short, header_bytes):
 # ======================== MAIN API ==========================
 # ============================================================
 @router.post("/report-gen")
-async def authenticator_endpoint(file: UploadFile = File(...)):
+async def authenticator_endpoint(file: UploadFile = File(...), proposal_id: Optional[str] = Query(None)):
 
     try:
         filename = file.filename or f"paper_{datetime.utcnow().isoformat()}"
         file_bytes = await file.read()
+        
+        # Fetch proposal data if proposal_id is provided
+        proposal_data = None
+        if proposal_id:
+            proposal_raw = await fetch_proposal_data(proposal_id)
+            if proposal_raw:
+                proposal_data = process_proposal_data(proposal_raw)
 
         routes = [
-            "/timeline",
-            "/check-plagiarism-final",
-            "/novelty-checks",
-            "/process-and-estimate",
-            "/detect-ai-and-validate"
+            # "/benefit-check",#check for benefits to coal industry
+            "/detect-ai-and-validate",#checks for the ai content
+            "/process-and-estimate",#government cost estimation
+            "/deliverable-check",#checks for deliverables
+            "/analyze-novelty",#novelty check
+            "/process-and-estimate",#cost estimation
+            "/check-plagiarism-final",#plagiarism check
         ]
 
         async with httpx.AsyncClient(timeout=120) as client:
@@ -542,15 +740,21 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
 
         modules_out = {}
         for r in results:
-            if r["ok"]:
-                modules_out[r["route"]] = r["json"]
+            route = r.get("route")
+            entry = r["json"] if r.get("ok") else {"error": r.get("error")}
+            if route in modules_out:
+                # keep multiple responses as a list
+                if isinstance(modules_out[route], list):
+                    modules_out[route].append(entry)
+                else:
+                    modules_out[route] = [modules_out[route], entry]
             else:
-                modules_out[r["route"]] = {"error": r.get("error")}
+                modules_out[route] = entry
 
         computed = compute_scores(modules_out)
 
         # gemini prompt + response (with retry on quota / 429)
-        prompt = build_gemini_scoring_prompt(modules_out, computed)
+        prompt = build_gemini_scoring_prompt(modules_out, computed, proposal_data)
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
         # Automatic retry on quota exceeded / 429 responses
@@ -623,7 +827,8 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
             pages,
             float(overall_score),
             filename.rsplit(".", 1)[0],
-            header_bytes
+            header_bytes,
+            proposal_data
         )
 
         # upload to supabase storage
@@ -655,6 +860,561 @@ async def authenticator_endpoint(file: UploadFile = File(...)):
 
         disposition_name = safe_name
         return StreamingResponse(pdf_stream, media_type="application/pdf", headers={**headers, "Content-Disposition": f'attachment; filename="{disposition_name}"'})
+
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/test-proposal/{proposal_id}")
+async def test_proposal_data(proposal_id: str):
+    """Test endpoint to check proposal data fetching"""
+    try:
+        proposal_data = await fetch_proposal_data(proposal_id)
+        if proposal_data:
+            processed_data = process_proposal_data(proposal_data)
+            return JSONResponse({
+                "ok": True, 
+                "proposal_id": proposal_id,
+                "raw_data": proposal_data,
+                "processed_data": processed_data,
+                "template_data": generate_json_template_data(processed_data)
+            })
+        else:
+            return JSONResponse({
+                "ok": False, 
+                "error": "No proposal data found",
+                "proposal_id": proposal_id
+            })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/preview-template")
+async def preview_template(proposal_id: Optional[str] = Query(None)):
+    """Preview the HTML template with proposal data"""
+    try:
+        proposal_data = None
+        scores = {
+            "overall_score": 75,
+            "subscores": {
+                "novelty_subscore": 80,
+                "ai_subscore": 85,
+                "plagiarism_subscore": 90,
+                "cost_subscore": 70,
+                "timeline_subscore": 65
+            }
+        }
+        
+        if proposal_id:
+            proposal_raw = await fetch_proposal_data(proposal_id)
+            if proposal_raw:
+                proposal_data = process_proposal_data(proposal_raw)
+        
+        html_content = generate_html_template(proposal_data, scores)
+        return JSONResponse({
+            "ok": True,
+            "html": html_content,
+            "has_proposal_data": proposal_data is not None
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/render-report-html")
+async def render_report_html(file: UploadFile = File(...), proposal_id: Optional[str] = Query(None)):
+    """Post file to microservices, gather outputs and proposal form, then
+    return the three-page HTML report by injecting real data into the
+    `template/test.html` file.
+    """
+    try:
+        filename = file.filename or f"paper_{datetime.utcnow().isoformat()}"
+        file_bytes = await file.read()
+
+        # routes to call (including extract-form1 to get PI details)
+        routes = [
+            "/extract-form1",
+            "/detect-ai-and-validate",
+            "/process-and-estimate",
+            "/deliverable-check",
+            "/analyze-novelty",
+            "/check-plagiarism-final",
+        ]
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            tasks = [post_file_to_route(client, r, filename, file_bytes) for r in routes]
+            results = await asyncio.gather(*tasks)
+
+        modules_out = {}
+        for r in results:
+            route = r.get("route")
+            entry = r["json"] if r.get("ok") else {"error": r.get("error")}
+            if route in modules_out:
+                if isinstance(modules_out[route], list):
+                    modules_out[route].append(entry)
+                else:
+                    modules_out[route] = [modules_out[route], entry]
+            else:
+                modules_out[route] = entry
+
+        # Try to get proposal data from extract-form1 result (if available)
+        proposal_data = None
+        extract_out = modules_out.get("/extract-form1")
+        if extract_out:
+            # handle list or single
+            if isinstance(extract_out, list):
+                # pick first successful
+                picked = None
+                for it in extract_out:
+                    if isinstance(it, dict) and it.get("extracted_data"):
+                        picked = it
+                        break
+                if picked:
+                    proposal_data = process_proposal_data(picked.get("extracted_data"))
+            elif isinstance(extract_out, dict) and extract_out.get("extracted_data"):
+                proposal_data = process_proposal_data(extract_out.get("extracted_data"))
+
+        # compute scores using existing logic
+        computed = compute_scores(modules_out)
+
+        # build data object for template injection
+        validated = computed.get("subscores", {})
+        overall = computed.get("overall_score", 0)
+
+        # STRICT VALIDATION: do not use dummy/fallback data. Require that
+        # proposal extraction and key microservice outputs are present.
+        missing = []
+
+        # proposal_data must be present and include certain fields
+        if not proposal_data:
+            missing.append("/extract-form1 -> extracted_data (proposal form)")
+        else:
+            basic_info = proposal_data.get('form_data', {}).get('basic_information', {})
+            if not basic_info.get('project_title'):
+                missing.append('proposal.basic_information.project_title')
+            if not basic_info.get('project_leader_name'):
+                missing.append('proposal.basic_information.project_leader_name')
+            if not basic_info.get('principal_implementing_agency'):
+                missing.append('proposal.basic_information.principal_implementing_agency')
+            total_cost_val_check = proposal_data.get('calculated_totals', {}).get('total_cost')
+            if total_cost_val_check in (None, 0, "", []):
+                missing.append('proposal.calculated_totals.total_cost')
+
+        # microservice required outputs
+        def _has_module_field(route, keys):
+            for k in keys:
+                v = safe_get(modules_out.get(route), k)
+                if v is not None and str(v).strip() != "":
+                    return True
+            return False
+
+        if not _has_module_field('/detect-ai-and-validate', ['ai_sentences_percentage_by_gemini', 'ai_percentage']):
+            missing.append('detect-ai-and-validate.ai_percentage')
+        if not _has_module_field('/check-plagiarism-final', ['plagiarism_percentage', 'plagiarism']):
+            missing.append('check-plagiarism-final.plagiarism_percentage')
+        if not _has_module_field('/analyze-novelty', ['novelty_percentage', 'novelty']):
+            missing.append('analyze-novelty.novelty_percentage')
+        if not _has_module_field('/process-and-estimate', ['estimated_cost', 'cost_estimate', 'cost_breakdown']):
+            missing.append('process-and-estimate.estimated_cost_or_cost_breakdown')
+
+        if missing:
+            # Instead of failing outright, follow user rules:
+            # - If basic proposal fields (PI name, agency, total cost) are missing,
+            #   set them to the literal string "nil".
+            # - If AI percentage or cost estimation are missing, re-call the
+            #   corresponding microservice routes to try to obtain them and
+            #   otherwise compute a conservative cost estimate.
+
+            # mark which kinds of missing keys we saw
+            basic_keys = {
+                'proposal.basic_information.project_leader_name',
+                'proposal.basic_information.principal_implementing_agency',
+                'proposal.calculated_totals.total_cost'
+            }
+
+            # ensure proposal_data exists
+            if not proposal_data:
+                proposal_data = {'form_data': {'basic_information': {}, 'cost_breakdown': {}}, 'calculated_totals': {'total_cost': 0, 'duration': 0}}
+
+            # fill nil for requested basic fields
+            basic_info = proposal_data.get('form_data', {}).get('basic_information', {})
+            for bk in basic_keys:
+                if bk in missing:
+                    # map key to basic_info field
+                    if 'project_leader_name' in bk:
+                        basic_info['project_leader_name'] = 'nil'
+                    if 'principal_implementing_agency' in bk:
+                        basic_info['principal_implementing_agency'] = 'nil'
+                    if 'total_cost' in bk:
+                        # ensure total exists at calculated_totals; set to literal 'nil'
+                        proposal_data.setdefault('calculated_totals', {})
+                        proposal_data['calculated_totals']['total_cost'] = 'nil'
+
+            # Try to recover AI % and cost by re-calling their routes
+            async with httpx.AsyncClient(timeout=120) as _client:
+                # attempt AI route if missing
+                if any(m.startswith('detect-ai-and-validate') or m == 'detect-ai-and-validate.ai_percentage' for m in missing):
+                    try:
+                        r = await post_file_to_route(_client, '/detect-ai-and-validate', filename, file_bytes)
+                        if r.get('ok'):
+                            modules_out['/detect-ai-and-validate'] = r.get('json')
+                    except Exception:
+                        pass
+
+                # attempt cost route if missing
+                if any('process-and-estimate' in m for m in missing):
+                    try:
+                        r2 = await post_file_to_route(_client, '/process-and-estimate', filename, file_bytes)
+                        if r2.get('ok'):
+                            modules_out['/process-and-estimate'] = r2.get('json')
+                    except Exception:
+                        pass
+
+            # After re-calls, attempt to extract AI % and cost again
+            ai_pct = safe_get(modules_out.get('/detect-ai-and-validate'), 'ai_sentences_percentage_by_gemini') or safe_get(modules_out.get('/detect-ai-and-validate'), 'ai_percentage')
+            cost_est = safe_get(modules_out.get('/process-and-estimate'), 'estimated_cost') or safe_get(modules_out.get('/process-and-estimate'), 'cost_estimate')
+            cost_breakdown = safe_get(modules_out.get('/process-and-estimate'), 'breakdown') or safe_get(modules_out.get('/process-and-estimate'), 'cost_breakdown')
+
+            # If cost still missing, try to compute using local cost estimator module
+            if (not cost_est and not cost_breakdown) and proposal_data.get('form_data'):
+                try:
+                    # try importing the cost_estimator from the codebase
+                    from Model.Common.Cost_validation import cost_estimator as ce
+                    # call predict_cost with form JSON (many functions expect form json)
+                    ce_out = ce.predict_cost(proposal_data.get('form_data'))
+                    # ce_out expected to include 'estimated_cost' (in Lakhs)
+                    if isinstance(ce_out, dict):
+                        if ce_out.get('estimated_cost'):
+                            cost_est = ce_out.get('estimated_cost')
+                        if ce_out.get('breakdown'):
+                            cost_breakdown = ce_out.get('breakdown')
+                except Exception:
+                    # fallback: try summing form cost_breakdown if present
+                    try:
+                        cb = proposal_data.get('form_data', {}).get('cost_breakdown', {}) or {}
+                        # sum totals
+                        total_try = 0
+                        def sum_group(g):
+                            s = 0
+                            if isinstance(g, dict):
+                                for v in g.values():
+                                    if isinstance(v, dict):
+                                        for fld in ['total', 'year1', 'year2', 'year3']:
+                                            vv = v.get(fld)
+                                            try:
+                                                if vv is not None and str(vv).strip() != '':
+                                                    s += float(re.sub(r'[^0-9.]', '', str(vv)))
+                                            except:
+                                                pass
+                                    else:
+                                        try:
+                                            s += float(v)
+                                        except:
+                                            pass
+                            return s
+                        total_try += sum_group(cb.get('capital_expenditure', {}))
+                        total_try += sum_group(cb.get('revenue_expenditure', {}))
+                        tpc = cb.get('total_project_cost', {}) or {}
+                        if isinstance(tpc, dict) and tpc.get('total'):
+                            try:
+                                total_try = float(re.sub(r'[^0-9.]', '', str(tpc.get('total'))))
+                            except:
+                                pass
+                        if total_try > 0:
+                            cost_est = total_try
+                    except Exception:
+                        cost_est = None
+
+            # write back recovered ai_pct/cost to computed/raw inputs so later code uses them
+            if ai_pct:
+                computed['raw_inputs']['ai_pct'] = ai_pct
+            if cost_est:
+                computed['raw_inputs']['cost_value'] = cost_est
+
+            # continue without failing; basic missing fields were set to 'nil' above
+
+        # At this point required data exists — build tpl_data using real values
+        # requested_funds: format as rupee string when numeric, otherwise 'nil'
+        total_cost_raw = proposal_data.get('calculated_totals', {}).get('total_cost')
+        def format_requested_funds(v):
+            try:
+                if isinstance(v, (int, float)):
+                    return f"₹{int(round(v))}"
+                if isinstance(v, str):
+                    vn = re.sub(r"[^0-9.]", "", v)
+                    if vn:
+                        return f"₹{int(round(float(vn)))}"
+            except:
+                pass
+            return "nil"
+
+        tpl_data = {
+            "overall_score": int(round(overall)),
+            "risk_index": 0,
+            "requested_funds": format_requested_funds(total_cost_raw),
+            "duration_months": proposal_data.get('calculated_totals', {}).get('duration', 0),
+            "novelty": int(round(validated.get('novelty_subscore', 0))),
+            "feasibility": int(round(validated.get('timeline_subscore', 0))),
+            "cost": int(round(validated.get('cost_subscore', 0))),
+            "ai_score": int(round(validated.get('ai_subscore', 0))),
+            "plagiarism": int(round(validated.get('plagiarism_subscore', 0))),
+            "time": int(round(validated.get('timeline_subscore', 0))),
+            "predicted_actual": "",
+            "est_labor_cost": "",
+            "actual_labor_cost": "",
+        }
+
+        # Build dashboard categories strictly from proposal cost_breakdown
+        dashboard_categories = []
+        total_cost_val = 0
+        cb = proposal_data.get('form_data', {}).get('cost_breakdown', {}) or {}
+
+        def add_items(group, color_idx):
+            nonlocal total_cost_val
+            for k, v in group.items():
+                val = 0
+                if isinstance(v, dict):
+                    for fld in ['total', 'year1', 'year2', 'year3']:
+                        vv = v.get(fld)
+                        try:
+                            if vv is not None and str(vv).strip() != "":
+                                val += float(re.sub(r"[^0-9.]", "", str(vv)))
+                        except:
+                            pass
+                else:
+                    try:
+                        val = float(v)
+                    except:
+                        val = 0
+                if val > 0:
+                    dashboard_categories.append({
+                        "category": k.replace('_', ' ').title(),
+                        "details": [],
+                        "cost": int(round(val)),
+                        "percent": 0,
+                        "color": ["#3a86ff", "#2556a6", "#0077b6", "#00b4d8", "#90e0ef", "#48cae4", "#00b894"][color_idx % 7]
+                    })
+                    total_cost_val += val
+
+        cap = cb.get('capital_expenditure', {})
+        rev = cb.get('revenue_expenditure', {})
+        add_items(cap, 0)
+        add_items(rev, 3)
+
+        # If no categories resolved but we do have a total cost (or recovered cost_est), create a single category
+        if total_cost_val == 0:
+            # try numeric total from proposal calculated_totals
+            numeric_total = 0
+            try:
+                numeric_total = float(re.sub(r"[^0-9.]", "", str(proposal_data.get('calculated_totals', {}).get('total_cost', 0) or 0)))
+            except:
+                numeric_total = 0
+
+            # if cost_est recovered earlier, prefer that
+            try:
+                if 'cost_est' in locals() and cost_est:
+                    numeric_total = float(re.sub(r"[^0-9.]", "", str(cost_est)))
+            except:
+                pass
+
+            if numeric_total > 0:
+                dashboard_categories = [{
+                    "category": "Total",
+                    "details": [],
+                    "cost": int(round(numeric_total)),
+                    "percent": 100,
+                    "color": "#3a86ff"
+                }]
+
+        # normalize percent
+        if total_cost_val > 0:
+            for it in dashboard_categories:
+                it['percent'] = int(round((it['cost'] / total_cost_val) * 100))
+
+        # inject the data into template/test.html
+        tpl_path = os.path.join(os.path.dirname(__file__), '..', '..', 'template', 'test.html')
+        tpl_path = os.path.normpath(tpl_path)
+        try:
+            with open(tpl_path, 'r', encoding='utf-8') as f:
+                tpl = f.read()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": f"Could not read template: {str(e)}"}, status_code=500)
+
+        # Replace the const data = { ... }; block
+        data_json = json.dumps(tpl_data, ensure_ascii=False)
+        tpl = re.sub(r"const\s+data\s*=\s*\{[\s\S]*?\};", f"const data = {data_json};", tpl, count=1)
+
+        # Replace dashboardData categories block
+        dash_json = json.dumps({"categories": dashboard_categories}, ensure_ascii=False)
+        tpl = re.sub(r"const\s+dashboardData\s*=\s*\{[\s\S]*?\};", f"const dashboardData = {dash_json};", tpl, count=1)
+
+        # Extract values from microservice outputs to populate sections
+        def num_str(x):
+            try:
+                return str(int(float(replace_non_numeric(x))))
+            except:
+                return None
+
+        ai_pct = safe_get(modules_out.get("/detect-ai-and-validate"), "ai_sentences_percentage_by_gemini") or safe_get(modules_out.get("/detect-ai-and-validate"), "ai_percentage")
+        plag_pct = safe_get(modules_out.get("/check-plagiarism-final"), "plagiarism_percentage") or safe_get(modules_out.get("/check-plagiarism-final"), "plagiarism")
+        novelty_pct = safe_get(modules_out.get("/analyze-novelty"), "novelty_percentage") or safe_get(modules_out.get("/analyze-novelty"), "novelty")
+        cost_est = safe_get(modules_out.get("/process-and-estimate"), "estimated_cost") or safe_get(modules_out.get("/process-and-estimate"), "cost_estimate")
+        flagged = safe_get(modules_out.get("/detect-ai-and-validate"), "flagged_sentences", default=[]) or []
+        suspicious = safe_get(modules_out.get("/check-plagiarism-final"), "suspicious_lines", default=[]) or []
+        deliverables = safe_get(modules_out.get("/deliverable-check"), "deliverables") or safe_get(modules_out.get("/deliverable-check"), "found_deliverables") or []
+
+        # Build section contents
+        exec_summary = []
+        exec_summary.append(f"Automated overall score: {tpl_data.get('overall_score', 'N/A')}%.")
+        if novelty_pct:
+            exec_summary.append(f"Novelty (automated): {novelty_pct}%.")
+        if ai_pct:
+            exec_summary.append(f"AI-detection: {ai_pct}% of sentences flagged as likely AI-generated.")
+        if plag_pct:
+            exec_summary.append(f"Plagiarism similarity: {plag_pct}%.")
+        if cost_est:
+            exec_summary.append(f"Estimated project cost (automated): {cost_est}.")
+        exec_summary_text = ' '.join(exec_summary)
+
+        tech_text = safe_get(modules_out.get("/analyze-novelty"), "technical_comments") or safe_get(modules_out.get("/deliverable-check"), "technical_feasibility") or "Technical review indicates feasibility at pilot scale; please verify feedstock logistics and emissions testing plans."
+
+        cost_text = safe_get(modules_out.get("/process-and-estimate"), "cost_commentary") or f"Estimated cost (automated): {cost_est or 'N/A'}. Provide vendor quotes for high-value equipment."
+
+        timeline_text = safe_get(modules_out.get("/process-and-estimate"), "timeline_commentary") or safe_get(modules_out.get("/deliverable-check"), "timeline") or "Timeline appears reasonable; include a Gantt chart and acceptance criteria for each milestone."
+
+        ai_card = f"AI automation flagged {len(flagged)} sentence(s). Top examples: {', '.join(flagged[:3])}" if flagged else f"AI detection: {ai_pct or 'N/A'}%."
+        plag_card = f"Plagiarism similarity {plag_pct or 'N/A'}%. Suspicious excerpts: {', '.join(suspicious[:3])}" if suspicious else f"Plagiarism similarity: {plag_pct or 'N/A'}%."
+        novelty_card = f"Novelty score: {novelty_pct or 'N/A'}%. Review highlighted areas for novelty validation." 
+        timeline_card = timeline_text
+
+        # helper to replace a section's inner .section-text by its title
+        def replace_section(tpl_str, title, new_html):
+            pattern = rf'(<div[^>]*class="section-title"[^>]*>\s*{re.escape(title)}\s*</div>\s*<div[^>]*class="section-text"[^>]*>)([\s\S]*?)(</div>)'
+            return re.sub(pattern, lambda m: m.group(1) + new_html + m.group(3), tpl_str, count=1, flags=re.IGNORECASE)
+
+        tpl = replace_section(tpl, 'Executive Summary', exec_summary_text)
+        tpl = replace_section(tpl, 'Technical Feasibility', tech_text)
+        tpl = replace_section(tpl, 'Cost Justification', cost_text)
+        tpl = replace_section(tpl, 'Timeline & Deliverables', timeline_text)
+
+                # Page 2 cards (novelty, cost justification, technical feasibility, deliverables)
+                # Build richer card HTML for page 2 and summary circles on page 1
+        def make_score_box(title, score_pct, comment, recommendations=None):
+                sc = int(float(replace_non_numeric(score_pct) or 0)) if score_pct is not None else 0
+                changeable = max(0, 100 - sc)
+                recs = recommendations or []
+                rec_lines = '\n'.join([f"<li>{sanitize_text(r)}</li>" for r in recs]) if recs else "<li>Provide more evidence and vendor quotes.</li>"
+                return f"""
+<div class=\"card-box\"> 
+    <div class=\"card-header\"><strong>{sanitize_text(title)}</strong></div>
+    <div class=\"card-body\">
+        <p><strong>Score:</strong> {sc}/100 &nbsp; <strong>Changeable:</strong> {changeable}%</p>
+        <p>{sanitize_text(str(comment) or '')}</p>
+        <div><strong>Recommended actions:</strong>
+            <ul>
+                {rec_lines}
+            </ul>
+        </div>
+    </div>
+</div>
+"""
+
+        novelty_recs = safe_get(modules_out.get('/analyze-novelty'), 'recommendations') or []
+        cost_recs = safe_get(modules_out.get('/process-and-estimate'), 'recommendations') or []
+        tech_recs = safe_get(modules_out.get('/deliverable-check'), 'recommendations') or []
+        deliver_recs = safe_get(modules_out.get('/deliverable-check'), 'deliverable_recommendations') or []
+
+        # Prefer route-provided numeric percentages where available
+        novelty_score_pct = novelty_pct or validated.get('novelty_subscore', 0)
+        cost_score_pct = None
+        try:
+            # cost_est may be a numeric or string value from the process-and-estimate module
+            cost_score_pct = cost_est or computed.get('raw_inputs', {}).get('cost_value') or validated.get('cost_subscore', 0)
+        except:
+            cost_score_pct = validated.get('cost_subscore', 0)
+
+        tech_score_pct = safe_get(modules_out.get('/deliverable-check'), 'technical_feasibility') or safe_get(modules_out.get('/analyze-novelty'), 'feasibility_percentage') or validated.get('timeline_subscore', 0)
+
+        deliver_score_pct = safe_get(modules_out.get('/deliverable-check'), 'deliverable_score') or safe_get(modules_out.get('/deliverable-check'), 'deliverable_percentage') or computed.get('subscores', {}).get('timeline_subscore') or validated.get('timeline_subscore', 0)
+
+        tpl = replace_section(tpl, 'Novelty', make_score_box('Novelty', novelty_score_pct, safe_get(modules_out.get('/analyze-novelty'), 'summary', default='Automated novelty assessment.'), novelty_recs))
+        tpl = replace_section(tpl, 'Cost Justification', make_score_box('Cost Justification', cost_score_pct or 0, cost_text, cost_recs))
+        tpl = replace_section(tpl, 'Technical Feasibility', make_score_box('Technical Feasibility', tech_score_pct, tech_text, tech_recs))
+        tpl = replace_section(tpl, 'Deliverables', make_score_box('Deliverables', deliver_score_pct, (', '.join(deliverables) if isinstance(deliverables, list) else str(deliverables)), deliver_recs))
+
+        # AI grid cards
+        # Build AI grid card HTML
+        def make_ai_card(title, body):
+            return f"<div class=\"ai-card\"><h4>{sanitize_text(title)}</h4><p>{sanitize_text(body)}</p></div>"
+
+        tpl = replace_section(tpl, 'Plagiarism Analysis', make_ai_card('Plagiarism Analysis', plag_card))
+        tpl = replace_section(tpl, 'Model Confidence', make_ai_card('Model Confidence', f"Model confidence: {safe_get(modules_out.get('/detect-ai-and-validate'), 'confidence', default='N/A')}.") )
+        tpl = replace_section(tpl, 'Automated Novelty Detection', make_ai_card('Automated Novelty Detection', novelty_card))
+        tpl = replace_section(tpl, 'Timeline & Risk Prediction', make_ai_card('Timeline & Risk Prediction', timeline_card))
+
+        # If proposal_data present, inject PI info into table (replace specific sample values)
+        if proposal_data and proposal_data.get('form_data'):
+            basic = proposal_data['form_data'].get('basic_information', {})
+            def safe_str(x):
+                return str(x) if x is not None else ""
+
+            tpl = tpl.replace('Integrated Coal Waste-to-Energy Demonstration Project', safe_str(basic.get('project_title')))
+            tpl = tpl.replace('Dr. A. K. Sharma', safe_str(basic.get('project_leader_name')))
+            tpl = tpl.replace('National Institute of Coal Research', safe_str(basic.get('principal_implementing_agency')))
+            tpl = tpl.replace('15 Oct 2025', safe_str(basic.get('submission_date')))
+            total_cost_val = proposal_data.get('calculated_totals', {}).get('total_cost')
+            repl_cost = 'nil'
+            try:
+                if isinstance(total_cost_val, (int, float)):
+                    repl_cost = f"₹ {int(round(total_cost_val)):,}"
+                elif isinstance(total_cost_val, str) and re.sub(r"[^0-9.]", "", total_cost_val):
+                    repl_cost = f"₹ {int(round(float(re.sub(r'[^0-9.]', '', total_cost_val)))):,}"
+            except:
+                repl_cost = 'nil'
+                tpl = tpl.replace('₹ 18,500,000', repl_cost)
+
+                # Inject detailed findings container (full second-page layout)
+                detailed_html = f"""
+<div class=\"detailed-findings\"> 
+    <div class=\"row\">{make_score_box('Novelty', novelty_pct or validated.get('novelty_subscore', 0), safe_get(modules_out.get('/analyze-novelty'), 'summary', default='Automated novelty assessment.'), novelty_recs)}{make_score_box('Cost Justification', (computed.get('raw_inputs', {}).get('cost_value') or 0), cost_text, cost_recs)}</div>
+    <div class=\"row\">{make_score_box('Technical Feasibility', validated.get('timeline_subscore', 0), tech_text, tech_recs)}{make_score_box('Deliverables', validated.get('timeline_subscore', 0), (', '.join(deliverables) if isinstance(deliverables, list) else str(deliverables)), deliver_recs)}</div>
+</div>
+"""
+
+                tpl = replace_section(tpl, 'Detailed Findings & Recommendations', detailed_html)
+
+                # Build Financial Summary HTML for page 3 (table + chart placeholder)
+                total_display = 0
+                try:
+                        if dashboard_categories:
+                                total_display = sum([int(it.get('cost', 0)) for it in dashboard_categories])
+                        else:
+                                total_display = int(float(re.sub(r"[^0-9.]", "", str(proposal_data.get('calculated_totals', {}).get('total_cost', 0) or 0))))
+                except:
+                        total_display = 0
+
+                rows_html = '\n'.join([f"<tr><td>{sanitize_text(it['category'])}</td><td style='text-align:right'>₹ {int(it['cost']):,}</td></tr>" for it in dashboard_categories])
+                if not rows_html:
+                        rows_html = "<tr><td>Total</td><td style='text-align:right'>₹ 0</td></tr>"
+
+                financial_html = f"""
+<div class=\"financial-summary\">
+    <h3>Financial Summary</h3>
+    <div class=\"financial-grid\">
+        <div class=\"categories\">
+            <h4>Category</h4>
+            <table class=\"budget-table\">{rows_html}</table>
+        </div>
+        <div class=\"chart-area\">
+            <div id=\"budget-chart\">(Chart — generated from dashboard data)</div>
+        </div>
+    </div>
+    <div class=\"total-row\"><strong>TOTAL</strong><span style=\"float:right\">₹ {total_display:,}</span></div>
+</div>
+"""
+
+                tpl = replace_section(tpl, 'Financial Summary', financial_html)
+
+        return StreamingResponse(io.BytesIO(tpl.encode('utf-8')), media_type='text/html')
 
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

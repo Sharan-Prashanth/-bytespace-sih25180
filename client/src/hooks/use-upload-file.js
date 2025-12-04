@@ -1,12 +1,13 @@
 import * as React from 'react';
 
-import { generateReactHelpers } from '@uploadthing/react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { uploadImage as uploadImageApi } from '../utils/proposalApi';
 
 export function useUploadFile({
   onUploadComplete,
   onUploadError,
+  folder = 'editor-images',
   ...props
 } = {}) {
   const [uploadedFile, setUploadedFile] = React.useState();
@@ -14,24 +15,54 @@ export function useUploadFile({
   const [progress, setProgress] = React.useState(0);
   const [isUploading, setIsUploading] = React.useState(false);
 
-  async function uploadThing(file) {
+  async function uploadFile(file) {
     setIsUploading(true);
     setUploadingFile(file);
+    setProgress(0);
+
+    console.log('[useUploadFile] Starting upload for file:', file.name, file.type, file.size);
 
     try {
-      const res = await uploadFiles('editorUploader', {
-        ...props,
-        files: [file],
-        onUploadProgress: ({ progress }) => {
-          setProgress(Math.min(progress, 100));
-        },
-      });
+      // Simulate progress while uploading
+      const progressInterval = setInterval(() => {
+        setProgress(prev => Math.min(prev + 10, 90));
+      }, 100);
 
-      setUploadedFile(res[0]);
+      // Upload to backend API which stores in Supabase S3
+      console.log('[useUploadFile] Calling uploadImageApi with folder:', folder);
+      const response = await uploadImageApi(file, folder);
 
-      onUploadComplete?.(res[0]);
+      clearInterval(progressInterval);
+      setProgress(100);
 
-      return uploadedFile;
+      console.log('[useUploadFile] Full API response:', JSON.stringify(response, null, 2));
+
+      // response is already response.data from proposalApi, which contains { success, data: { url, path, s3Key } }
+      const uploadData = response.data || response;
+      
+      console.log('[useUploadFile] Upload data extracted:', JSON.stringify(uploadData, null, 2));
+
+      if (!uploadData || !uploadData.url) {
+        console.error('[useUploadFile] Invalid upload response - missing URL');
+        throw new Error('Upload response missing URL');
+      }
+
+      const uploadedFileData = {
+        key: uploadData.s3Key || uploadData.path,
+        appUrl: uploadData.url,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: uploadData.url,
+        s3Key: uploadData.s3Key || uploadData.path // Store for deletion
+      };
+      
+      console.log('[useUploadFile] Final uploaded file data:', JSON.stringify(uploadedFileData, null, 2));
+
+      setUploadedFile(uploadedFileData);
+      onUploadComplete?.(uploadedFileData);
+
+      return uploadedFileData;
     } catch (error) {
       const errorMessage = getErrorMessage(error);
 
@@ -41,36 +72,10 @@ export function useUploadFile({
           : 'Something went wrong, please try again later.';
 
       toast.error(message);
-
       onUploadError?.(error);
 
-      // Mock upload for unauthenticated users
-      // toast.info('User not logged in. Mocking upload process.');
-      const mockUploadedFile = {
-        key: 'mock-key-0',
-        appUrl: `https://mock-app-url.com/${file.name}`,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        url: URL.createObjectURL(file)
-      };
-
-      // Simulate upload progress
-      let progress = 0;
-
-      const simulateProgress = async () => {
-        while (progress < 100) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          progress += 2;
-          setProgress(Math.min(progress, 100));
-        }
-      };
-
-      await simulateProgress();
-
-      setUploadedFile(mockUploadedFile);
-
-      return mockUploadedFile;
+      // Return null on error instead of mocking
+      return null;
     } finally {
       setProgress(0);
       setIsUploading(false);
@@ -82,13 +87,10 @@ export function useUploadFile({
     isUploading,
     progress,
     uploadedFile,
-    uploadFile: uploadThing,
+    uploadFile,
     uploadingFile,
   };
 }
-
-export const { uploadFiles, useUploadThing } =
-  generateReactHelpers();
 
 export function getErrorMessage(err) {
   const unknownError = 'Something went wrong, please try again later.';
@@ -100,6 +102,8 @@ export function getErrorMessage(err) {
 
     return errors.join('\n');
   } else if (err instanceof Error) {
+    return err.message;
+  } else if (typeof err === 'object' && err !== null && 'message' in err) {
     return err.message;
   } else {
     return unknownError;

@@ -9,13 +9,17 @@ import {
   getProposalTracking,
   updateProposalInfo,
   uploadFormI,
-  deleteFormI
+  deleteFormI,
+  beaconSave
 } from '../controllers/proposalController.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, authenticateBeacon } from '../middleware/auth.js';
 import { upload, uploadFormIPdf } from '../middleware/upload.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = express.Router();
+
+// Beacon save uses query token authentication (for sendBeacon API)
+router.post('/:proposalId/beacon-save', authenticateBeacon, beaconSave);
 
 router.use(authenticate);
 

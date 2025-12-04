@@ -335,11 +335,13 @@ class CollaborationService {
 
       // Update version if this is an auto-save
       if (options.isAutoSave) {
-        // Increment minor version (x.1, x.2, etc.) using integer math to avoid floating point issues
-        const baseVersion = Math.floor(room.currentVersion);
-        const minorVersionInt = Math.round((room.currentVersion - baseVersion) * 10);
-        const newMinorVersionInt = minorVersionInt + 1;
-        room.currentVersion = baseVersion + (newMinorVersionInt / 10);
+        // Increment minor version properly: 1.0 -> 1.1 -> 1.2 ... -> 1.9 -> 1.10 -> 1.11
+        const versionStr = String(room.currentVersion);
+        const parts = versionStr.split('.');
+        const majorVersion = parseInt(parts[0], 10);
+        const minorVersion = parseInt(parts[1] || '0', 10);
+        const newMinorVersion = minorVersion + 1;
+        room.currentVersion = parseFloat(`${majorVersion}.${newMinorVersion}`);
         proposal.currentVersion = room.currentVersion;
       }
 

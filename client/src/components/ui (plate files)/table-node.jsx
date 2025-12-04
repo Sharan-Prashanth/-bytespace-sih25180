@@ -478,16 +478,17 @@ export function TableCellElement({
       {...props}
       as={isHeader ? 'th' : 'td'}
       className={cn(
-        'h-full overflow-visible border-none bg-white p-0 align-top',
-        element.background ? 'bg-(--cellBackground)' : 'bg-white',
+        'h-full overflow-visible border-none p-0 align-top',
+        // Use CSS variable for background to support theming
+        element.background ? 'bg-(--cellBackground)' : 'bg-[var(--table-cell-bg,white)]',
         isHeader && 'text-left *:m-0',
         'before:size-full',
         selected && 'before:z-10 before:bg-brand/5',
         "before:absolute before:box-border before:content-[''] before:select-none",
-        borders.bottom?.size && `before:border-b before:border-b-border`,
-        borders.right?.size && `before:border-r before:border-r-border`,
-        borders.left?.size && `before:border-l before:border-l-border`,
-        borders.top?.size && `before:border-t before:border-t-border`
+        borders.bottom?.size && `before:border-b before:border-b-[var(--table-border-color,#e5e7eb)]`,
+        borders.right?.size && `before:border-r before:border-r-[var(--table-border-color,#e5e7eb)]`,
+        borders.left?.size && `before:border-l before:border-l-[var(--table-border-color,#e5e7eb)]`,
+        borders.top?.size && `before:border-t before:border-t-[var(--table-border-color,#e5e7eb)]`
       )}
       style={
         {

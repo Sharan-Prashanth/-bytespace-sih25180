@@ -5,24 +5,71 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { getProposalById } from '../../../utils/proposalApi';
-import { Edit, Users, FileText, MessageSquare, Download, ChevronUp, ChevronDown } from 'lucide-react';
+import apiClient from '../../../utils/api';
+import { Edit, Users, FileText, MessageSquare, Download, ChevronUp, ChevronDown, Clock, ArrowLeft, Moon, Sun, MoonStar } from 'lucide-react';
 
 // Lazy load heavy components
 const AdvancedProposalEditor = lazy(() => import('../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor'));
+const VersionHistory = lazy(() => import('../../../components/VersionHistory'));
 
 // Import view-specific components
 import ViewHeader from '../../../components/view-page/ViewHeader';
 import ViewProposalInformation from '../../../components/view-page/ViewProposalInformation';
-import QuickLinks from '../../../components/view-page/QuickLinks';
 
 function ViewProposalContent() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id, version: versionParam } = router.query;
   const { user } = useAuth();
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [fabExpanded, setFabExpanded] = useState(true);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [viewingVersion, setViewingVersion] = useState(null);
+  const [versionData, setVersionData] = useState(null);
+  
+  // Theme state
+  const [theme, setTheme] = useState('light');
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('dashboard-theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  // Apply dark class to document for CSS variable support
+  useEffect(() => {
+    const isDarkMode = theme === 'dark' || theme === 'darkest';
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    // Cleanup on unmount
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard-theme', newTheme);
+  };
+
+  // Theme helper variables
+  const isDark = theme === 'dark' || theme === 'darkest';
+  const isDarkest = theme === 'darkest';
+  
+  // Theme-based classes
+  const bgClass = isDarkest ? 'bg-black' : isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-50 to-slate-100';
+  const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+  const textColor = isDark ? 'text-white' : 'text-black';
+  const subTextColor = isDark ? 'text-slate-400' : 'text-black';
+  const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-200';
 
   // Determine which buttons to show based on user role
   const userRoles = user?.roles || [];
@@ -60,15 +107,65 @@ function ViewProposalContent() {
   // admin - everything (edit, collaborate, track, review, download)
   // tssrc, ssrc - collaborate, track, review
   const showEdit = isAdmin;
-  const showCollaborate = true; // Everyone can collaborate
+  const showCollaborate = true; // Will be conditionally shown based on status below
   const showReview = isAdmin || isExpert || isCMPDI || isTSSRC || isSSRC;
   const showTrack = true; // Everyone can track
   const showDownload = isAdmin;
+  
+  // Check if proposal is finally rejected (cannot collaborate)
+  const isFinallyRejected = proposal && ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(proposal.status);
+  const isAIRejected = proposal && proposal.status === 'AI_REJECTED';
+
+  // Load specific version data if version parameter is present
+  useEffect(() => {
+    const loadVersionData = async () => {
+      if (!id) return;
+      
+      // If no version param, reset to current version
+      if (!versionParam) {
+        setViewingVersion(null);
+        setVersionData(null);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const versionNum = parseInt(versionParam);
+        setViewingVersion(versionNum);
+
+        const response = await apiClient.get(`/api/proposals/${id}/versions/${versionNum}`);
+        const version = response.data.data;
+        setVersionData(version);
+      } catch (err) {
+        console.error('[ViewPage] Error loading version:', err);
+        setError(err.response?.data?.message || 'Failed to load version');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadVersionData();
+  }, [id, versionParam]);
 
   // Load proposal data
   useEffect(() => {
     const loadProposal = async () => {
       if (!id) return;
+      // Skip loading current proposal if we're viewing a specific version
+      if (versionParam) {
+        // But ensure we have at least the base proposal data for context
+        if (!proposal) {
+          try {
+            const response = await getProposalById(id);
+            const proposalData = response.data;
+            setProposal({ ...proposalData, processedForms: null }); // Basic data without forms
+          } catch (err) {
+            console.error('Error loading base proposal:', err);
+          }
+        }
+        return;
+      }
       
       try {
         setLoading(true);
@@ -79,16 +176,54 @@ function ViewProposalContent() {
         
         console.log('Proposal loaded:', proposalData.proposalCode);
         console.log('Forms available:', proposalData.forms ? Object.keys(proposalData.forms) : 'none');
-        console.log('Full forms structure:', JSON.stringify(proposalData.forms, null, 2));
+        console.log('FormI field available:', proposalData.formi ? 'yes' : 'no');
         
         // Process forms data to match AdvancedProposalEditor expectations
         // Editor expects EXACT format from create.jsx: { formi: { content: [...] } }
-        // NOT { formI: { editorContent: [...] } }
         let processedForms = null;
-        if (proposalData.forms && proposalData.forms.formI) {
+        
+        // First check for the new single formi field (new schema)
+        if (proposalData.formi) {
+          const formiData = proposalData.formi;
+          console.log('Using new formi field structure');
+          
+          let content = null;
+          
+          // Check for nested content
+          if (formiData.formi && formiData.formi.content) {
+            content = formiData.formi.content;
+            console.log('Found nested formi.formi.content structure');
+          }
+          // Check direct content
+          else if (formiData.content) {
+            content = formiData.content;
+            console.log('Found formi.content structure');
+          }
+          // Maybe it's already the content array
+          else if (Array.isArray(formiData)) {
+            content = formiData;
+            console.log('Found formi as direct content array');
+          }
+          
+          if (content && Array.isArray(content) && content.length > 0) {
+            processedForms = {
+              formi: {
+                content: content,
+                wordCount: formiData.wordCount || 0,
+                characterCount: formiData.characterCount || 0
+              }
+            };
+            console.log('Successfully processed formi:', {
+              contentLength: content.length,
+              firstNode: content[0]
+            });
+          }
+        }
+        // Fallback to legacy forms.formI structure (old schema)
+        else if (proposalData.forms && proposalData.forms.formI) {
           const formIData = proposalData.forms.formI;
           
-          console.log('FormI structure:', {
+          console.log('Using legacy forms.formI structure:', {
             keys: Object.keys(formIData),
             hasFormi: !!formIData.formi,
             hasContent: !!formIData.content,
@@ -134,7 +269,7 @@ function ViewProposalContent() {
             console.log('Form I data:', formIData);
           }
         } else {
-          console.error('No formI found in proposal.forms');
+          console.error('No formI found in proposal');
         }
         
         setProposal({ ...proposalData, processedForms });
@@ -147,34 +282,105 @@ function ViewProposalContent() {
     };
 
     loadProposal();
-  }, [id]);
+  }, [id, versionParam]);
+
+  // Process version data for display
+  const getDisplayData = () => {
+    if (viewingVersion && versionData) {
+      // Process version forms for editor
+      let processedForms = null;
+      
+      // First check for new formi field
+      if (versionData.formi) {
+        const formiData = versionData.formi;
+        let content = null;
+        
+        if (formiData.formi && formiData.formi.content) {
+          content = formiData.formi.content;
+        } else if (formiData.content) {
+          content = formiData.content;
+        } else if (Array.isArray(formiData)) {
+          content = formiData;
+        }
+        
+        if (content && Array.isArray(content) && content.length > 0) {
+          processedForms = {
+            formi: {
+              content: content,
+              wordCount: formiData.wordCount || 0,
+              characterCount: formiData.characterCount || 0
+            }
+          };
+        }
+      }
+      // Fallback to legacy forms.formI
+      else if (versionData.forms && versionData.forms.formI) {
+        const formIData = versionData.forms.formI;
+        let content = null;
+        
+        if (formIData.formi && formIData.formi.content) {
+          content = formIData.formi.content;
+        } else if (formIData.content) {
+          content = formIData.content;
+        } else if (formIData.editorContent) {
+          content = formIData.editorContent;
+        }
+        
+        if (content && Array.isArray(content) && content.length > 0) {
+          processedForms = {
+            formi: {
+              content: content,
+              wordCount: formIData.formi?.wordCount || formIData.wordCount || 0,
+              characterCount: formIData.formi?.characterCount || formIData.characterCount || 0
+            }
+          };
+        }
+      }
+      
+      return {
+        proposalCode: versionData.proposalCode,
+        title: versionData.proposalInfo?.title || 'N/A',
+        status: versionData.status || 'ARCHIVED',
+        currentVersion: versionData.versionNumber,
+        proposalInfo: versionData.proposalInfo || {},
+        processedForms,
+        isHistoricalVersion: true
+      };
+    }
+    
+    return proposal ? { ...proposal, isHistoricalVersion: false } : null;
+  };
+
+  const displayData = getDisplayData();
 
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center transition-colors duration-300`}>
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-black text-lg">Loading proposal...</p>
+          <div className={`w-16 h-16 border-4 ${isDark ? 'border-slate-700 border-t-white' : 'border-slate-200 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+          <p className={`${textColor} text-lg`}>
+            {viewingVersion ? `Loading version ${viewingVersion}...` : 'Loading proposal...'}
+          </p>
         </div>
       </div>
     );
   }
 
   // Error state
-  if (error || !proposal) {
+  if (error || (!proposal && !versionData)) {
     return (
-      <div className="min-h-screen bg-black/5 flex items-center justify-center">
+      <div className={`min-h-screen ${bgClass} flex items-center justify-center transition-colors duration-300`}>
         <div className="text-center">
           <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-black text-xl mb-4">
+          <p className={`${textColor} text-xl mb-4`}>
             {error || 'Proposal not found'}
           </p>
           <button
             onClick={() => router.push(getDashboardPath())}
-            className="px-6 py-2 bg-black text-white rounded-lg hover:bg-black/90 transition-colors"
+            className={`px-6 py-2 rounded-lg transition-colors ${isDark ? 'bg-white text-black hover:bg-slate-200' : 'bg-black text-white hover:bg-black/90'}`}
           >
             Back to {getRoleLabel()}
           </button>
@@ -184,202 +390,357 @@ function ViewProposalContent() {
   }
 
   return (
-    <div className="min-h-screen bg-black/5">
-      {/* Floating Action Button Panel - Fixed position, scrolls with user */}
-      <div className="fixed right-6 top-1/2 -translate-y-1/2 z-50">
-        <div className={`bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
+    <div className={`min-h-screen ${bgClass} transition-colors duration-300`}>
+      {/* Version History Panel */}
+      <Suspense fallback={null}>
+        <VersionHistory
+          proposalId={id}
+          currentVersion={proposal?.currentVersion || displayData?.currentVersion || 0}
+          showVersionHistory={showVersionHistory}
+          setShowVersionHistory={setShowVersionHistory}
+          theme={theme}
+        />
+      </Suspense>
+
+      {/* Historical Version Banner */}
+      {viewingVersion && (
+        <div className="fixed top-0 left-0 right-0 bg-amber-500 text-white z-50">
+          <div className="max-w-7xl mx-auto px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5" />
+                <div>
+                  <span className="font-semibold">Viewing Version {viewingVersion}</span>
+                  <span className="ml-2 text-amber-100">
+                    {versionData?.commitMessage === 'Initial Submission' 
+                      ? '(Initial Submission)' 
+                      : versionData?.commitMessage ? `(${versionData.commitMessage})` : ''}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setViewingVersion(null);
+                    setVersionData(null);
+                    router.replace(`/proposal/view/${id}`, undefined, { shallow: false });
+                  }}
+                  className="flex items-center gap-2 px-4 py-1.5 bg-white text-amber-600 rounded-lg text-sm font-medium hover:bg-amber-50 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Current Version
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button Panel */}
+      <div className={`fixed right-6 top-1/2 -translate-y-1/2 z-40 ${viewingVersion ? 'mt-6' : ''}`}>
+        <div className={`${cardBg} rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
           {/* Toggle Button */}
           <button
             onClick={() => setFabExpanded(!fabExpanded)}
-            className="w-full flex items-center justify-between p-3 hover:bg-slate-50 transition-colors border-b border-slate-100"
+            className={`w-full flex items-center justify-between p-3 transition-colors border-b ${borderColor} ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/5'}`}
           >
-            {fabExpanded && <span className="text-sm font-semibold text-slate-700">Actions</span>}
+            {fabExpanded && <span className={`text-sm font-semibold ${textColor}`}>Actions</span>}
             {fabExpanded ? (
-              <ChevronDown className="w-5 h-5 text-slate-500" />
+              <ChevronDown className={`w-5 h-5 ${textColor}`} />
             ) : (
-              <ChevronUp className="w-5 h-5 text-slate-500 mx-auto" />
+              <ChevronUp className={`w-5 h-5 ${textColor} mx-auto`} />
             )}
           </button>
 
           {/* Action Buttons */}
           <div className="p-2 space-y-1">
-            {/* Edit Button - Admin only */}
-            {showEdit && (
-              <button
-                onClick={() => router.push(`/proposal/collaborate/${id}?mode=edit`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
-                title="Edit Proposal"
-              >
-                <Edit className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                {fabExpanded && <span className="text-sm font-medium">Edit</span>}
-              </button>
-            )}
+            {/* Version History Button */}
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
+              title="Version History"
+            >
+              <Clock className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {fabExpanded && <span className="text-sm font-medium">Versions</span>}
+            </button>
 
-            {/* Collaborate Button - Everyone */}
-            {showCollaborate && (
-              <button
-                onClick={() => router.push(`/proposal/collaborate/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
-                title="Collaborate"
-              >
-                <Users className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                {fabExpanded && <span className="text-sm font-medium">Collaborate</span>}
-              </button>
-            )}
+            {/* Only show action buttons when not viewing historical version */}
+            {!viewingVersion && (
+              <>
+                {/* Edit Button - Admin only */}
+                {showEdit && (
+                  <button
+                    onClick={() => router.push(`/proposal/collaborate/${id}?mode=edit`)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
+                    title="Edit Proposal"
+                  >
+                    <Edit className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    {fabExpanded && <span className="text-sm font-medium">Edit</span>}
+                  </button>
+                )}
 
-            {/* Review Button - Expert, CMPDI, TSSRC, SSRC, Admin */}
-            {showReview && (
-              <button
-                onClick={() => router.push(`/proposal/review/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
-                title="Review"
-              >
-                <FileText className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                {fabExpanded && <span className="text-sm font-medium">Review</span>}
-              </button>
-            )}
+                {/* Collaborate Button - Everyone except finally rejected */}
+                {showCollaborate && !isFinallyRejected && (
+                  <button
+                    onClick={() => router.push(`/proposal/collaborate/${id}`)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
+                    title="Collaborate"
+                  >
+                    <Users className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    {fabExpanded && <span className="text-sm font-medium">Collaborate</span>}
+                  </button>
+                )}
 
-            {/* Track Button - Everyone */}
-            {showTrack && (
-              <button
-                onClick={() => router.push(`/proposal/track/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
-                title="Track Progress"
-              >
-                <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                {fabExpanded && <span className="text-sm font-medium">Track</span>}
-              </button>
-            )}
+                {/* Review Button - Expert, CMPDI, TSSRC, SSRC, Admin */}
+                {showReview && (
+                  <button
+                    onClick={() => router.push(`/proposal/review/${id}`)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
+                    title="Review"
+                  >
+                    <FileText className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    {fabExpanded && <span className="text-sm font-medium">Review</span>}
+                  </button>
+                )}
 
-            {/* Download Button - Admin only */}
-            {showDownload && (
-              <button
-                onClick={() => {
-                  // Download functionality - can be expanded later
-                  alert('Download feature coming soon!');
-                }}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/5 text-black transition-all group ${!fabExpanded && 'justify-center'}`}
-                title="Download PDF"
-              >
-                <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                {fabExpanded && <span className="text-sm font-medium">Download</span>}
-              </button>
+                {/* Track Button - Everyone */}
+                {showTrack && (
+                  <button
+                    onClick={() => router.push(`/proposal/track/${id}`)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
+                    title="Track Progress"
+                  >
+                    <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    {fabExpanded && <span className="text-sm font-medium">Track</span>}
+                  </button>
+                )}
+
+                {/* Download Button - Admin only */}
+                {showDownload && (
+                  <button
+                    onClick={() => {
+                      alert('Download feature coming soon!');
+                    }}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
+                    title="Download PDF"
+                  >
+                    <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    {fabExpanded && <span className="text-sm font-medium">Download</span>}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
 
       {/* Header with Back Button */}
-      <div className="bg-white border-b border-black/10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className={`${cardBg} border-b ${borderColor} ${viewingVersion ? 'mt-12' : ''}`}>
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <button
-            onClick={() => router.push(getDashboardPath())}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-black/20 text-black rounded-lg hover:bg-black/5 transition-colors"
+            onClick={() => {
+              if (viewingVersion) {
+                setViewingVersion(null);
+                setVersionData(null);
+                router.replace(`/proposal/view/${id}`, undefined, { shallow: false });
+              } else {
+                router.push(getDashboardPath());
+              }
+            }}
+            className={`flex items-center gap-2 px-4 py-2 text-sm border rounded-lg transition-colors ${isDark ? `border-slate-600 ${textColor} hover:bg-white/5` : `border-slate-300 ${textColor} hover:bg-black/5`}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Back to {getRoleLabel()}
+            {viewingVersion ? 'Back to Current Version' : `Back to ${getRoleLabel()}`}
           </button>
+          
+          {/* Date and Theme Toggle */}
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-black'}`}>
+              {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
+              title={theme === 'light' ? 'Switch to Dark Mode' : theme === 'dark' ? 'Switch to Darkest Mode' : 'Switch to Light Mode'}
+            >
+              {theme === 'light' ? (
+                <Moon className="w-5 h-5" />
+              ) : theme === 'dark' ? (
+                <MoonStar className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Header */}
       <ViewHeader
-        proposalCode={proposal.proposalCode}
-        projectLeader={proposal.projectLeader}
-        status={(proposal.status || 'DRAFT').replace('_', ' ').toUpperCase()}
+        proposalCode={displayData?.proposalCode || proposal?.proposalCode}
+        projectLeader={displayData?.proposalInfo?.projectLeader || proposal?.projectLeader}
+        status={viewingVersion ? `VERSION ${viewingVersion}` : (displayData?.status || 'DRAFT').replace('_', ' ').toUpperCase()}
+        version={viewingVersion || proposal?.currentVersion || 1}
+        hasDraft={!viewingVersion && proposal?.hasDraft}
+        draftVersionLabel={!viewingVersion && proposal?.draftVersionLabel}
+        theme={theme}
       />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Proposal Code Section */}
-        <div className="bg-white border border-black/10 rounded-lg p-4 mb-6">
+        <div className={`${cardBg} border rounded-xl p-4 mb-6`}>
           <div className="flex items-center justify-between">
-            <div>
-              <label className="block text-xs font-semibold text-black mb-1">Proposal Code</label>
-              <div className="text-lg font-bold text-black">{proposal.proposalCode || 'N/A'}</div>
+            <div className="flex items-center gap-3">
+              <div>
+                <label className={`block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-black'} mb-0.5`}>Proposal Code</label>
+                <div className={`text-lg font-bold ${textColor}`}>{displayData?.proposalCode || proposal?.proposalCode || 'N/A'}</div>
+              </div>
             </div>
-            <div className="px-3 py-1 rounded-full text-xs font-semibold bg-black/5 text-black">
-              {(proposal.status || 'DRAFT').replace('_', ' ').toUpperCase()}
+            <div className="flex items-center gap-2">
+              {viewingVersion && (
+                <div className={`px-3 py-1 rounded-full text-xs font-semibold ${isDark ? 'bg-amber-900/30 text-amber-400 border border-amber-800' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>
+                  Version {viewingVersion}
+                </div>
+              )}
+              <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                viewingVersion 
+                  ? isDark ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-black'
+                  : (displayData?.status || 'DRAFT').includes('ACCEPTED') || (displayData?.status || 'DRAFT').includes('APPROVED')
+                    ? isDark ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                    : (displayData?.status || 'DRAFT').includes('REJECTED')
+                      ? isDark ? 'bg-red-900/30 text-red-400 border border-red-800' : 'bg-red-100 text-red-700 border border-red-200'
+                      : (displayData?.status || 'DRAFT').includes('REVIEW')
+                        ? isDark ? 'bg-amber-900/30 text-amber-400 border border-amber-800' : 'bg-amber-100 text-amber-700 border border-amber-200'
+                        : isDark ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-black'
+              }`}>
+                {viewingVersion ? 'Historical Version' : (displayData?.status || 'DRAFT').replace('_', ' ').toUpperCase()}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Proposal Information Section */}
-        <ViewProposalInformation proposalInfo={proposal} />
+        <ViewProposalInformation proposalInfo={viewingVersion ? displayData?.proposalInfo : proposal} theme={theme} />
 
         {/* View-Only Editor Section using AdvancedProposalEditor */}
-        <div className="bg-white border border-black/10 rounded-lg p-6 mb-6">
-          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h4 className="font-semibold text-blue-900 mb-1">View-Only Mode</h4>
-                <p className="text-sm text-blue-800 mb-2">
-                  This proposal is displayed in read-only mode. You cannot make any changes to the content.
-                </p>
-                {proposal.status === 'DRAFT' ? (
-                  <p className="text-sm text-blue-800">
-                    To make changes, please continue editing on the{' '}
-                    <button
-                      onClick={() => router.push('/proposal/create')}
-                      className="font-semibold underline hover:text-blue-900"
-                    >
-                      Create Proposal
-                    </button>{' '}
-                    page.
+        <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
+          {/* Version-specific info banner */}
+          {viewingVersion ? (
+            <div className={`mb-4 p-4 rounded-xl ${isDark ? 'bg-slate-700/50 border border-slate-600' : 'bg-slate-100 border border-slate-200'}`}>
+              <div className="flex items-start gap-3">
+                <Clock className={`w-5 h-5 ${textColor} mt-0.5 flex-shrink-0`} />
+                <div>
+                  <h4 className={`font-semibold ${textColor} mb-1`}>Historical Version</h4>
+                  <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-black'} mb-2`}>
+                    You are viewing Version {viewingVersion} of this proposal. This is a read-only snapshot of the proposal at that point in time.
                   </p>
-                ) : (
-                  <p className="text-sm text-blue-800">
-                    To make changes, please use the{' '}
+                  <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-black'}`}>
                     <button
-                      onClick={() => router.push(`/proposal/collaborate/${id}`)}
-                      className="font-semibold underline hover:text-blue-900"
+                      onClick={() => {
+                        setViewingVersion(null);
+                        setVersionData(null);
+                        router.replace(`/proposal/view/${id}`, undefined, { shallow: false });
+                      }}
+                      className={`font-semibold underline ${textColor}`}
                     >
-                      Collaborative Editor
+                      Click here
                     </button>{' '}
-                    page.
+                    to view the current version.
                   </p>
-                )}
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className={`mb-4 p-4 rounded-xl ${isDark ? 'bg-slate-700/50 border border-slate-600' : 'bg-slate-100 border border-slate-200'}`}>
+              <div className="flex items-start gap-3">
+                <svg className={`w-5 h-5 ${textColor} mt-0.5 flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <h4 className={`font-semibold ${textColor} mb-1`}>View-Only Mode</h4>
+                  <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-black'} mb-2`}>
+                    This proposal is displayed in read-only mode. You cannot make any changes to the content.
+                  </p>
+                  {(displayData?.status || proposal?.status) === 'DRAFT' ? (
+                    <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-black'}`}>
+                      To make changes, please continue editing on the{' '}
+                      <button
+                        onClick={() => router.push('/proposal/create')}
+                        className={`font-semibold underline ${textColor}`}
+                      >
+                        Create Proposal
+                      </button>{' '}
+                      page.
+                    </p>
+                  ) : isAIRejected ? (
+                    <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-black'}`}>
+                      This proposal was rejected by AI evaluation. You can{' '}
+                      <button
+                        onClick={() => router.push('/proposal/create')}
+                        className={`font-semibold underline ${textColor}`}
+                      >
+                        edit and resubmit
+                      </button>{' '}
+                      the proposal.
+                    </p>
+                  ) : isFinallyRejected ? (
+                    <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-black'}`}>
+                      This proposal has been rejected and cannot be modified. You can view it in read-only mode.
+                    </p>
+                  ) : (
+                    <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-black'}`}>
+                      To make changes, please use the{' '}
+                      <button
+                        onClick={() => router.push(`/proposal/collaborate/${id}`)}
+                        className={`font-semibold underline ${textColor}`}
+                      >
+                        Collaborative Editor
+                      </button>{' '}
+                      page.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <Suspense fallback={
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="w-12 h-12 border-4 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-black text-sm">Loading editor...</p>
+                <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+                <p className={`${textColor} text-sm`}>Loading editor...</p>
               </div>
             </div>
           }>
-            {proposal.processedForms ? (
+            {(displayData?.processedForms || proposal?.processedForms) ? (
               <AdvancedProposalEditor
                 mode="view"
-                initialContent={proposal.processedForms}
-                proposalTitle={proposal.title || 'Form I - Project Proposal'}
+                initialContent={displayData?.processedForms || proposal?.processedForms}
+                proposalTitle={displayData?.proposalInfo?.title || proposal?.title || 'Form I - Project Proposal'}
                 showStats={true}
                 readOnly={true}
+                theme={theme}
               />
             ) : (
-              <div className="flex items-center justify-center py-12 bg-red-50 border border-red-200 rounded-lg">
+              <div className={`flex items-center justify-center py-12 ${isDark ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'} border rounded-lg`}>
                 <div className="text-center">
-                  <svg className="w-12 h-12 text-red-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-12 h-12 ${isDark ? 'text-red-400' : 'text-red-600'} mx-auto mb-4`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
-                  <p className="text-red-800 font-semibold mb-2">No Content Available</p>
-                  <p className="text-red-600 text-sm">This proposal does not have any Form I content yet.</p>
+                  <p className={`${isDark ? 'text-red-300' : 'text-red-800'} font-semibold mb-2`}>No Content Available</p>
+                  <p className={`${isDark ? 'text-red-400' : 'text-red-600'} text-sm`}>
+                    {viewingVersion 
+                      ? `Version ${viewingVersion} does not have any Form I content.`
+                      : 'This proposal does not have any Form I content yet.'}
+                  </p>
                 </div>
               </div>
             )}
           </Suspense>
         </div>
-
-        {/* Quick Links Section */}
-        <QuickLinks proposalId={id} status={proposal.status} />
       </div>
     </div>
   );

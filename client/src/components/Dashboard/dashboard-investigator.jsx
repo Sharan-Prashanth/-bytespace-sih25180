@@ -6,7 +6,7 @@ import LoadingScreen from "../../components/LoadingScreen";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import { useAuth } from "../../context/AuthContext";
 import apiClient from "../../utils/api";
-import { PROPOSAL_STATUS } from "../../utils/statusConfig";
+import { PROPOSAL_STATUS, isRejected } from "../../utils/statusConfig";
 
 // New Components
 import UserDashboardLayout from "./User/Layout/UserDashboardLayout";
@@ -39,10 +39,18 @@ function InvestigatorDashboardContent() {
     if (savedTheme) setTheme(savedTheme);
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+  const setAndSaveTheme = (newTheme) => {
     setTheme(newTheme);
     localStorage.setItem('dashboard-theme', newTheme);
+    // Also save to user preferences if logged in
+    if (user?._id) {
+      apiClient.put(`/api/users/${user._id}`, { preferredTheme: newTheme }).catch(() => {});
+    }
+  };
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light';
+    setAndSaveTheme(newTheme);
   };
 
   const fetchProposals = async () => {
@@ -59,9 +67,26 @@ function InvestigatorDashboardContent() {
     }
   };
 
+  // Handle proposal deletion - refresh the list after deletion
+  const handleProposalDeleted = (deletedProposalId) => {
+    // Remove the deleted proposal from local state immediately for better UX
+    setProposals(prev => prev.filter(p => p._id !== deletedProposalId));
+  };
+
+  // Filter out rejected proposals for the main view
+  const activeProposals = proposals.filter(p => !isRejected(p.status));
+  const rejectedProposals = proposals.filter(p => isRejected(p.status));
+
+  // Find the most recent draft (sorted by updatedAt)
+  const lastDraft = [...proposals]
+    .filter(p => p.status === PROPOSAL_STATUS.DRAFT || p.status === PROPOSAL_STATUS.AI_REJECTED)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+
+  // Calculate stats
   const stats = {
     total: proposals.length,
     draft: proposals.filter(p => p.status === PROPOSAL_STATUS.DRAFT).length,
+    aiPending: proposals.filter(p => p.status === PROPOSAL_STATUS.AI_EVALUATION_PENDING).length,
     underReview: proposals.filter(p =>
       p.status === PROPOSAL_STATUS.CMPDI_REVIEW ||
       p.status === PROPOSAL_STATUS.CMPDI_EXPERT_REVIEW ||
@@ -69,15 +94,11 @@ function InvestigatorDashboardContent() {
       p.status === PROPOSAL_STATUS.SSRC_REVIEW
     ).length,
     approved: proposals.filter(p =>
-      p.status === PROPOSAL_STATUS.ONGOING ||
-      p.status === PROPOSAL_STATUS.COMPLETED
+      p.status === PROPOSAL_STATUS.CMPDI_ACCEPTED ||
+      p.status === PROPOSAL_STATUS.TSSRC_ACCEPTED ||
+      p.status === PROPOSAL_STATUS.SSRC_ACCEPTED
     ).length,
-    rejected: proposals.filter(p =>
-      p.status === PROPOSAL_STATUS.CMPDI_REJECTED ||
-      p.status === PROPOSAL_STATUS.TSSRC_REJECTED ||
-      p.status === PROPOSAL_STATUS.SSRC_REJECTED
-    ).length,
-    totalBudget: proposals.reduce((sum, p) => sum + (p.outlayLakhs || 0), 0)
+    rejected: proposals.filter(p => isRejected(p.status)).length
   };
 
   if (loading) {
@@ -87,15 +108,15 @@ function InvestigatorDashboardContent() {
   const renderSection = () => {
     switch (activeSection) {
       case 'overview':
-        return <UserOverviewSection stats={stats} theme={theme} />;
+        return <UserOverviewSection stats={stats} theme={theme} proposals={proposals} lastDraft={lastDraft} />;
       case 'proposals':
-        return <UserProposalsSection proposals={proposals} theme={theme} />;
+        return <UserProposalsSection proposals={proposals} theme={theme} onProposalDeleted={handleProposalDeleted} />;
       case 'profile':
         return <UserProfileSection user={user} theme={theme} />;
       case 'settings':
-        return <UserSettingsSection theme={theme} toggleTheme={toggleTheme} />;
+        return <UserSettingsSection theme={theme} setTheme={setAndSaveTheme} />;
       default:
-        return <UserOverviewSection stats={stats} theme={theme} />;
+        return <UserOverviewSection stats={stats} theme={theme} proposals={proposals} lastDraft={lastDraft} />;
     }
   };
 

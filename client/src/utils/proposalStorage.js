@@ -196,6 +196,11 @@ class ProposalStorage {
    * Update proposal ID and code (after creation in DB)
    */
   updateProposalMeta(proposalId, proposalCode) {
+    // Ensure data exists - initialize if not
+    if (!this.data) {
+      this.initialize(proposalId);
+    }
+    
     const oldKey = this.storageKey;
     
     // Update internal data

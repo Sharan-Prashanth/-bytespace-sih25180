@@ -32,8 +32,14 @@ class StorageService {
    */
   async uploadImage(file, folder = 'misc') {
     try {
+      console.log('[StorageService.uploadImage] Starting upload');
+      console.log('[StorageService.uploadImage] File:', file.originalname, file.mimetype, file.size);
+      console.log('[StorageService.uploadImage] Folder:', folder);
+      console.log('[StorageService.uploadImage] Bucket:', this.buckets.images);
+      
       const fileExt = path.extname(file.originalname);
       const fileName = `${folder}/${uuidv4()}${fileExt}`;
+      console.log('[StorageService.uploadImage] Generated filename:', fileName);
 
       const { data, error } = await this.supabase.storage
         .from(this.buckets.images)
@@ -43,13 +49,18 @@ class StorageService {
         });
 
       if (error) {
+        console.error('[StorageService.uploadImage] Supabase upload error:', error);
         throw new Error(`Upload failed: ${error.message}`);
       }
+      
+      console.log('[StorageService.uploadImage] Supabase upload success:', data);
 
       // Get public URL
       const { data: urlData } = this.supabase.storage
         .from(this.buckets.images)
         .getPublicUrl(fileName);
+
+      console.log('[StorageService.uploadImage] Public URL:', urlData.publicUrl);
 
       return {
         success: true,
@@ -57,7 +68,7 @@ class StorageService {
         path: fileName
       };
     } catch (error) {
-      console.error('Image upload error:', error);
+      console.error('[StorageService.uploadImage] Error:', error);
       return {
         success: false,
         error: error.message
