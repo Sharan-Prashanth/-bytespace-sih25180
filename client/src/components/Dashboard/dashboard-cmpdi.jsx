@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../utils/api';
 import { getCMPDIMetrics } from '../../utils/cmpdiMock/metrics';
 import CMPDIDashboardLayout from './CMPDI/Layout/CMPDIDashboardLayout';
 import CMPDIHome from './CMPDI/Sections/CMPDIHome';
 import ProjectsSection from './CMPDI/Sections/ProjectsSection';
-import ProposalsSection from './CMPDI/Sections/ProposalsSection';
+import CMPDIProposalsSection from './CMPDI/Sections/CMPDIProposalsSection';
+import ExpertsSection from './CMPDI/Sections/ExpertsSection';
 import GISSection from './CMPDI/Sections/GISSection';
 
 // Placeholder components for sections not yet implemented
@@ -25,6 +28,14 @@ export default function CMPDIDashboard() {
     const [activeMetric, setActiveMetric] = useState(null);
     const [loading, setLoading] = useState(true);
     const [proposals, setProposals] = useState([]);
+    
+    const router = useRouter();
+    const { user, logout } = useAuth();
+
+    const handleLogout = async () => {
+        await logout();
+        router.push('/login');
+    };
 
     // Load initial data
     useEffect(() => {
@@ -137,13 +148,11 @@ export default function CMPDIDashboard() {
             case 'projects':
                 return <ProjectsSection theme={theme} />;
             case 'proposals':
-                return <ProposalsSection proposals={safeProposals} theme={theme} />;
+                return <CMPDIProposalsSection theme={theme} />;
+            case 'experts':
+                return <ExpertsSection theme={theme} />;
             case 'finance':
                 return <PlaceholderSection title="Finance Module" />;
-            case 'staff':
-                return <PlaceholderSection title="Staff Module" />;
-            case 'roles':
-                return <PlaceholderSection title="Roles Module" />;
             case 'safety':
                 return <PlaceholderSection title="Safety Module" />;
             case 'gis':
@@ -165,8 +174,8 @@ export default function CMPDIDashboard() {
         <CMPDIDashboardLayout
             activeSection={activeSection}
             setActiveSection={setActiveSection}
-            user={{ fullName: 'CMPDI Admin' }} // Mock user for now
-            logout={() => console.log("Logout")}
+            user={user || { fullName: 'CMPDI Admin' }}
+            logout={handleLogout}
             theme={theme}
             toggleTheme={toggleTheme}
         >

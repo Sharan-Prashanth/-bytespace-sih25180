@@ -18,6 +18,7 @@ const TrackExpertOpinions = ({
   const textColor = isDark ? 'text-white' : 'text-black';
   const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
   const itemBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-black/5 border-black/10';
+  const starMuted = isDark ? 'text-white/20' : 'text-black/20';
 
   const formatRole = (role) => {
     const roleMap = {
@@ -28,6 +29,27 @@ const TrackExpertOpinions = ({
       'SUPER_ADMIN': 'Administrator'
     };
     return roleMap[role] || role;
+  };
+
+  // Render star with support for half-filled state
+  const renderStar = (starIndex, rating, size = 'w-4 h-4') => {
+    if (rating >= starIndex) {
+      // Full star
+      return <Star className={`${size} text-yellow-500 fill-yellow-500`} />;
+    } else if (rating >= starIndex - 0.5) {
+      // Half star
+      return (
+        <div className={`relative ${size}`}>
+          <Star className={`${size} ${starMuted} absolute`} />
+          <div className="absolute overflow-hidden w-1/2">
+            <Star className={`${size} text-yellow-500 fill-yellow-500`} />
+          </div>
+        </div>
+      );
+    } else {
+      // Empty star
+      return <Star className={`${size} ${starMuted}`} />;
+    }
   };
 
   return (
@@ -45,7 +67,7 @@ const TrackExpertOpinions = ({
             <h3 className={`text-lg font-semibold ${textColor}`}>Expert Opinions</h3>
             <div className={`flex items-center gap-2 text-sm ${textColor}`}>
               <span>{opinions.length} opinion{opinions.length !== 1 ? 's' : ''}</span>
-              {opinions.length > 0 && (
+              {opinions.length > 0 && averageRating > 0 && (
                 <>
                   <span>|</span>
                   <div className="flex items-center gap-1">
@@ -86,7 +108,7 @@ const TrackExpertOpinions = ({
                       </div>
                       <div>
                         <h4 className={`font-medium ${textColor}`}>
-                          {opinion.reviewer?.name || 'Anonymous'}
+                          {opinion.reviewer?.fullName || opinion.reviewer?.name || 'Unknown Reviewer'}
                         </h4>
                         <p className={`text-xs ${textColor}`}>
                           {formatRole(opinion.reviewerRole)}
@@ -94,25 +116,25 @@ const TrackExpertOpinions = ({
                         </p>
                       </div>
                     </div>
-                    {/* Rating */}
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star 
-                          key={star}
-                          className={`w-4 h-4 ${
-                            star <= opinion.rating 
-                              ? 'text-yellow-500 fill-yellow-500' 
-                              : (isDark ? 'text-white/20' : 'text-black/20')
-                          }`}
-                        />
-                      ))}
-                    </div>
+                    {/* Rating - with half star support */}
+                    {opinion.rating > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span key={star}>
+                            {renderStar(star, opinion.rating)}
+                          </span>
+                        ))}
+                        <span className={`ml-1 text-sm ${textColor}`}>({opinion.rating})</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Opinion Text */}
-                  <p className={`text-sm ${textColor} leading-relaxed`}>
-                    {opinion.opinion}
-                  </p>
+                  {opinion.opinion && (
+                    <p className={`text-sm ${textColor} leading-relaxed`}>
+                      {opinion.opinion}
+                    </p>
+                  )}
 
                   {/* Date */}
                   <p className={`text-xs ${textColor} mt-3`}>

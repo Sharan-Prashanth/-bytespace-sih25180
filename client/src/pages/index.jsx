@@ -81,7 +81,27 @@ export default function Home() {
     }
   }, [selectedState]);
 
+  // Scroll-triggered animations
+  useEffect(() => {
+    const observerCallback = (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    };
 
+    const observer = new IntersectionObserver(observerCallback, {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    });
+
+    // Observe all elements with scroll animation classes
+    const animatedElements = document.querySelectorAll('.animate-on-scroll, .animate-on-scroll-left, .animate-on-scroll-right, .animate-on-scroll-scale');
+    animatedElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [isLoading]);
 
   // IntersectionObserver for counter animation
   useEffect(() => {
@@ -392,6 +412,212 @@ export default function Home() {
           50% { transform: translateY(-5px); }
         }
         .animate-bounce-slow { animation: bounce-slow 3s infinite ease-in-out; }
+
+        /* CTA Section Animations - Enhanced & More Visible */
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) scale(1); }
+          50% { transform: translateY(-20px) scale(1.05); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+
+        @keyframes float-delayed {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-15px) rotate(3deg); }
+        }
+        .animate-float-delayed { animation: float-delayed 7s ease-in-out infinite; animation-delay: 2s; }
+
+        @keyframes float-slow {
+          0%, 100% { transform: translate(0px, 0px); }
+          25% { transform: translate(10px, -10px); }
+          50% { transform: translate(0px, -20px); }
+          75% { transform: translate(-10px, -10px); }
+        }
+        .animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
+
+        @keyframes shimmer {
+          0% { left: -100%; }
+          100% { left: 100%; }
+        }
+        .animate-shimmer::after { 
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+          animation: shimmer 2s infinite;
+        }
+
+        @keyframes glow-pulse {
+          0%, 100% { 
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4), 0 0 40px rgba(59, 130, 246, 0.2); 
+            transform: scale(1);
+          }
+          50% { 
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.6), 0 0 80px rgba(59, 130, 246, 0.4); 
+            transform: scale(1.02);
+          }
+        }
+        .animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+
+        @keyframes slide-in-left {
+          from { opacity: 0; transform: translateX(-50px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-slide-in-left { animation: slide-in-left 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes slide-in-right {
+          from { opacity: 0; transform: translateX(50px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-slide-in-right { animation: slide-in-right 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes slide-up {
+          from { opacity: 0; transform: translateY(40px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes fade-in-scale {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in-scale { animation: fade-in-scale 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes count-up {
+          from { opacity: 0; transform: translateY(20px) scale(0.8); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-count-up { animation: count-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes line-grow {
+          from { height: 0; opacity: 0; }
+          to { height: 100%; opacity: 1; }
+        }
+        .animate-line-grow { animation: line-grow 1.5s ease-out forwards; animation-delay: 0.5s; }
+
+        @keyframes checkmark-pop {
+          0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+          50% { transform: scale(1.3) rotate(10deg); }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .animate-checkmark-pop { animation: checkmark-pop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards; }
+
+        @keyframes text-glow {
+          0%, 100% { text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+          50% { text-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 40px rgba(59, 130, 246, 0.4); }
+        }
+        .animate-text-glow { animation: text-glow 2s ease-in-out infinite; }
+
+        @keyframes border-glow {
+          0%, 100% { border-color: rgba(59, 130, 246, 0.3); }
+          50% { border-color: rgba(59, 130, 246, 0.8); }
+        }
+        .animate-border-glow { animation: border-glow 2s ease-in-out infinite; }
+
+        @keyframes pulse-ring {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1.5); opacity: 0; }
+        }
+        .animate-pulse-ring::before {
+          content: '';
+          position: absolute;
+          inset: -4px;
+          border-radius: 50%;
+          border: 2px solid rgba(74, 222, 128, 0.6);
+          animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes typing {
+          from { width: 0; }
+          to { width: 100%; }
+        }
+        .animate-typing { 
+          overflow: hidden;
+          white-space: nowrap;
+          animation: typing 2s steps(30) forwards;
+        }
+
+        @keyframes wiggle {
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-3deg); }
+          75% { transform: rotate(3deg); }
+        }
+        .animate-wiggle { animation: wiggle 0.5s ease-in-out; }
+
+        .stagger-1 { animation-delay: 0.15s; }
+        .stagger-2 { animation-delay: 0.3s; }
+        .stagger-3 { animation-delay: 0.45s; }
+        .stagger-4 { animation-delay: 0.6s; }
+        .stagger-5 { animation-delay: 0.75s; }
+        .stagger-6 { animation-delay: 0.9s; }
+        .stagger-7 { animation-delay: 1.05s; }
+        .stagger-8 { animation-delay: 1.2s; }
+
+        /* Hover effect classes */
+        .hover-lift { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease; }
+        .hover-lift:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+
+        .hover-glow { transition: all 0.4s ease; }
+        .hover-glow:hover { box-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
+
+        .hover-scale { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .hover-scale:hover { transform: scale(1.1); }
+
+        /* Scroll-triggered animations */
+        .animate-on-scroll {
+          opacity: 0;
+          transform: translateY(40px);
+          transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .animate-on-scroll.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .animate-on-scroll-left {
+          opacity: 0;
+          transform: translateX(-60px);
+          transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .animate-on-scroll-left.visible {
+          opacity: 1;
+          transform: translateX(0);
+        }
+
+        .animate-on-scroll-right {
+          opacity: 0;
+          transform: translateX(60px);
+          transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .animate-on-scroll-right.visible {
+          opacity: 1;
+          transform: translateX(0);
+        }
+
+        .animate-on-scroll-scale {
+          opacity: 0;
+          transform: scale(0.9);
+          transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .animate-on-scroll-scale.visible {
+          opacity: 1;
+          transform: scale(1);
+        }
+
+        /* Initial fade-in animations for hero */
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { animation: fade-in-up 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in { animation: fade-in 1s ease-out forwards; animation-delay: 0.5s; opacity: 0; }
       `}</style>
 
       {/* Hero Section - Shopify Style (Cinematic & Minimal) */}
@@ -481,111 +707,140 @@ export default function Home() {
       </section>
 
       {/* Main Content Area */}
-      <section className="py-12 bg-white">
+      <section className="py-12 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid lg:grid-cols-12 gap-8 items-start">
             {/* Left Content - 8 Columns */}
             <div className="lg:col-span-8">
-              {/* PRISM Main Feature Section */}
-              <div className="bg-white rounded-3xl p-8 md:p-10 shadow-xl relative overflow-hidden group">
-                {/* Background Decoration */}
-                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600"></div>
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 group-hover:scale-110 transition-transform duration-1000"></div>
-
-                <div className="relative z-10">
-                  <div className="flex flex-col md:flex-row items-center gap-8 mb-10">
-                    <div className="w-32 h-32 bg-slate-50 rounded-2xl flex items-center justify-center p-4 shadow-inner shrink-0 border border-slate-100">
-                      <img
-                        src="/images/prism brand logo.png"
-                        alt="PRISM Logo"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="text-center md:text-left flex-1">
-                      <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                        <h2 className="text-4xl font-black text-slate-900 tracking-tight">PRISM</h2>
-                        <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full uppercase tracking-wider border border-blue-100">Core System</span>
+              {/* PRISM Main Feature Section - Professional Government Style */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-500">
+                {/* Header Bar - Clean Minimal Design */}
+                <div className="px-6 py-5 border-b border-slate-100">
+                  <div className="flex items-center">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md">
+                        <img
+                          src="/images/prism brand logo.png"
+                          alt="PRISM Logo"
+                          className="w-8 h-8 object-contain brightness-0 invert"
+                        />
                       </div>
-                      <h3 className="text-xl text-slate-700 font-bold mb-3">
-                        Proposal Review & Innovation Support Mechanism
-                      </h3>
-                      <p className="text-slate-500 leading-relaxed">
-                        A cutting-edge platform designed to streamline the research proposal lifecycle, ensuring transparency, efficiency, and merit-based selection for national coal research projects.
-                      </p>
+                      <div>
+                        <h2 className="text-xl font-bold text-slate-900">PRISM</h2>
+                        <p className="text-slate-500 text-xs">Proposal Review & Innovation Support Mechanism</p>
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Unique Selling Points Grid */}
-                  <div className="grid md:grid-cols-2 gap-4">
+                {/* Description */}
+                <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+                  <p className="text-slate-600 text-sm leading-relaxed">
+                    An integrated digital platform under the Ministry of Coal, Government of India, designed to streamline 
+                    the research proposal lifecycle with transparency, efficiency, and merit-based evaluation for national 
+                    coal research & development projects.
+                  </p>
+                </div>
+
+                {/* Features Grid - Clean Professional Style */}
+                <div className="p-6">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span className="w-8 h-px bg-slate-300"></span>
+                    Key Features
+                    <span className="flex-1 h-px bg-slate-200"></span>
+                  </h4>
+                  
+                  <div className="grid md:grid-cols-2 gap-3">
                     {[
-                      { text: "Smart AI Based scoring system", icon: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z", color: "blue" },
-                      { text: "Live Updated Real Time Insights", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z", color: "indigo" },
-                      { text: "Trusted and Verified Templates and Guides", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z", color: "emerald" },
-                      { text: "Smart Future Needs Forecaster", icon: "M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z", color: "purple" },
-                      { text: "Collaborative Team Editing system", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z", color: "orange" },
-                      { text: "Secure Blockchain Powered Records", icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z", color: "cyan" }
-                    ].map((usp, idx) => (
-                      <div key={idx} className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all duration-300 group/feature">
-                        <div className={`w-12 h-12 rounded-xl bg-${usp.color}-100 text-${usp.color}-600 flex items-center justify-center shrink-0 group-hover/feature:scale-110 transition-transform duration-300`}>
-                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={usp.icon} />
+                      { text: "AI-Assisted Proposal Evaluation", desc: "Automated scoring and analysis", icon: "M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" },
+                      { text: "Real-Time Status Tracking", desc: "Live updates and notifications", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" },
+                      { text: "Official Templates & Guidelines", desc: "Government-approved formats", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+                      { text: "Budget & Timeline Forecasting", desc: "Smart resource planning tools", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
+                      { text: "Multi-User Collaboration", desc: "Team-based proposal editing", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" },
+                      { text: "Blockchain Audit Trail", desc: "Immutable record keeping", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" }
+                    ].map((feature, idx) => (
+                      <div key={idx} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                          <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d={feature.icon} />
                           </svg>
                         </div>
-                        <span className="text-sm font-bold text-slate-700 group-hover/feature:text-slate-900 leading-tight">
-                          {usp.text}
-                        </span>
+                        <div>
+                          <span className="text-sm font-semibold text-slate-800 block">{feature.text}</span>
+                          <span className="text-xs text-slate-500">{feature.desc}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Footer CTA */}
+                <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                  <p className="text-xs text-slate-500">
+                    <span className="font-semibold text-slate-700">Ministry of Coal</span> • Government of India Initiative
+                  </p>
+                  <Link href="/login">
+                    <button className="px-5 py-2.5 bg-slate-800 text-white text-sm font-medium rounded-xl hover:bg-slate-700 transition-colors flex items-center gap-2">
+                      Access Portal
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </Link>
                 </div>
               </div>
             </div>
 
             {/* Right Content - 4 Columns (Info Widget) */}
             <div className="lg:col-span-4">
-              <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden sticky top-24">
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden sticky top-24 shadow-sm hover:shadow-lg transition-shadow duration-500">
                 {/* Tab Header */}
-                <div className="flex p-2 bg-slate-50/50 backdrop-blur-sm">
+                <div className="flex border-b border-slate-200">
                   <button
                     onClick={() => setActiveInfoTab('whats-new')}
-                    className={`flex-1 py-3 px-4 text-sm font-bold rounded-xl transition-all duration-300 ${activeInfoTab === 'whats-new'
-                      ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                    className={`flex-1 py-3.5 px-4 text-sm font-semibold transition-all ${activeInfoTab === 'whats-new'
+                      ? 'bg-white text-slate-800 border-b-2 border-blue-600 -mb-px'
+                      : 'text-slate-500 hover:text-slate-700 bg-slate-50'
                       }`}
                   >
                     What's New
                   </button>
                   <button
                     onClick={() => setActiveInfoTab('important-info')}
-                    className={`flex-1 py-3 px-4 text-sm font-bold rounded-xl transition-all duration-300 ${activeInfoTab === 'important-info'
-                      ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                    className={`flex-1 py-3.5 px-4 text-sm font-semibold transition-all ${activeInfoTab === 'important-info'
+                      ? 'bg-white text-slate-800 border-b-2 border-blue-600 -mb-px'
+                      : 'text-slate-500 hover:text-slate-700 bg-slate-50'
                       }`}
                   >
-                    Important Info
+                    Notices
                   </button>
                 </div>
 
                 {/* Content Area */}
-                <div className="p-6 min-h-[400px] bg-white">
+                <div className="p-5 min-h-[380px] bg-white">
                   {activeInfoTab === 'whats-new' && (
-                    <div className="space-y-6 animate-fade-in">
+                    <div className="space-y-4">
                       {[
-                        { text: "New AI-powered proposal evaluation system launched successfully.", date: "25/09/2025", tag: "New" },
-                        { text: "Enhanced collaboration features now available for all users.", date: "20/09/2025", tag: "Update" },
-                        { text: "Updated R&D proposal submission guidelines published.", date: "15/09/2025", tag: "Info" },
-                        { text: "Digital transformation initiatives in mining sector expanded.", date: "12/09/2025", tag: "News" }
+                        { text: "New AI-powered proposal evaluation system launched successfully.", date: "25/11/2025", tag: "New" },
+                        { text: "Enhanced collaboration features now available for all users.", date: "20/11/2025", tag: "Update" },
+                        { text: "Updated R&D proposal submission guidelines published.", date: "15/11/2025", tag: "Guideline" },
+                        { text: "Digital transformation initiatives in mining sector expanded.", date: "12/11/2025", tag: "News" }
                       ].map((item, i) => (
-                        <div key={i} className="flex gap-4 items-start group cursor-pointer">
-                          <div className="flex-shrink-0 w-14 text-center bg-slate-50 rounded-lg p-2 border border-slate-100 group-hover:border-blue-100 group-hover:bg-blue-50 transition-colors">
-                            <span className="block text-xl font-bold text-slate-700 group-hover:text-blue-600">{item.date.split('/')[0]}</span>
-                            <span className="block text-[10px] font-bold text-slate-400 uppercase">{['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(item.date.split('/')[1]) - 1]}</span>
+                        <div key={i} className="flex gap-3 items-start group cursor-pointer pb-4 border-b border-slate-100 last:border-0 last:pb-0 hover:bg-slate-50/50 -mx-2 px-2 rounded-lg transition-colors">
+                          <div className="flex-shrink-0 w-12 text-center bg-slate-100 rounded-xl p-1.5">
+                            <span className="block text-lg font-bold text-slate-700">{item.date.split('/')[0]}</span>
+                            <span className="block text-[9px] font-semibold text-slate-500 uppercase">{['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(item.date.split('/')[1]) - 1]}</span>
                           </div>
-                          <div>
-                            <p className="text-sm text-slate-700 font-medium group-hover:text-blue-600 transition-colors line-clamp-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-slate-700 group-hover:text-slate-900 transition-colors line-clamp-2 leading-snug">
                               {item.text}
                             </p>
-                            <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold border border-slate-200">
+                            <span className={`inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              item.tag === 'New' ? 'bg-green-100 text-green-700' :
+                              item.tag === 'Update' ? 'bg-blue-100 text-blue-700' :
+                              item.tag === 'Guideline' ? 'bg-amber-100 text-amber-700' :
+                              'bg-slate-100 text-slate-600'
+                            }`}>
                               {item.tag}
                             </span>
                           </div>
@@ -595,31 +850,33 @@ export default function Home() {
                   )}
 
                   {activeInfoTab === 'important-info' && (
-                    <div className="space-y-4 animate-fade-in">
+                    <div className="space-y-3">
                       {[
-                        { text: "System maintenance scheduled for Oct 1, 2025", type: "Critical", color: "red" },
-                        { text: "New compliance requirements for research proposals", type: "Policy", color: "blue" },
-                        { text: "Deadline extension for pending submissions until Oct 15, 2025", type: "Alert", color: "orange" },
-                        { text: "Mandatory training session for new reviewers on Oct 5, 2025", type: "Training", color: "green" }
+                        { text: "System maintenance scheduled for Dec 1, 2025", type: "Maintenance", icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" },
+                        { text: "New compliance requirements for research proposals effective Jan 2026", type: "Policy", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+                        { text: "Deadline extension for pending submissions until Dec 15, 2025", type: "Deadline", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
+                        { text: "Mandatory training session for new reviewers on Dec 5, 2025", type: "Training", icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" }
                       ].map((item, i) => (
-                        <div key={i} className={`p-4 rounded-xl border border-${item.color}-100 bg-${item.color}-50/50 hover:bg-${item.color}-50 transition-colors`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-[10px] font-bold uppercase tracking-wider text-${item.color}-600 bg-white px-2 py-1 rounded-full shadow-sm`}>
-                              {item.type}
-                            </span>
-                            <span className={`w-2 h-2 rounded-full bg-${item.color}-500 animate-pulse`}></span>
+                        <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-200 hover:bg-blue-50/30 transition-colors">
+                          <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                            <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                            </svg>
                           </div>
-                          <p className="text-sm text-slate-700 font-medium">{item.text}</p>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 block mb-1">{item.type}</span>
+                            <p className="text-sm text-slate-700 leading-snug">{item.text}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                  <button className="w-full py-3 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 group">
+                <div className="p-4 bg-slate-50 border-t border-slate-200">
+                  <button className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2">
                     View All Updates
-                    <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                     </svg>
                   </button>
@@ -634,142 +891,263 @@ export default function Home() {
         <ProcessFlow />
       </div>
 
-      {/* CTA Section - Redesigned to match landing page aesthetic */}
-      <section className="relative py-16 bg-slate-900 overflow-hidden">
-        {/* Sophisticated Background Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px]"></div>
-        </div>
-
-        {/* Accent Gradients */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-20 animate-pulse"></div>
-          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-600 rounded-full blur-[120px] opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
-        </div>
-
-        <div className="max-w-6xl mx-auto px-4 relative z-10">
-          {/* Content Container */}
-          <div className="text-center space-y-6">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-400/20 backdrop-blur-sm text-blue-400 text-xs font-bold uppercase tracking-widest">
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-              Get Started Today
+      <section id="services" className="py-14 bg-white relative">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f8fafc_1px,transparent_1px),linear-gradient(to_bottom,#f8fafc_1px,transparent_1px)] [background-size:4rem_4rem] opacity-60"></div>
+        
+        <div className="max-w-7xl mx-auto px-4 relative z-10">
+          {/* Clean Government-Style Header */}
+          <div className="mb-8 animate-on-scroll">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <div className="h-px w-12 bg-gradient-to-r from-transparent to-blue-600"></div>
+              <span className="text-blue-600 font-semibold text-sm tracking-wide uppercase">Our Services</span>
+              <div className="h-px w-12 bg-gradient-to-l from-transparent to-blue-600"></div>
             </div>
-
-            {/* Heading */}
-            <h2 className="text-4xl md:text-6xl font-bold text-white tracking-tight leading-tight">
-              Ready to transform<br />your research?
-            </h2>
-
-            {/* Subheading */}
-            <p className="text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
-              Join thousands of researchers already accessing India's premier research funding platform
+            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 text-center mb-4">Comprehensive Research Support</h2>
+            <p className="text-slate-500 text-center max-w-2xl mx-auto">
+              End-to-end support for the entire research lifecycle—from proposal submission to project monitoring and evaluation.
             </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-              <Link href="/register">
-                <button className="group px-8 py-4 bg-white text-slate-900 rounded-full font-bold text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-105 flex items-center gap-3">
-                  Create Free Account
-                  <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </button>
-              </Link>
-              <button className="px-8 py-4 bg-transparent border-2 border-white/20 text-white rounded-full font-bold text-lg hover:bg-white/5 hover:border-white/40 transition-all backdrop-blur-sm">
-                Schedule Demo
-              </button>
+            {/* Accent underline */}
+            <div className="flex justify-center mt-4">
+              <div className="h-1 w-20 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 rounded-full"></div>
             </div>
-
-            {/* Bottom Text */}
-            <p className="text-sm text-slate-500 font-medium pt-2">
-              No credit card required • Start submitting research proposals in minutes
-            </p>
           </div>
 
-          {/* Decorative Elements */}
-          <div className="absolute top-1/2 left-0 w-px h-32 bg-gradient-to-b from-transparent via-blue-500/50 to-transparent -translate-y-1/2 hidden lg:block"></div>
-          <div className="absolute top-1/2 right-0 w-px h-32 bg-gradient-to-b from-transparent via-indigo-500/50 to-transparent -translate-y-1/2 hidden lg:block"></div>
-        </div>
-      </section>
-
-      <section id="services" className="py-12 bg-gradient-to-b from-white to-slate-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-10 animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-xs font-bold uppercase tracking-widest mb-6">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Our Services
-            </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 tracking-tight">Comprehensive Research Support</h2>
-            <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-              End-to-end support for the entire research lifecycle, from proposal submission to project monitoring and evaluation.
-            </p>
-          </div>
-
-          {/* Services Content - Full Width */}
+          {/* Services Content */}
           <ServicesContent />
         </div>
       </section>
 
-      <section id="research" className="py-12 bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-50 relative overflow-hidden">
-        {/* Background Elements */}
-        <div className="absolute inset-0 bg-[radial-gradient(#dbeafe_1px,transparent_1px)] [background-size:20px_20px] opacity-40"></div>
-        <div className="absolute top-20 right-20 w-96 h-96 bg-blue-300 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-indigo-300 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
+      {/* About Ministry Section */}
+      <section id="about" className="py-16 bg-white relative">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f8fafc_1px,transparent_1px),linear-gradient(to_bottom,#f8fafc_1px,transparent_1px)] [background-size:4rem_4rem] opacity-40"></div>
+        
+        <div className="max-w-7xl mx-auto px-4 relative z-10">
+          {/* Section Header */}
+          <div className="mb-12 animate-on-scroll">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <div className="h-px w-12 bg-gradient-to-r from-transparent to-blue-600"></div>
+              <span className="text-blue-600 font-semibold text-sm tracking-wide uppercase">About Us</span>
+              <div className="h-px w-12 bg-gradient-to-l from-transparent to-blue-600"></div>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 text-center mb-4">About Ministry of Coal</h2>
+            <p className="text-slate-500 text-center max-w-2xl mx-auto">
+              Powering India's progress through sustainable coal research and development since 1975.
+            </p>
+            <div className="flex justify-center mt-4">
+              <div className="h-1 w-20 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 rounded-full"></div>
+            </div>
+          </div>
+
+          {/* Main Content - Two Column Layout */}
+          <div className="grid lg:grid-cols-5 gap-6 mb-8">
+            
+            {/* Left Column - About Text */}
+            <div className="lg:col-span-3 animate-on-scroll">
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 h-full">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">S&T Research Scheme</h3>
+                    <p className="text-sm text-slate-500">Government of India Initiative</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 text-slate-600 leading-relaxed">
+                  <p>
+                    The Ministry of Coal, Government of India, operates a dedicated <strong className="text-slate-800">Science & Technology Research Scheme</strong> aimed at advancing the coal sector through systematic research and development activities.
+                  </p>
+                  <p>
+                    Since 1975, this initiative has been supporting R&D projects implemented by premier national institutions including IITs, NITs, IISc, CSIR laboratories, and leading universities in collaboration with coal and lignite producing companies.
+                  </p>
+                  <p>
+                    The scheme focuses on improving production efficiency, enhancing safety standards, developing clean coal technologies, and promoting environmental sustainability across India's coal mining operations.
+                  </p>
+                </div>
+
+                {/* Key Stats Row */}
+                <div className="grid grid-cols-3 gap-4 mt-8 pt-6 border-t border-slate-100">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">50+</div>
+                    <div className="text-xs text-slate-500 mt-1">Years of Excellence</div>
+                  </div>
+                  <div className="text-center border-x border-slate-100">
+                    <div className="text-2xl font-bold text-blue-600">342</div>
+                    <div className="text-xs text-slate-500 mt-1">Projects Completed</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">₹409 Cr</div>
+                    <div className="text-xs text-slate-500 mt-1">Total Investment</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Quick Info Cards */}
+            <div className="lg:col-span-2 flex flex-col gap-4 animate-on-scroll">
+              {/* Vision Card */}
+              <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white flex-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <h4 className="font-bold">Our Vision</h4>
+                </div>
+                <p className="text-blue-100 text-sm leading-relaxed">
+                  To secure availability of coal in an eco-friendly, sustainable and cost-effective manner while augmenting production through advanced technologies.
+                </p>
+              </div>
+
+              {/* Mission Card */}
+              <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-2xl p-6 text-white flex-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <h4 className="font-bold">Our Mission</h4>
+                </div>
+                <ul className="text-slate-300 text-sm space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="w-1 h-1 bg-blue-400 rounded-full mt-2 flex-shrink-0"></span>
+                    <span>Adopt clean coal technologies for safety & sustainability</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1 h-1 bg-blue-400 rounded-full mt-2 flex-shrink-0"></span>
+                    <span>Develop infrastructure for efficient coal evacuation</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1 h-1 bg-blue-400 rounded-full mt-2 flex-shrink-0"></span>
+                    <span>Support environmental protection initiatives</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Official Link */}
+              <a href="https://www.coal.nic.in" target="_blank" rel="noopener noreferrer" 
+                className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-colors group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white rounded-lg border border-slate-200 flex items-center justify-center group-hover:border-blue-200">
+                    <svg className="w-5 h-5 text-slate-600 group-hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-800 group-hover:text-blue-700 text-sm">Ministry of Coal</p>
+                    <p className="text-xs text-slate-500">coal.nic.in</p>
+                  </div>
+                </div>
+                <svg className="w-5 h-5 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          {/* Governance Structure - Full Width */}
+          <div className="animate-on-scroll">
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+              <div className="mb-5">
+                <h3 className="text-lg font-bold text-slate-900">Governance Structure</h3>
+                <p className="text-sm text-slate-500 mt-1">Three-tier approval system for research proposals</p>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4">
+                {/* CMPDIL */}
+                <div className="bg-white rounded-xl p-5 border border-slate-200">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                    <span className="text-xs font-semibold text-emerald-600 uppercase">Nodal Agency</span>
+                  </div>
+                  <h4 className="font-bold text-slate-900 mb-1">CMPDIL, Ranchi</h4>
+                  <p className="text-xs text-slate-500 mb-2">Central Mine Planning & Design Institute</p>
+                  <p className="text-sm text-slate-600">Handles proposal processing, fund disbursement, and progress monitoring.</p>
+                </div>
+
+                {/* Technical Sub-committee */}
+                <div className="bg-white rounded-xl p-5 border border-slate-200">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                    <span className="text-xs font-semibold text-indigo-600 uppercase">Technical Review</span>
+                  </div>
+                  <h4 className="font-bold text-slate-900 mb-1">Technical Sub-committee</h4>
+                  <p className="text-xs text-slate-500 mb-2">HOD Mining, IIT (Rotational)</p>
+                  <p className="text-sm text-slate-600">Conducts technical evaluation and expert review of proposals.</p>
+                </div>
+
+                {/* SSRC */}
+                <div className="bg-white rounded-xl p-5 border border-slate-200">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold">3</span>
+                    <span className="text-xs font-semibold text-blue-600 uppercase">Final Approval</span>
+                  </div>
+                  <h4 className="font-bold text-slate-900 mb-1">SSRC</h4>
+                  <p className="text-xs text-slate-500 mb-2">Standing Scientific Research Committee</p>
+                  <p className="text-sm text-slate-600">Final approval authority headed by Secretary (Coal), MOC.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="research" className="py-14 bg-slate-50 relative">
+        {/* Subtle grid background */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] [background-size:4rem_4rem] opacity-50"></div>
 
         <div className="max-w-7xl mx-auto px-4 relative z-10">
-          {/* Header */}
-          <div className="flex flex-col items-center justify-center gap-3 mb-10 text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-xs font-bold uppercase tracking-widest shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-              Live Data Visualization
+          {/* Clean Header */}
+          <div className="mb-8 animate-on-scroll">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <div className="h-px w-12 bg-gradient-to-r from-transparent to-blue-600"></div>
+              <span className="text-blue-600 font-semibold text-sm tracking-wide uppercase">Data Insights</span>
+              <div className="h-px w-12 bg-gradient-to-l from-transparent to-blue-600"></div>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 text-center mb-4">
               NaCCER's Indian Footprint
             </h2>
-            <p className="text-slate-600 max-w-3xl text-lg leading-relaxed">
-              Visualizing the distribution of research proposals and scientific contributions across the nation in real-time.
+            <p className="text-slate-500 text-center max-w-2xl mx-auto">
+              Distribution of research proposals and scientific contributions across the nation.
             </p>
+            <div className="flex justify-center mt-6">
+              <div className="h-1 w-20 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 rounded-full"></div>
+            </div>
           </div>
 
           {/* Main Content Area */}
-          <div className="grid lg:grid-cols-12 gap-6 items-start">
+          <div className="grid lg:grid-cols-12 gap-8 items-start">
             {/* Left: State Info and Chart - 4 Columns */}
-            <div className="lg:col-span-4 space-y-6">
+            <div className="lg:col-span-4 space-y-6 animate-on-scroll-left">
               {/* Selected State Card */}
-              <div className="bg-white rounded-3xl border border-blue-100 shadow-xl p-8 relative overflow-hidden group hover:border-blue-300 transition-colors duration-500">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-2xl -mr-10 -mt-10"></div>
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-500">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Selected Region</span>
+                  <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full animate-pulse-soft">Active</span>
+                </div>
 
-                <div className="relative z-10">
-                  <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-4">Selected Region</h3>
-
-                  <div className="relative h-16 mb-8">
-                    {/* Animated Text */}
-                    <div className="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight" key={selectedState + '-text'}>
-                      {selectedState}
-                    </div>
+                <div className="mb-6">
+                  <div className="text-2xl md:text-3xl font-bold text-slate-900 transition-all duration-300" key={selectedState + '-text'}>
+                    {selectedState}
                   </div>
+                </div>
 
-                  <div className="h-1 w-full bg-slate-100 rounded-full mb-8 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 w-1/3 animate-[loading_2s_ease-in-out_infinite]"></div>
-                  </div>
+                <div className="h-px w-full bg-slate-200 mb-6"></div>
 
-                  <div className="animate-fade-in" key={selectedState + '-count'}>
-                    <p className="text-sm font-medium text-slate-500 mb-2 uppercase tracking-wide">Total Proposals (2014-2025)</p>
-                    <div className="flex items-baseline gap-4">
-                      <span className="text-6xl font-bold text-slate-900 animate-count-up">{stateProposalsData[selectedState].count}</span>
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-                        Active Status
-                      </span>
-                    </div>
+                <div key={selectedState + '-count'}>
+                  <p className="text-sm text-slate-500 mb-2">Total Proposals (2014-2025)</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-5xl font-bold text-slate-900 animate-count-up">{stateProposalsData[selectedState].count}</span>
+                    <span className="text-sm text-slate-500">proposals</span>
                   </div>
                 </div>
               </div>
 
               {/* Timeline Chart */}
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 animate-slide-up" key={selectedState + '-chart'}>
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 hover:shadow-lg transition-shadow duration-500" key={selectedState + '-chart'}>
                 <ReactApexChart
                   options={{
                     chart: {
@@ -820,9 +1198,9 @@ export default function Home() {
             </div>
 
             {/* Right: India Map Visualization - 8 Columns */}
-            <div className="lg:col-span-8">
-              <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xl">
-                <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4 relative overflow-hidden" style={{ height: '650px' }}>
+            <div className="lg:col-span-8 animate-on-scroll-right">
+              <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl transition-shadow duration-500">
+                <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 relative overflow-hidden" style={{ height: '600px' }}>
 
                   {/* Map Container */}
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -875,22 +1253,22 @@ export default function Home() {
                   </div>
 
                   {/* Floating Stats Cards on Map */}
-                  <div className="absolute top-6 right-6 bg-white/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-slate-200 max-w-[200px]">
-                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Highest Activity</div>
-                    <div className="text-lg font-bold text-slate-900">Jharkhand</div>
-                    <div className="text-sm font-medium text-orange-600">44 Proposals</div>
+                  <div className="absolute top-4 right-4 bg-white p-3.5 rounded-xl shadow-lg border border-slate-200 max-w-[180px] animate-float hover:shadow-xl transition-shadow">
+                    <div className="text-xs font-medium text-slate-500 mb-1">Highest Activity</div>
+                    <div className="text-base font-bold text-slate-900">Jharkhand</div>
+                    <div className="text-sm font-semibold text-blue-600">44 Proposals</div>
                   </div>
 
-                  <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-slate-200">
+                  <div className="absolute bottom-4 left-4 bg-white p-3.5 rounded-xl shadow-lg border border-slate-200 animate-float hover:shadow-xl transition-shadow" style={{ animationDelay: '1s' }}>
                     <div className="flex items-center gap-3">
                       <div className="flex -space-x-2">
                         {[1, 2, 3].map(i => (
-                          <div key={i} className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-600">
+                          <div key={i} className="w-7 h-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[9px] font-bold text-slate-600 hover:scale-110 transition-transform cursor-pointer">
                             {['MH', 'WB', 'TS'][i - 1]}
                           </div>
                         ))}
                       </div>
-                      <div className="text-xs font-medium text-slate-600">
+                      <div className="text-xs text-slate-600">
                         Top contributing<br />regions this year
                       </div>
                     </div>
@@ -902,368 +1280,99 @@ export default function Home() {
           </div>
 
           {/* Statistics Summary */}
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { label: "States Covered", value: Object.keys(stateProposalsData).length, color: "blue", speed: 50, increment: 1 },
-              { label: "Total Proposals", value: Object.values(stateProposalsData).reduce((sum, state) => sum + state.count, 0), color: "green", speed: 30, increment: 2 },
-              { label: "Highest (State)", value: Math.max(...Object.values(stateProposalsData).map(s => s.count)), color: "orange", speed: 80, increment: 1 }
+              { label: "Projects Completed", value: "342", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
+              { label: "Total Outlay", value: "₹409.23 Cr", icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+              { label: "States Covered", value: Object.keys(stateProposalsData).length, icon: "M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+              { label: "Time Period", value: "2014-25", isText: true, icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" }
             ].map((stat, idx) => (
               <div
                 key={idx}
-                className={`metric-card bg-white rounded-2xl p-6 text-center border border-blue-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-500 relative overflow-hidden group hover:-translate-y-2 cursor-default`}
-                data-start="0"
-                data-end={typeof stat.value === 'number' ? stat.value : 0}
-                data-increment={stat.increment}
-                data-speed={stat.speed}
+                className={`animate-on-scroll stagger-${idx + 1} bg-white rounded-2xl p-6 text-center border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-200 hover:-translate-y-1 transition-all duration-300 group cursor-default`}
               >
-                <div className={`absolute top-0 left-0 w-full h-1 bg-${stat.color}-500 transition-all duration-500 group-hover:h-1.5`}></div>
-                <div className={`absolute -right-6 -top-6 w-24 h-24 bg-${stat.color}-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:scale-150`}></div>
-                <div className="relative z-10">
-                  <div className={`counter-value text-3xl font-bold text-slate-900 mb-1 transition-transform duration-300 group-hover:scale-110 origin-center`}>0</div>
-                  <div className={`text-sm font-medium text-slate-500 uppercase tracking-wide transition-colors duration-300 group-hover:text-${stat.color}-600`}>{stat.label}</div>
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-100 transition-colors">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={stat.icon} />
+                  </svg>
                 </div>
+                <div className="text-3xl font-bold text-slate-900 mb-1">
+                  {stat.isText ? stat.value : stat.value}
+                </div>
+                <div className="text-sm text-slate-500 font-medium">{stat.label}</div>
               </div>
             ))}
-
-            {/* Time Period Box */}
-            <div className="bg-white rounded-2xl p-6 text-center border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-500 relative overflow-hidden group hover:-translate-y-2 cursor-default">
-              <div className="absolute top-0 left-0 w-full h-1 bg-purple-500 transition-all duration-500 group-hover:h-1.5"></div>
-              <div className="absolute -right-6 -top-6 w-24 h-24 bg-purple-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:scale-150"></div>
-              <div className="relative z-10">
-                <div className="text-3xl font-bold text-slate-900 mb-1 transition-transform duration-300 group-hover:scale-110 origin-center">2014-2025</div>
-                <div className="text-sm font-medium text-slate-500 uppercase tracking-wide transition-colors duration-300 group-hover:text-purple-600">Time Period</div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
-
-      {/* About Ministry & Vision/Mission Section */}
-      <section id="about" className="py-12 pb-72 bg-gradient-to-b from-white to-blue-50/30 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20 pointer-events-none">
-          <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-blue-300 blur-3xl animate-pulse"></div>
-          <div className="absolute top-1/2 right-0 w-96 h-96 rounded-full bg-indigo-300 blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }}></div>
-          <div className="absolute bottom-0 left-1/2 w-96 h-96 rounded-full bg-blue-200 blur-3xl animate-pulse" style={{ animationDelay: '3s' }}></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-
-            {/* About Ministry/Department Component */}
-            <div className="space-y-6 animate-fade-in-up">
-              <div className="inline-block mb-4">
-                <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">About Ministry</h2>
-                <div className="h-1.5 w-24 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full"></div>
-              </div>
-
-              <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 p-8 relative overflow-hidden group hover:shadow-[0_20px_50px_rgba(8,_112,_184,_0.1)] transition-all duration-500">
-                <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110 duration-700"></div>
-
-                <div className="relative z-10 space-y-6 text-lg text-slate-600 leading-relaxed font-light">
-                  <p>
-                    We are dedicated to serving the public by advancing <strong className="text-slate-900 font-semibold">coal research and development</strong> initiatives in India.
-                    The Ministry of Coal is committed to sustainable mining practices, environmental protection, and
-                    technological innovation in the coal sector.
-                  </p>
-                  <p>
-                    Our team of experienced professionals focuses on promoting clean coal technologies,
-                    carbon capture and storage solutions, and supporting research initiatives that contribute to
-                    India's energy security while maintaining environmental standards.
-                  </p>
-                  <p>
-                    We believe in transparency, innovation, and excellence in all our operations.
-                    The <span className="text-blue-600 font-bold">NaCCER portal</span> represents our commitment to streamlined research management and
-                    collaborative scientific advancement.
-                  </p>
-                </div>
-
-                <div className="mt-8 pt-6 border-t border-slate-100">
-                  <a href="https://www.coal.nic.in" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-blue-600 font-bold hover:text-blue-800 transition-colors group/link">
-                    Visit Official Website
-                    <svg className="w-5 h-5 transform group-hover/link:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Vision & Mission Component */}
-            <div className="space-y-6">
-              {/* Vision Card - Flip */}
-              <div className="h-[300px] cursor-pointer [perspective:1200px] group animate-fade-in-up animation-delay-200">
-                <div className="relative w-full h-full duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] shadow-xl hover:shadow-2xl rounded-3xl transition-shadow">
-                  {/* FRONT */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl flex flex-col items-center justify-center [backface-visibility:hidden] p-8 text-white overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[url('/images/noise.png')] opacity-10 mix-blend-overlay"></div>
-
-                    {/* Decorative Elements */}
-                    <div className="absolute top-8 right-8 w-20 h-20 border-2 border-white/20 rounded-full animate-pulse"></div>
-                    <div className="absolute bottom-8 left-8 w-16 h-16 border-2 border-white/20 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
-
-
-
-                    {/* Title with gradient underline */}
-                    <div className="text-center relative">
-                      <h2 className="text-5xl font-extrabold tracking-widest mb-3 drop-shadow-lg">
-                        <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent animate-gradient-x">VISION</span>
-                      </h2>
-                      <div className="h-1 w-24 mx-auto bg-gradient-to-r from-transparent via-white to-transparent rounded-full"></div>
-                    </div>
-
-                  </div>
-
-                  {/* BACK */}
-                  <div className="absolute inset-0 bg-white text-slate-800 rounded-3xl p-8 [transform:rotateY(180deg)] [backface-visibility:hidden] overflow-auto border border-slate-100 flex flex-col justify-center">
-                    <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mb-4">Our Vision</h3>
-                    <p className="text-lg font-medium mb-6 text-slate-700 leading-snug">
-                      To secure availability of coal in an eco-friendly, sustainable and cost-effective manner.
-                    </p>
-                    <ul className="space-y-4 text-sm text-slate-600">
-                      <li className="flex items-start group/item">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
-                        <span>Augment production through advanced clean coal technologies.</span>
-                      </li>
-                      <li className="flex items-start group/item">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
-                        <span>Enhance resource base by increasing exploration efforts.</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mission Card - Flip */}
-              <div className="h-[300px] cursor-pointer [perspective:1200px] group animate-fade-in-up animation-delay-400">
-                <div className="relative w-full h-full duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] shadow-xl hover:shadow-2xl rounded-3xl transition-shadow">
-                  {/* FRONT */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-3xl flex flex-col items-center justify-center [backface-visibility:hidden] p-8 text-white overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[url('/images/noise.png')] opacity-10 mix-blend-overlay"></div>
-
-                    {/* Decorative Elements */}
-                    <div className="absolute top-8 left-8 w-24 h-24 border-2 border-white/20 rounded-lg rotate-12 animate-pulse"></div>
-                    <div className="absolute bottom-8 right-8 w-20 h-20 border-2 border-white/20 rounded-lg -rotate-12 animate-pulse" style={{ animationDelay: '1s' }}></div>
-
-
-                    {/* Title with gradient underline */}
-                    <div className="text-center relative">
-                      <h2 className="text-5xl font-extrabold tracking-widest mb-3 drop-shadow-lg">
-                        <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent animate-gradient-x">MISSION</span>
-                      </h2>
-                      <div className="h-1 w-24 mx-auto bg-gradient-to-r from-transparent via-white to-transparent rounded-full"></div>
-                    </div>
-
-                  </div>
-
-                  {/* BACK */}
-                  <div className="absolute inset-0 bg-white text-slate-800 rounded-3xl p-8 [transform:rotateY(180deg)] [backface-visibility:hidden] overflow-auto border border-slate-100 flex flex-col justify-center">
-                    <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600 mb-4">Our Mission</h3>
-                    <ul className="space-y-4 text-sm text-slate-600 mb-6">
-                      <li className="flex items-start group/item">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
-                        <span>Adopt clean coal technologies for safety & sustainability.</span>
-                      </li>
-                      <li className="flex items-start group/item">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0 group-hover/item:scale-125 transition-transform"></span>
-                        <span>Develop infrastructure for efficient coal evacuation.</span>
-                      </li>
-                    </ul>
-                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                      <p className="text-xs font-bold text-blue-800 text-center uppercase tracking-wide">
-                        Driving sustainable development through innovation
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* Our Ministers Section with Overlapping Banner */}
-      <section id="leadership" className="pt-60 pb-12 bg-slate-900 relative">
-
-        {/* Overlapping Coal Mining Carousel */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-4 z-30">
-          <div className="relative aspect-[21/9] overflow-hidden rounded-3xl shadow-2xl border border-slate-700 bg-slate-900 group">
-
-            {/* Slides */}
-            {miningSlides.map((slide, index) => (
-              <div
-                key={index}
-                className={`absolute inset-0 transition-all duration-1000 ease-in-out transform ${index === currentMiningSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
-                  }`}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent z-10"></div>
-                <img
-                  src={slide.img}
-                  alt={slide.title}
-                  className="w-full h-full object-cover"
-                />
-
-                {/* Content Overlay */}
-                <div className={`absolute top-0 left-0 h-full w-full md:w-2/3 p-8 md:p-16 flex flex-col justify-center z-20 transform transition-all duration-700 delay-300 ${index === currentMiningSlide ? 'translate-x-0 opacity-100' : '-translate-x-10 opacity-0'
-                  }`}>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase tracking-widest w-fit mb-4">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-                    Featured Highlight
-                  </div>
-                  <h3 className="text-3xl md:text-5xl font-bold text-white mb-4 leading-tight drop-shadow-lg">
-                    {slide.title}
-                  </h3>
-                  <p className="text-slate-300 text-lg md:text-xl leading-relaxed max-w-xl drop-shadow-md">
-                    {slide.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-
-            {/* Navigation Arrows */}
-            <button
-              onClick={() => setCurrentMiningSlide((prev) => (prev - 1 + miningSlides.length) % miningSlides.length)}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all hover:scale-110 border border-white/20 group/nav"
-            >
-              <svg className="w-6 h-6 transform group-hover/nav:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            </button>
-
-            <button
-              onClick={() => setCurrentMiningSlide((prev) => (prev + 1) % miningSlides.length)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all hover:scale-110 border border-white/20 group/nav"
-            >
-              <svg className="w-6 h-6 transform group-hover/nav:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-            </button>
-
-            {/* Dots Indicator */}
-            <div className="absolute bottom-6 right-8 z-30 flex gap-2">
-              {miningSlides.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentMiningSlide(idx)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentMiningSlide ? 'w-8 bg-blue-500 shadow-lg shadow-blue-500/50' : 'w-2 bg-white/50 hover:bg-white'
-                    }`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Background Pattern Container (Overflow Hidden) */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px]"></div>
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-blue-600 blur-[100px] opacity-20 animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-indigo-600 blur-[100px] opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 relative z-10">
-          <div className="text-center mb-8">
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">Leadership</h2>
-            <p className="text-slate-400 max-w-2xl mx-auto text-lg">Guiding the nation towards energy security and sustainable development.</p>
-          </div>
-
-          <div className="grid lg:grid-cols-12 gap-6 items-center">
-            {/* Prime Minister - Center/Left Focus */}
-            <div className="lg:col-span-5 text-center lg:text-left">
-              <div className="relative inline-block group">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full blur opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
-                <div className="w-72 h-72 bg-slate-800 rounded-full p-2 relative z-10 mx-auto lg:mx-0">
-                  <img
-                    src="/images/narendra modi.jpg"
-                    alt="Hon'ble Prime Minister Shri Narendra Modi"
-                    className="w-full h-full object-cover rounded-full border-4 border-slate-700 shadow-2xl"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-8 space-y-2">
-                <h3 className="text-3xl font-bold text-white">Shri Narendra Modi</h3>
-                <p className="text-blue-400 font-medium text-lg uppercase tracking-wider">Hon'ble Prime Minister of India</p>
-              </div>
-
-              <div className="mt-6 flex items-center justify-center lg:justify-start gap-4">
-                <a href="https://www.pmindia.gov.in/en/" target="_blank" rel="noopener noreferrer" className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-medium transition-colors backdrop-blur-sm border border-white/10">
-                  View Portfolio
-                </a>
-                <div className="flex gap-2">
-                  {[
-                    { icon: "M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z", link: "https://x.com/pmoindia" },
-                    { icon: "M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z", link: "https://www.facebook.com/PMOIndia" }
-                  ].map((social, idx) => (
-                    <a key={idx} href={social.link} target="_blank" rel="noopener noreferrer" className="w-9 h-9 bg-white/5 hover:bg-blue-500 rounded-full flex items-center justify-center text-slate-300 hover:text-white transition-all duration-300">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d={social.icon} />
-                      </svg>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Other Ministers - Cards */}
-            <div className="lg:col-span-7 space-y-6">
-              {[
-                { name: "Shri G. Kishan Reddy", role: "Hon'ble Union Minister", dept: "Coal and Mines, Govt. of India", img: "/images/kishan reddy.jpg", link: "https://www.coal.nic.in/index.php/minister/shri-g-kishan-reddy" },
-                { name: "Shri Satish Chandra Dubey", role: "Hon'ble Minister of State", dept: "Coal and Mines, Govt. of India", img: "/images/satish chandra dubey.jpg", link: "https://www.coal.nic.in/index.php/minister/shri-satish-chandra-dubey" }
-              ].map((minister, idx) => (
-                <a key={idx} href={minister.link} target="_blank" rel="noopener noreferrer" className="block group">
-                  <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex items-center gap-6 hover:bg-slate-800 transition-all duration-300 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10">
-                    <div className="w-24 h-24 shrink-0">
-                      <img
-                        src={minister.img}
-                        alt={minister.name}
-                        className="w-full h-full object-cover rounded-xl shadow-lg group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                    <div>
-                      <p className="text-blue-400 font-medium text-sm mb-1">{minister.role}</p>
-                      <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-300 transition-colors">{minister.name}</h3>
-                      <p className="text-slate-400 text-sm">{minister.dept}</p>
-                    </div>
-                    <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 9. Timeline of Achievements */}
-      <div className="bg-gradient-to-b from-slate-50 to-white py-12">
-        <div className="container mx-auto px-4">
-          <TimelineChart />
-        </div>
-      </div>
-
-
 
       {/* Gallery Section */}
-      <section className="py-12 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center md:items-end mb-8 gap-4">
-            <div className="text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest mb-4">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Gallery
-              </div>
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">Media Gallery</h2>
-              <p className="text-slate-600 max-w-xl text-lg">Highlights from recent events, conferences, and technological milestones in the coal sector.</p>
+      <section className="py-14 bg-white relative">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f8fafc_1px,transparent_1px),linear-gradient(to_bottom,#f8fafc_1px,transparent_1px)] [background-size:4rem_4rem] opacity-60"></div>
+        
+        <div className="max-w-7xl mx-auto px-4 relative z-10">
+          {/* Consistent Header */}
+          <div className="mb-10 animate-on-scroll">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <div className="h-px w-12 bg-gradient-to-r from-transparent to-blue-600"></div>
+              <span className="text-blue-600 font-semibold text-sm tracking-wide uppercase">Gallery</span>
+              <div className="h-px w-12 bg-gradient-to-l from-transparent to-blue-600"></div>
             </div>
-            <a href="#" className="text-blue-600 font-bold hover:text-blue-800 transition-all flex items-center gap-2 group hover:gap-3">
-              View All Gallery
-              <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </a>
+            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 text-center mb-4">Media Gallery</h2>
+            <p className="text-slate-500 text-center max-w-2xl mx-auto">
+              Highlights from recent events, conferences, and technological milestones in the coal sector.
+            </p>
+            <div className="flex justify-center mt-6">
+              <div className="h-1 w-20 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 rounded-full"></div>
+            </div>
           </div>
 
+          {/* Mining Operations Slideshow */}
+          <div className="mb-12">
+            <div className="relative aspect-[21/9] overflow-hidden rounded-2xl shadow-lg border border-slate-200 bg-slate-900">
+              {miningSlides.map((slide, index) => (
+                <div
+                  key={index}
+                  className={`absolute inset-0 transition-all duration-700 ${index === currentMiningSlide ? 'opacity-100' : 'opacity-0'}`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent z-10"></div>
+                  <img
+                    src={slide.img}
+                    alt={slide.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className={`absolute top-0 left-0 h-full w-full md:w-2/3 p-8 md:p-12 flex flex-col justify-center z-20 ${index === currentMiningSlide ? 'opacity-100' : 'opacity-0'}`}>
+                    <span className="text-blue-400 text-xs font-semibold uppercase tracking-wide mb-2">Featured</span>
+                    <h3 className="text-xl md:text-3xl font-bold text-white mb-2 leading-tight">{slide.title}</h3>
+                    <p className="text-slate-300 text-sm md:text-base leading-relaxed max-w-lg">{slide.description}</p>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => setCurrentMiningSlide((prev) => (prev - 1 + miningSlides.length) % miningSlides.length)}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-white/10 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-all border border-white/20"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <button
+                onClick={() => setCurrentMiningSlide((prev) => (prev + 1) % miningSlides.length)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-white/10 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-all border border-white/20"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+              <div className="absolute bottom-4 right-6 z-30 flex gap-1.5">
+                {miningSlides.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentMiningSlide(idx)}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentMiningSlide ? 'w-6 bg-blue-500' : 'w-1.5 bg-white/50 hover:bg-white'}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
               { img: "/images/gallery1.jpeg", title: "Establishment of Geo-thermal energy", date: "SCCL held at Sri Ram Institute on 8/2/2022", link: "https://scienceandtech.cmpdi.co.in/review_meeting_on_geothermal_energy_sccl.php" },
@@ -1273,7 +1382,7 @@ export default function Home() {
               { img: "/images/gallery5.jpg", title: "Sustainable Development", date: "Building a Greener, Smarter Future", link: "https://scienceandtech.cmpdi.co.in/sustainable_development-EE-44_photographs.php" },
               { img: "/images/gallery6.jpg", title: "Online Washability Analyzer", date: "Real-Time Coal Washability Monitoring", link: "https://scienceandtech.cmpdi.co.in/online_washibility_analyzer-CP-47_photographs.php" }
             ].map((item, idx) => (
-              <a key={idx} href={item.link} target="_blank" rel="noopener noreferrer" className="group relative block h-80 rounded-2xl overflow-hidden shadow-lg cursor-pointer">
+              <a key={idx} href={item.link} target="_blank" rel="noopener noreferrer" className={`animate-on-scroll-scale stagger-${(idx % 3) + 1} group relative block h-72 rounded-xl overflow-hidden shadow-md hover:shadow-2xl cursor-pointer transition-shadow duration-500`}>
                 {/* Background Image */}
                 <div
                   className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
@@ -1281,19 +1390,19 @@ export default function Home() {
                 ></div>
 
                 {/* Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-70 group-hover:opacity-90 transition-opacity duration-500"></div>
 
                 {/* Content */}
-                <div className="absolute inset-0 p-6 flex flex-col justify-end transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                  <div className="transform opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-4 group-hover:translate-y-0 mb-2">
-                    <span className="inline-block px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full uppercase tracking-wider">Event</span>
+                <div className="absolute inset-0 p-5 flex flex-col justify-end">
+                  <div className="transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                    <span className="inline-block px-2.5 py-1 bg-blue-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">Event</span>
+                    <h3 className="text-lg font-bold text-white mb-1 leading-tight group-hover:text-blue-200 transition-colors duration-300">{item.title}</h3>
+                    <p className="text-slate-300 text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">{item.date}</p>
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-2 leading-tight group-hover:text-blue-200 transition-colors">{item.title}</h3>
-                  <p className="text-slate-300 text-sm line-clamp-2 mb-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">{item.date}</p>
 
-                  <div className="flex items-center gap-2 text-white text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
+                  <div className="flex items-center gap-2 text-white text-sm font-semibold mt-3 opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-500 delay-150">
                     View Details
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                     </svg>
                   </div>
@@ -1301,8 +1410,19 @@ export default function Home() {
               </a>
             ))}
           </div>
+          
+          {/* View All Link */}
+          <div className="mt-10 text-center animate-on-scroll">
+            <a href="#" className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-full transition-all duration-300 group">
+              View Complete Gallery
+              <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </a>
+          </div>
         </div>
       </section>
+
       <Footer />
     </div >
   );

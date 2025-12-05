@@ -7,7 +7,8 @@ import LoadingScreen from "../../components/LoadingScreen";
 import apiClient from "../../utils/api";
 import ExpertDashboardLayout from "./Expert/Layout/ExpertDashboardLayout";
 import ExpertHome from "./Expert/Sections/ExpertHome";
-import ExpertProposals from "./Expert/Sections/ExpertProposals";
+import ExpertProposalsSection from "./Expert/Sections/ExpertProposalsSection";
+import MyReviewsSection from "./Expert/Sections/MyReviewsSection";
 
 // Placeholder components for sections not yet implemented
 const PlaceholderSection = ({ title }) => (
@@ -32,7 +33,8 @@ function ExpertDashboardContent() {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/proposals');
+      // Fetch proposals assigned to the expert
+      const response = await apiClient.get('/api/proposals/assigned-to-me');
       const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
       setProposals(Array.isArray(proposalData) ? proposalData : []);
     } catch (error) {
@@ -47,15 +49,21 @@ function ExpertDashboardContent() {
   const stats = {
     totalAssigned: proposals.length,
     pendingReviews: proposals.filter(p => {
-      const assignment = p.assignedReviewers?.find(ar => ar.reviewer === user?._id);
-      return assignment?.status === 'PENDING' || assignment?.status === 'IN_PROGRESS';
+      const assignment = p.assignedReviewers?.find(ar => 
+        ar.reviewer === user?._id || ar.reviewer?._id === user?._id
+      );
+      return !assignment?.status || assignment?.status === 'PENDING' || assignment?.status === 'IN_PROGRESS';
     }).length,
     reviewsSubmitted: proposals.filter(p => {
-      const assignment = p.assignedReviewers?.find(ar => ar.reviewer === user?._id);
+      const assignment = p.assignedReviewers?.find(ar => 
+        ar.reviewer === user?._id || ar.reviewer?._id === user?._id
+      );
       return assignment?.status === 'COMPLETED';
     }).length,
     overdue: proposals.filter(p => {
-      const assignment = p.assignedReviewers?.find(ar => ar.reviewer === user?._id);
+      const assignment = p.assignedReviewers?.find(ar => 
+        ar.reviewer === user?._id || ar.reviewer?._id === user?._id
+      );
       if (!assignment?.dueDate) return false;
       return new Date(assignment.dueDate) < new Date() && assignment.status !== 'COMPLETED';
     }).length
@@ -74,9 +82,9 @@ function ExpertDashboardContent() {
           case 'overview':
               return <ExpertHome stats={stats} theme={theme} proposals={proposals} user={user} onViewCalendar={() => setShowCalendar(true)} />;
           case 'proposals':
-              return <ExpertProposals proposals={proposals} user={user} theme={theme} />;
+              return <ExpertProposalsSection user={user} theme={theme} />;
           case 'reviews':
-              return <PlaceholderSection title="My Reviews" />;
+              return <MyReviewsSection user={user} theme={theme} />;
           case 'history':
               return <PlaceholderSection title="History" />;
           default:

@@ -103,7 +103,7 @@ export default function Profile() {
             {user.fullName?.charAt(0)?.toUpperCase()}
           </div>
           <h2 className="text-xl font-bold mb-1">{user.fullName || 'User Name'}</h2>
-          <p className="text-gray-400 text-sm">{user.designation || 'Project Manager'}</p>
+          <p className="text-slate-400 text-sm">{user.designation || 'Project Manager'}</p>
           <button
             onClick={() => setIsEditing(!isEditing)}
             className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all"
@@ -115,33 +115,33 @@ export default function Profile() {
         {/* Info Section */}
         <div className="space-y-6 flex-1">
           <div>
-            <h3 className="text-xs text-gray-400 uppercase tracking-wider mb-4">Info</h3>
+            <h3 className="text-xs text-slate-400 uppercase tracking-wider mb-4">Info</h3>
             <div className="space-y-3">
               <div>
-                <p className="text-xs text-gray-500 mb-1">EMAIL</p>
-                <p className="text-sm text-gray-300">{user.email}</p>
+                <p className="text-xs text-slate-500 mb-1">EMAIL</p>
+                <p className="text-sm text-slate-300">{user.email}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">PHONE</p>
-                <p className="text-sm text-gray-300">{user.phoneNumber || '+123-4567-8900'}</p>
+                <p className="text-xs text-slate-500 mb-1">PHONE</p>
+                <p className="text-sm text-slate-300">{user.phoneNumber || '+123-4567-8900'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">LOCATION</p>
-                <p className="text-sm text-gray-300">{user.address?.city || 'New York, NY'}</p>
+                <p className="text-xs text-slate-500 mb-1">LOCATION</p>
+                <p className="text-sm text-slate-300">{user.address?.city || 'New York, NY'}</p>
               </div>
             </div>
           </div>
 
           {/* Favorites Section */}
           <div>
-            <h3 className="text-xs text-gray-400 uppercase tracking-wider mb-4">Favorites</h3>
+            <h3 className="text-xs text-slate-400 uppercase tracking-wider mb-4">Favorites</h3>
             <div className="space-y-3">
               {['Research Team', 'Admin Panel', 'Analytics'].map((item, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500"></div>
                   <div>
                     <p className="text-sm font-medium">{item}</p>
-                    <p className="text-xs text-gray-500">Quick Access</p>
+                    <p className="text-xs text-slate-500">Quick Access</p>
                   </div>
                 </div>
               ))}
@@ -157,19 +157,19 @@ export default function Profile() {
           <div className="flex gap-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`text-sm font-semibold pb-2 border-b-2 transition-colors ${activeTab === 'overview' ? 'text-blue-600 border-blue-600' : 'text-gray-500 border-transparent'}`}
+              className={`text-sm font-semibold pb-2 border-b-2 transition-colors ${activeTab === 'overview' ? 'text-blue-600 border-blue-600' : 'text-slate-500 border-transparent'}`}
             >
               Overview
             </button>
             <button
               onClick={() => setActiveTab('activity')}
-              className={`text-sm font-semibold pb-2 border-b-2 transition-colors ${activeTab === 'activity' ? 'text-blue-600 border-blue-600' : 'text-gray-500 border-transparent'}`}
+              className={`text-sm font-semibold pb-2 border-b-2 transition-colors ${activeTab === 'activity' ? 'text-blue-600 border-blue-600' : 'text-slate-500 border-transparent'}`}
             >
               Activity
             </button>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -420,7 +420,7 @@ export default function Profile() {
               <h2 className="text-2xl font-bold text-slate-900">Edit Profile</h2>
               <button
                 onClick={() => setIsEditing(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-slate-500 hover:text-slate-700"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -472,7 +472,7 @@ export default function Profile() {
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 rounded-lg transition-colors"
+                  className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-3 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>

@@ -125,6 +125,17 @@ const proposalSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: null
   },
+  // Yjs document state for real-time collaboration (base64 encoded)
+  yjsState: {
+    type: String,
+    default: null
+  },
+  // Inline discussions (comments and suggestions) from Plate.js editor
+  // Stored per form: { formi: { discussions: [...], suggestions: [...] } }
+  inlineDiscussions: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
   supportingDocs: [{
     formName: String,
     fileName: String,
@@ -157,6 +168,12 @@ const proposalSchema = new mongoose.Schema({
     },
     notes: String
   }],
+  // Track if expert review was skipped during CMPDI review
+  // This is set when CMPDI directly accepts/rejects without sending to expert review
+  expertReviewSkipped: {
+    type: Boolean,
+    default: null // null = not yet determined, true = skipped, false = expert review was conducted
+  },
   aiReports: [{
     version: Number,
     reportUrl: String,
@@ -165,6 +182,14 @@ const proposalSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  metadata: {
+    lastYjsSync: Date,
+    collaborationType: {
+      type: String,
+      enum: ['socket', 'yjs', null],
+      default: null
+    }
+  },
   isDeleted: {
     type: Boolean,
     default: false
@@ -174,8 +199,8 @@ const proposalSchema = new mongoose.Schema({
 });
 
 // Index for better query performance
+// Note: proposalCode index is automatically created by unique:true in schema definition
 proposalSchema.index({ createdBy: 1, status: 1 });
-proposalSchema.index({ proposalCode: 1 });
 proposalSchema.index({ 'assignedReviewers.reviewer': 1 });
 proposalSchema.index({ 'collaborators.userId': 1 });
 

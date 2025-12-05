@@ -5,15 +5,14 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import apiClient from '../../../utils/api';
-import { Moon, Sun, MoonStar } from 'lucide-react';
+import { Moon, Sun, MoonStar, ArrowLeft, Clock, Users, Eye, ClipboardCheck, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Import modular components
 import {
   TrackHeader,
   TrackQuickStats,
   TrackMilestones,
-  TrackExpertOpinions,
-  TrackTimeline
+  TrackExpertOpinions
 } from '../../../components/track-page';
 
 function TrackProposalContent() {
@@ -61,7 +60,6 @@ function TrackProposalContent() {
   const bgClass = isDarkest ? 'bg-black' : isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-50 to-slate-100';
   const cardBg = isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
   const textColor = isDark ? 'text-white' : 'text-black';
-  const subTextColor = isDark ? 'text-slate-400' : 'text-black';
   const borderColor = isDarkest ? 'border-neutral-800' : isDark ? 'border-slate-700' : 'border-slate-200';
   const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
   
@@ -71,20 +69,20 @@ function TrackProposalContent() {
   const [opinionStats, setOpinionStats] = useState({ count: 0, averageRating: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [fabExpanded, setFabExpanded] = useState(true);
   
   // Active section for scrolling
   const [activeSection, setActiveSection] = useState(null);
   
-  // Section open states
-  const [milestonesOpen, setMilestonesOpen] = useState(false);
+  // Section open states - milestones open by default
+  const [milestonesOpen, setMilestonesOpen] = useState(true);
   const [opinionsOpen, setOpinionsOpen] = useState(false);
-  const [timelineOpen, setTimelineOpen] = useState(false);
+  
+  // FAB menu state
+  const [fabExpanded, setFabExpanded] = useState(true);
 
   // Refs for scrolling
   const milestonesRef = useRef(null);
   const opinionsRef = useRef(null);
-  const timelineRef = useRef(null);
 
   // Role checks
   const userRoles = user?.roles || [];
@@ -101,8 +99,10 @@ function TrackProposalContent() {
     ['EXPERT_REVIEWER', 'CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER', 'SUPER_ADMIN'].includes(role)
   );
 
-  // Check if user can collaborate
-  const canAccessCollaborate = isPI || isCI;
+  // Check if proposal is rejected
+  const isRejected = ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED', 'AI_REJECTED'].includes(proposal?.status);
+  // Collaborate link available to everyone except for rejected proposals
+  const canAccessCollaborate = !isRejected;
 
   // Load proposal data
   useEffect(() => {
@@ -159,34 +159,57 @@ function TrackProposalContent() {
   };
 
   const handleStageClick = () => {
-    setActiveSection('timeline');
-    setTimelineOpen(true);
+    // Current Stage card now scrolls to milestones section
+    setActiveSection('milestones');
+    setMilestonesOpen(true);
     setTimeout(() => {
-      timelineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      milestonesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   };
 
-  // Calculate milestones
+  // Calculate milestones - Updated workflow with 6 stages
   const calculateMilestones = () => {
     if (!proposal?.status) return { completed: 0, total: 6 };
     
-    const milestoneStatuses = {
-      'AI_VALIDATION': ['CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'],
-      'CMPDI_REVIEW': ['CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'],
-      'EXPERT_REVIEW': ['CMPDI_ACCEPTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'],
-      'CMPDI_DECISION': ['TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'],
-      'TSSRC_REVIEW': ['TSSRC_ACCEPTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'],
-      'SSRC_REVIEW': ['SSRC_ACCEPTED', 'SSRC_REJECTED']
-    };
-
+    const status = proposal.status;
+    const timeline = proposal.timeline || [];
+    const timelineStatuses = timeline.map(t => t.status);
+    
+    // Check if expert review was conducted or skipped
+    const hasExpertReview = timelineStatuses.includes('CMPDI_EXPERT_REVIEW') || status === 'CMPDI_EXPERT_REVIEW';
+    const expertWasSkipped = proposal.expertReviewSkipped === true || 
+      (!hasExpertReview && ['CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'].includes(status));
+    
+    // Stage 1: AI Evaluation - completed if moved past AI stage
+    const aiCompleted = ['CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'].includes(status);
+    
+    // Stage 2: CMPDI Review - completed if moved to expert review or decision made
+    const cmpdiReviewCompleted = ['CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'].includes(status);
+    
+    // Stage 3: Expert Review - completed if expert review done, skipped if not
+    const expertReviewCompleted = hasExpertReview && ['CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'].includes(status);
+    
+    // Stage 4: CMPDI Decision - completed if decision made
+    const cmpdiDecisionCompleted = ['CMPDI_ACCEPTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'].includes(status);
+    
+    // Stage 5: TSSRC Review - completed if moved to SSRC or accepted by TSSRC
+    const tssrcCompleted = ['TSSRC_ACCEPTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'].includes(status);
+    
+    // Stage 6: SSRC Review - completed if finally accepted or rejected by SSRC
+    const ssrcCompleted = ['SSRC_ACCEPTED', 'SSRC_REJECTED'].includes(status);
+    
     let completed = 0;
-    Object.values(milestoneStatuses).forEach(statuses => {
-      if (statuses.includes(proposal.status)) {
-        completed++;
-      }
-    });
+    if (aiCompleted) completed++;
+    if (cmpdiReviewCompleted) completed++;
+    if (expertReviewCompleted) completed++; // Only count if expert review actually happened
+    if (cmpdiDecisionCompleted) completed++;
+    if (tssrcCompleted) completed++;
+    if (ssrcCompleted) completed++;
 
-    return { completed, total: 6 };
+    // Total is 6 stages, but if expert review was skipped, effective total is 5
+    const total = expertWasSkipped ? 5 : 6;
+
+    return { completed, total };
   };
 
   // Get current stage name
@@ -196,6 +219,7 @@ function TrackProposalContent() {
     const stageMap = {
       'DRAFT': 'Draft',
       'AI_EVALUATION_PENDING': 'AI Evaluation',
+      'AI_REJECTED': 'AI Rejected',
       'CMPDI_REVIEW': 'CMPDI Review',
       'CMPDI_EXPERT_REVIEW': 'Expert Review',
       'CMPDI_ACCEPTED': 'CMPDI Accepted',
@@ -275,37 +299,80 @@ function TrackProposalContent() {
 
   const milestones = calculateMilestones();
 
-  // Determine rejected stage index (if any)
-  const getRejectedStageIndex = () => {
-    if (!proposal?.status) return -1;
-    const rejectionMap = {
-      'AI_REJECTED': 0,
-      'CMPDI_REJECTED': 3, // Decision stage
-      'TSSRC_REJECTED': 4,
-      'SSRC_REJECTED': 5
-    };
-    return rejectionMap[proposal.status] ?? -1;
+  // Define quick actions based on role
+  const getQuickActions = () => {
+    const actions = [];
+
+    // Versions - available to all
+    actions.push({
+      label: 'Versions',
+      description: 'View version history',
+      icon: <Clock className="w-5 h-5" />,
+      onClick: () => router.push(`/proposal/view/${id}?tab=versions`)
+    });
+
+    // Collaborate - available to all except for rejected proposals
+    if (canAccessCollaborate) {
+      actions.push({
+        label: 'Collaborate',
+        description: 'Work with team',
+        icon: <Users className="w-5 h-5" />,
+        onClick: () => router.push(`/proposal/collaborate/${id}`)
+      });
+    }
+
+    // View - available to all
+    actions.push({
+      label: 'View',
+      description: 'View proposal',
+      icon: <Eye className="w-5 h-5" />,
+      onClick: () => router.push(`/proposal/view/${id}`)
+    });
+
+    // Review - only for reviewers and committee members
+    if (isReviewer) {
+      actions.push({
+        label: 'Review',
+        description: 'Submit review',
+        icon: <ClipboardCheck className="w-5 h-5" />,
+        onClick: () => router.push(`/proposal/review/${id}`)
+      });
+    }
+
+    return actions;
   };
 
-  const rejectedStageIndex = getRejectedStageIndex();
-  const isRejected = rejectedStageIndex >= 0;
+  const quickActions = getQuickActions();
 
   return (
     <div className={`min-h-screen ${bgClass}`}>
-      {/* Theme Toggle Button */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors`}
-        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
-      >
-        {theme === 'light' ? (
-          <Moon className={`w-5 h-5 ${textColor}`} />
-        ) : theme === 'dark' ? (
-          <MoonStar className={`w-5 h-5 ${textColor}`} />
-        ) : (
-          <Sun className={`w-5 h-5 ${textColor}`} />
-        )}
-      </button>
+      {/* Fixed Top Bar - Back Button (left) and Theme Toggle (right) */}
+      <div className="fixed top-0 left-0 right-0 z-50 px-4 py-3 flex items-center justify-between pointer-events-none">
+        {/* Back to Dashboard Button - Expands on hover */}
+        <button
+          onClick={() => router.push('/dashboard')}
+          className={`group flex items-center gap-0 p-2 ${cardBg} border rounded-lg shadow-lg ${hoverBg} transition-all duration-300 pointer-events-auto overflow-hidden`}
+          title="Back to Dashboard"
+        >
+          <ArrowLeft className={`w-5 h-5 ${textColor} flex-shrink-0`} />
+          <span className={`text-sm font-medium ${textColor} max-w-0 group-hover:max-w-40 group-hover:ml-2 group-hover:pr-1 overflow-hidden whitespace-nowrap transition-all duration-300`}>Back to Dashboard</span>
+        </button>
+
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          className={`p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors pointer-events-auto`}
+          title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
+        >
+          {theme === 'light' ? (
+            <Moon className={`w-5 h-5 ${textColor}`} />
+          ) : theme === 'dark' ? (
+            <MoonStar className={`w-5 h-5 ${textColor}`} />
+          ) : (
+            <Sun className={`w-5 h-5 ${textColor}`} />
+          )}
+        </button>
+      </div>
 
       {/* Floating Action Button Panel */}
       <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40">
@@ -313,83 +380,41 @@ function TrackProposalContent() {
           {/* Toggle Button */}
           <button
             onClick={() => setFabExpanded(!fabExpanded)}
-            className={`w-full flex items-center justify-between p-3 ${hoverBg} transition-colors border-b ${borderColor}`}
+            className={`w-full flex items-center justify-between p-3 transition-colors border-b ${borderColor} ${hoverBg}`}
           >
             {fabExpanded && <span className={`text-sm font-semibold ${textColor}`}>Actions</span>}
-            <svg 
-              className={`w-5 h-5 ${textColor} transition-transform ${fabExpanded ? '' : 'mx-auto'} ${fabExpanded ? 'rotate-0' : 'rotate-180'}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
+            {fabExpanded ? (
+              <ChevronDown className={`w-5 h-5 ${textColor}`} />
+            ) : (
+              <ChevronUp className={`w-5 h-5 ${textColor} mx-auto`} />
+            )}
           </button>
 
           {/* Action Buttons */}
           <div className="p-2 space-y-1">
-            {/* Version History Button */}
-            <button
-              onClick={() => router.push(`/proposal/view/${id}?tab=versions`)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
-              title="Version History"
-            >
-              <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {fabExpanded && <span className="text-sm font-medium">Versions</span>}
-            </button>
-
-            {/* Collaborate Button */}
-            {canAccessCollaborate && (
+            {quickActions.map((action, index) => (
               <button
-                onClick={() => router.push(`/proposal/collaborate/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
-                title="Collaborate"
+                key={index}
+                onClick={action.onClick}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${hoverBg} ${textColor}`}
+                title={action.label}
               >
-                <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                {fabExpanded && <span className="text-sm font-medium">Collaborate</span>}
+                <span className="group-hover:scale-110 transition-transform">{action.icon}</span>
+                {fabExpanded && <span className="text-sm font-medium">{action.label}</span>}
               </button>
-            )}
-
-            {/* View Button */}
-            <button
-              onClick={() => router.push(`/proposal/view/${id}`)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
-              title="View Proposal"
-            >
-              <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              {fabExpanded && <span className="text-sm font-medium">View</span>}
-            </button>
-
-            {/* Review Button - Only for reviewers */}
-            {isReviewer && (
-              <button
-                onClick={() => router.push(`/proposal/review/${id}`)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl ${hoverBg} ${textColor} transition-all group ${!fabExpanded && 'justify-center'}`}
-                title="Review"
-              >
-                <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {fabExpanded && <span className="text-sm font-medium">Review</span>}
-              </button>
-            )}
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Header */}
-      <TrackHeader
-        proposalCode={proposal.proposalCode}
-        projectLeader={proposal.projectLeader}
-        status={proposal.status}
-        version={proposal.currentVersion}
+      {/* Add top padding to account for fixed header */}
+      <div className="pt-16">
+        {/* Header */}
+        <TrackHeader
+          proposalCode={proposal.proposalCode}
+          projectLeader={proposal.projectLeader}
+          status={proposal.status}
+          version={proposal.currentVersion}
         userRoles={userRoles}
         theme={theme}
       />
@@ -409,95 +434,14 @@ function TrackProposalContent() {
           theme={theme}
         />
 
-        {/* Visual Timeline Bar */}
-        <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
-          <h3 className={`text-lg font-semibold ${textColor} mb-6`}>Progress Overview</h3>
-          <div className="relative">
-            {/* Progress Bar Container */}
-            <div className="flex items-center">
-              {['AI', 'CMPDI', 'Expert', 'Decision', 'TSSRC', 'SSRC'].map((stage, index) => {
-                const isCompleted = index < milestones.completed;
-                const isActive = index === milestones.completed && !isRejected;
-                const isRejectedStage = index === rejectedStageIndex;
-                const isLast = index === 5;
-                const isPastRejection = isRejected && index > rejectedStageIndex;
-                
-                return (
-                  <div key={stage} className="flex items-center flex-1 last:flex-none">
-                    {/* Stage Marker */}
-                    <div className="flex flex-col items-center relative z-10">
-                      <div className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${
-                        isRejectedStage 
-                          ? 'bg-red-500 border-red-500' 
-                          : isCompleted 
-                            ? (isDark ? 'bg-white border-white' : 'bg-black border-black') 
-                            : isActive 
-                              ? (isDark ? 'bg-transparent border-white' : 'bg-white border-black') 
-                              : (isDark ? 'bg-transparent border-white/20' : 'bg-white border-black/20')
-                      }`}>
-                        {isRejectedStage ? (
-                          <svg className="w-full h-full text-white p-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        ) : isCompleted ? (
-                          <svg className={`w-full h-full ${isDark ? 'text-black' : 'text-white'} p-0.5`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : null}
-                      </div>
-                      <span className={`text-xs mt-2 font-medium ${
-                        isRejectedStage 
-                          ? 'text-red-500' 
-                          : isPastRejection
-                            ? (isDark ? 'text-white/20' : 'text-black/20')
-                            : isCompleted || isActive 
-                              ? textColor 
-                              : (isDark ? 'text-white/40' : 'text-black/40')
-                      }`}>
-                        {stage}
-                      </span>
-                    </div>
-                    
-                    {/* Connecting Line */}
-                    {!isLast && (
-                      <div className="flex-1 h-0.5 mx-2 -mt-5">
-                        <div className={`h-full transition-all duration-300 ${
-                          isRejectedStage 
-                            ? 'bg-red-500' 
-                            : isCompleted && !isPastRejection
-                              ? (isDark ? 'bg-white' : 'bg-black') 
-                              : (isDark ? 'bg-white/10' : 'bg-black/10')
-                        }`} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          {/* Rejection Notice */}
-          {isRejected && (
-            <div className={`mt-4 p-3 ${isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'} border rounded-lg`}>
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className={`text-sm ${textColor}`}>
-                  This proposal was rejected at the <span className="font-semibold">{['AI', 'CMPDI', 'Expert', 'Decision', 'TSSRC', 'SSRC'][rejectedStageIndex]}</span> stage.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Detailed Sections */}
+        {/* Collapsible Sections */}
         <div className="space-y-6">
           {/* Milestones Section */}
-          <div ref={milestonesRef} className="scroll-mt-8">
+          <div ref={milestonesRef} className="scroll-mt-20">
             <TrackMilestones
               proposalStatus={proposal.status}
               timeline={proposal.timeline || []}
+              expertReviewSkipped={proposal.expertReviewSkipped}
               isOpen={milestonesOpen}
               onToggle={() => {
                 setMilestonesOpen(!milestonesOpen);
@@ -508,7 +452,7 @@ function TrackProposalContent() {
           </div>
 
           {/* Expert Opinions Section */}
-          <div ref={opinionsRef} className="scroll-mt-8">
+          <div ref={opinionsRef} className="scroll-mt-20">
             <TrackExpertOpinions
               opinions={opinions}
               averageRating={opinionStats.averageRating}
@@ -520,21 +464,8 @@ function TrackProposalContent() {
               theme={theme}
             />
           </div>
-
-          {/* Timeline Section */}
-          <div ref={timelineRef} className="scroll-mt-8">
-            <TrackTimeline
-              proposalStatus={proposal.status}
-              timeline={proposal.timeline || []}
-              isOpen={timelineOpen}
-              onToggle={() => {
-                setTimelineOpen(!timelineOpen);
-                if (!timelineOpen) setActiveSection('timeline');
-              }}
-              theme={theme}
-            />
-          </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -131,14 +131,22 @@ export default function TimelineChart() {
 
   return (
     <div className="space-y-8 py-12">
-      <div className="text-center mb-10">
-        <h3 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">
-          Our Journey
+      {/* Consistent Government-Style Header */}
+      <div className="mb-12">
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="h-px w-12 bg-gradient-to-r from-transparent to-blue-600"></div>
+          <span className="text-blue-600 font-semibold text-sm tracking-wide uppercase">Milestones</span>
+          <div className="h-px w-12 bg-gradient-to-l from-transparent to-blue-600"></div>
+        </div>
+        <h3 className="text-3xl md:text-4xl font-bold text-slate-900 text-center mb-4">
+          NaCCER's Journey of Innovation
         </h3>
-        <div className="w-24 h-1.5 bg-blue-600 mx-auto rounded-full mb-4"></div>
-        <p className="text-slate-600 max-w-2xl mx-auto text-lg font-light">
-          Key milestones in NaCCER's evolution towards excellence in coal research.
+        <p className="text-slate-600 text-center max-w-2xl mx-auto text-lg">
+          A decade of advancing coal research through technology, transparency, and transformative initiatives.
         </p>
+        <div className="flex justify-center mt-6">
+          <div className="h-1 w-20 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 rounded-full"></div>
+        </div>
       </div>
 
       <div

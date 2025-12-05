@@ -191,7 +191,7 @@ export const replyToComment = asyncHandler(async (req, res) => {
 
 /**
  * @route   PUT /api/comments/:commentId/resolve
- * @desc    Mark comment as resolved
+ * @desc    Mark comment as resolved (only the comment author can resolve)
  * @access  Private
  */
 export const resolveComment = asyncHandler(async (req, res) => {
@@ -201,6 +201,14 @@ export const resolveComment = asyncHandler(async (req, res) => {
     return res.status(404).json({
       success: false,
       message: 'Comment not found'
+    });
+  }
+
+  // Only the comment author can resolve the comment
+  if (comment.author.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only the comment author can resolve this comment'
     });
   }
 

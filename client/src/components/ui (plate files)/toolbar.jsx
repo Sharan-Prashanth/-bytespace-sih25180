@@ -96,7 +96,51 @@ const dropdownArrowVariants = cva(cn(
   },
 });
 
-export const ToolbarButton = withTooltip(function ToolbarButton({
+// Local TooltipContent for toolbar (avoids circular import issues)
+function TooltipContent({
+  children,
+  className,
+  sideOffset = 4,
+  ...props
+}) {
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        className={cn(
+          'z-50 w-fit origin-(--radix-tooltip-content-transform-origin) rounded-md bg-primary px-3 py-1.5 text-xs text-balance text-primary-foreground',
+          className
+        )}
+        data-slot="tooltip-content"
+        sideOffset={sideOffset}
+        {...props}>
+        {children}
+      </TooltipPrimitive.Content>
+    </TooltipPrimitive.Portal>
+  );
+}
+
+// withTooltip HOC - Uses native title attribute instead of Radix Tooltip
+// Radix Tooltip with asChild causes infinite loop due to composeRefs + Plate.js state updates
+function withTooltip(Component) {
+  const ExtendComponent = React.forwardRef(function ExtendComponent({
+    tooltip,
+    tooltipContentProps,
+    tooltipProps,
+    tooltipTriggerProps,
+    ...props
+  }, ref) {
+    // Use native title attribute for tooltip - simple and doesn't cause re-render loops
+    if (tooltip) {
+      return <Component ref={ref} title={tooltip} {...props} />;
+    }
+    return <Component ref={ref} {...props} />;
+  });
+  
+  ExtendComponent.displayName = `withTooltip(${Component.displayName || Component.name || 'Component'})`;
+  return ExtendComponent;
+}
+
+export const ToolbarButton = withTooltip(React.forwardRef(function ToolbarButton({
   children,
   className,
   isDropdown,
@@ -104,10 +148,11 @@ export const ToolbarButton = withTooltip(function ToolbarButton({
   size = 'sm',
   variant,
   ...props
-}) {
+}, ref) {
   return typeof pressed === 'boolean' ? (
     <ToolbarToggleGroup disabled={props.disabled} value="single" type="single">
       <ToolbarToggleItem
+        ref={ref}
         className={cn(toolbarButtonVariants({
           size,
           variant,
@@ -130,6 +175,7 @@ export const ToolbarButton = withTooltip(function ToolbarButton({
     </ToolbarToggleGroup>
   ) : (
     <ToolbarPrimitive.Button
+      ref={ref}
       className={cn(toolbarButtonVariants({
         size,
         variant,
@@ -138,7 +184,7 @@ export const ToolbarButton = withTooltip(function ToolbarButton({
       {children}
     </ToolbarPrimitive.Button>
   );
-});
+}));
 
 export function ToolbarSplitButton({
   className,
@@ -215,64 +261,6 @@ export function ToolbarGroup({
         <Separator orientation="vertical" />
       </div>
     </div>
-  );
-}
-
-function withTooltip(Component) {
-  return function ExtendComponent({
-    tooltip,
-    tooltipContentProps,
-    tooltipProps,
-    tooltipTriggerProps,
-    ...props
-  }) {
-    const [mounted, setMounted] = React.useState(false);
-
-    React.useEffect(() => {
-      setMounted(true);
-    }, []);
-
-    const component = <Component {...(props)} />;
-
-    if (tooltip && mounted) {
-      return (
-        <Tooltip {...tooltipProps}>
-          <TooltipTrigger asChild {...tooltipTriggerProps}>
-            {component}
-          </TooltipTrigger>
-          <TooltipContent {...tooltipContentProps}>{tooltip}</TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    return component;
-  };
-}
-
-function TooltipContent({
-  children,
-  className,
-
-  // CHANGE
-  sideOffset = 4,
-
-  ...props
-}) {
-  return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
-        className={cn(
-          'z-50 w-fit origin-(--radix-tooltip-content-transform-origin) rounded-md bg-primary px-3 py-1.5 text-xs text-balance text-primary-foreground',
-          className
-        )}
-        data-slot="tooltip-content"
-        sideOffset={sideOffset}
-        {...props}>
-        {children}
-        {/* CHANGE */}
-        {/* <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-primary fill-primary" /> */}
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
   );
 }
 

@@ -8,13 +8,12 @@ import {
   SuggestionLineBreak,
 } from '@/components/ui (plate files)/suggestion-node';
 
-import { discussionPlugin } from './discussion-kit';
-
-export const suggestionPlugin = toTPlatePlugin(BaseSuggestionPlugin, ({ editor }) => ({
+export const suggestionPlugin = toTPlatePlugin(BaseSuggestionPlugin, () => ({
   options: {
     activeId: null,
-    currentUserId: editor.getOption(discussionPlugin, 'currentUserId'),
+    currentUserId: null, // Will be set by AdvancedProposalEditor when user is available
     hoverId: null,
+    isSuggesting: false, // Enable suggestion mode - when true, edits create suggestions instead of direct changes
     uniquePathMap: new Map(),
   },
 })).configure({

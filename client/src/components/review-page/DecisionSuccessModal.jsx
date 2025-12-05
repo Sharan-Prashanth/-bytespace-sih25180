@@ -42,6 +42,7 @@ const DecisionSuccessModal = ({
 
   const getDecisionLabel = () => {
     if (!decision) return 'Decision Made';
+    if (decision === 'EXPERT_REPORT_SUBMITTED') return 'Expert Report Submitted';
     if (decision.includes('ACCEPTED')) return 'Proposal Accepted';
     if (decision.includes('REJECTED')) return 'Proposal Rejected';
     if (decision.includes('EXPERT_REVIEW')) return 'Sent for Expert Review';
@@ -50,6 +51,9 @@ const DecisionSuccessModal = ({
 
   const getDecisionDescription = () => {
     if (!decision) return 'Your decision has been recorded.';
+    if (decision === 'EXPERT_REPORT_SUBMITTED') {
+      return 'Your expert review report has been submitted successfully. It will be shared with the CMPDI committee for their consideration in making a final decision.';
+    }
     if (decision.includes('ACCEPTED')) {
       if (decision.includes('CMPDI')) return 'The proposal has been accepted by CMPDI and will be forwarded to TSSRC for review.';
       if (decision.includes('TSSRC')) return 'The proposal has been accepted by TSSRC and will be forwarded to SSRC for final review.';

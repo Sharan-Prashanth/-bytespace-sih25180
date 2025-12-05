@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { flip, offset, useFloatingToolbar, useFloatingToolbarState } from '@platejs/floating';
-import { useComposedRef } from '@udecode/cn';
 import { KEYS } from 'platejs';
 import {
   useEditorId,
@@ -56,7 +55,31 @@ export function FloatingToolbar({
     ref: floatingRef,
   } = useFloatingToolbar(floatingToolbarState);
 
-  const ref = useComposedRef(props.ref, floatingRef);
+  // Store refs in a stable ref object to prevent callback recreation
+  const refsRef = React.useRef({ floatingRef: null, propsRef: null });
+  refsRef.current.floatingRef = floatingRef;
+  refsRef.current.propsRef = props.ref;
+
+  // Use stable callback ref - no dependencies to prevent recreation
+  const setRefs = React.useCallback((node) => {
+    const { floatingRef: fRef, propsRef } = refsRef.current;
+    // Set floating ref
+    if (fRef) {
+      if (typeof fRef === 'function') {
+        fRef(node);
+      } else {
+        fRef.current = node;
+      }
+    }
+    // Set external ref from props
+    if (propsRef) {
+      if (typeof propsRef === 'function') {
+        propsRef(node);
+      } else {
+        propsRef.current = node;
+      }
+    }
+  }, []);
 
   if (hidden) return null;
 
@@ -65,7 +88,7 @@ export function FloatingToolbar({
       <Toolbar
         {...props}
         {...rootProps}
-        ref={ref}
+        ref={setRefs}
         className={cn(
           'absolute z-50 scrollbar-hide overflow-x-auto rounded-md border bg-popover p-1 whitespace-nowrap opacity-100 shadow-md print:hidden',
           'max-w-[80vw]',

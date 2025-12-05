@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/router';
-import { ArrowLeft, FileText, User, Clock, Tag } from 'lucide-react';
+import { FileText, User, Clock, Tag } from 'lucide-react';
 
 const ReviewHeader = ({ 
   proposalCode, 
@@ -14,8 +13,6 @@ const ReviewHeader = ({
   userRoles = [],
   theme = 'light'
 }) => {
-  const router = useRouter();
-
   // Theme helpers
   const isDark = theme === 'dark' || theme === 'darkest';
   const isDarkest = theme === 'darkest';
@@ -24,18 +21,6 @@ const ReviewHeader = ({
   const textColor = isDark ? 'text-white' : 'text-black';
   const mutedColor = isDark ? 'text-slate-400' : 'text-black/60';
   const dividerColor = isDark ? 'text-slate-600' : 'text-black/40';
-  const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
-  const buttonBorder = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/20';
-
-  // Determine dashboard path - always goes to main dashboard
-  const getDashboardPath = () => {
-    return '/dashboard';
-  };
-
-  // Get role-specific label
-  const getRoleLabel = () => {
-    return 'Dashboard';
-  };
 
   // Format status for display
   const formatStatus = (status) => {
@@ -62,71 +47,55 @@ const ReviewHeader = ({
   };
 
   return (
-    <>
-      {/* Back Button Section - Matching view page style */}
-      <div className={`${bgClass} border-b ${borderColor}`}>
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <button
-            onClick={() => router.push(getDashboardPath())}
-            className={`flex items-center gap-2 px-4 py-2 text-sm border ${buttonBorder} ${textColor} rounded-lg ${hoverBg} transition-colors`}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to {getRoleLabel()}
-          </button>
-        </div>
-      </div>
+    <div className={`${bgClass} border-b ${borderColor} mt-14`}>
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <h1 className={`text-3xl font-bold ${textColor} mb-4`}>Review Proposal</h1>
+        
+        {/* Proposal Info Row */}
+        <div className={`flex flex-wrap items-center gap-4 text-sm ${textColor}`}>
+          {/* Proposal Code */}
+          <div className="flex items-center gap-2">
+            <FileText className={`w-4 h-4 ${mutedColor}`} />
+            <span>Code:</span>
+            <span className="font-semibold">{proposalCode || 'N/A'}</span>
+          </div>
 
-      {/* Header Content */}
-      <div className={`${bgClass} border-b ${borderColor}`}>
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <h1 className={`text-3xl font-bold ${textColor} mb-4`}>Review Proposal</h1>
-          
-          {/* Proposal Info Row */}
-          <div className={`flex flex-wrap items-center gap-4 text-sm ${textColor}`}>
-            {/* Proposal Code */}
-            <div className="flex items-center gap-2">
-              <FileText className={`w-4 h-4 ${mutedColor}`} />
-              <span>Code:</span>
-              <span className="font-semibold">{proposalCode || 'N/A'}</span>
-            </div>
+          <span className={dividerColor}>|</span>
 
-            <span className={dividerColor}>|</span>
+          {/* Project Leader */}
+          <div className="flex items-center gap-2">
+            <User className={`w-4 h-4 ${mutedColor}`} />
+            <span>Leader:</span>
+            <span className="font-semibold">{projectLeader || 'N/A'}</span>
+          </div>
 
-            {/* Project Leader */}
-            <div className="flex items-center gap-2">
-              <User className={`w-4 h-4 ${mutedColor}`} />
-              <span>Leader:</span>
-              <span className="font-semibold">{projectLeader || 'N/A'}</span>
-            </div>
+          <span className={dividerColor}>|</span>
 
-            <span className={dividerColor}>|</span>
-
-            {/* Version */}
-            <div className="flex items-center gap-2">
-              <Clock className={`w-4 h-4 ${mutedColor}`} />
-              <span>Version:</span>
-              <span className="font-semibold">v{version || 1}</span>
-              {hasDraft && (
-                <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 text-xs font-medium rounded">
-                  {draftVersionLabel || 'Draft'}
-                </span>
-              )}
-            </div>
-
-            <span className={dividerColor}>|</span>
-
-            {/* Status Badge */}
-            <div className="flex items-center gap-2">
-              <Tag className={`w-4 h-4 ${mutedColor}`} />
-              <span>Status:</span>
-              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getStatusColor(status)}`}>
-                {formatStatus(status)}
+          {/* Version */}
+          <div className="flex items-center gap-2">
+            <Clock className={`w-4 h-4 ${mutedColor}`} />
+            <span>Version:</span>
+            <span className="font-semibold">v{version || 1}</span>
+            {hasDraft && (
+              <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 text-xs font-medium rounded">
+                {draftVersionLabel || 'Draft'}
               </span>
-            </div>
+            )}
+          </div>
+
+          <span className={dividerColor}>|</span>
+
+          {/* Status Badge */}
+          <div className="flex items-center gap-2">
+            <Tag className={`w-4 h-4 ${mutedColor}`} />
+            <span>Status:</span>
+            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getStatusColor(status)}`}>
+              {formatStatus(status)}
+            </span>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

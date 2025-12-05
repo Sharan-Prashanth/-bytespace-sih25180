@@ -20,9 +20,12 @@ import workflowRoutes from "./routes/workflowRoutes.js";
 import calendarRoutes from "./routes/calendarRoutes.js";
 import expertOpinionRoutes from "./routes/expertOpinionRoutes.js";
 
-// Import collaboration service and socket handlers
+// Import collaboration service and socket handlers (legacy - kept for backwards compatibility)
 import collaborationService from "./services/collaborationService.js";
 import initializeCollaborationSockets from "./sockets/collaborationSocket.js";
+
+// Import Hocuspocus server for Yjs collaboration
+import createHocuspocusServer, { getActiveUsers, getActiveDocuments } from "./services/hocuspocusServer.js";
 
 // Load environment variables
 dotenv.config();
@@ -131,6 +134,34 @@ app.set('io', io);
 app.set('collaborationService', collaborationService);
 
 const PORT = process.env.PORT || 5000;
+const HOCUSPOCUS_PORT = process.env.HOCUSPOCUS_PORT || 4000;
+
+// Initialize Hocuspocus server for Yjs collaboration
+let hocuspocusServer = null;
+
+const initializeHocuspocus = async () => {
+  try {
+    hocuspocusServer = createHocuspocusServer();
+    
+    // Start Hocuspocus server (returns a Promise in v3.x)
+    await hocuspocusServer.listen(HOCUSPOCUS_PORT);
+    console.log(`[Hocuspocus] Yjs collaboration server running on port ${HOCUSPOCUS_PORT}`);
+    
+    // Make Hocuspocus utilities accessible to routes
+    app.set('hocuspocus', {
+      server: hocuspocusServer,
+      getActiveUsers,
+      getActiveDocuments
+    });
+  } catch (error) {
+    console.warn('[Hocuspocus] Failed to initialize Yjs server:', error.message);
+    console.warn('[Hocuspocus] Falling back to Socket.io only mode');
+  }
+};
+
+// Initialize Hocuspocus
+initializeHocuspocus();
+
 httpServer.listen(PORT, () => {
   console.log('='.repeat(60));
   console.log('  NaCCER Research Portal API Server');
@@ -138,6 +169,9 @@ httpServer.listen(PORT, () => {
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Server URL: http://localhost:${PORT}`);
   console.log(`  Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
+  if (hocuspocusServer) {
+    console.log(`  Hocuspocus (Yjs): ws://localhost:${HOCUSPOCUS_PORT}`);
+  }
   console.log('='.repeat(60));
   console.log(`  API Routes:`);
   console.log(`    - Health Check: GET /api/health`);

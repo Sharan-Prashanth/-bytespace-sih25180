@@ -1,19 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MessageSquare, ChevronDown, Send, Reply, CheckCircle } from 'lucide-react';
+import { MessageSquare, ChevronDown, Send, Reply } from 'lucide-react';
 
 const CommunicationSection = ({ 
   comments = [], 
   currentUser,
   onAddComment,
   onReply,
-  onResolve,
-  canResolve = false,
   theme = 'light'
 }) => {
   const [isOpen, setIsOpen] = useState(true);
-  const [showResolved, setShowResolved] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [replyText, setReplyText] = useState({});
   const [showReplyFor, setShowReplyFor] = useState(null);
@@ -28,11 +25,9 @@ const CommunicationSection = ({
   const hoverBg = isDark ? 'hover:bg-white/5' : 'hover:bg-black/5';
   const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/20';
   const activeBtnBg = isDark ? 'bg-white text-black' : 'bg-black text-white';
-  const inactiveBtnBg = isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-black/5 text-black hover:bg-black/10';
   const inputBg = isDark ? 'bg-slate-700 text-white' : 'bg-white text-black';
   const avatarBg = isDark ? 'bg-slate-600' : 'bg-black/10';
   const commentBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-white border-black/20';
-  const resolvedBg = isDarkest ? 'bg-neutral-800/50 border-neutral-700' : isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-black/5 border-black/10';
 
   // Filter comments - only show comments from reviewers and committee members
   const filterReviewerComments = (commentList) => {
@@ -45,9 +40,6 @@ const CommunicationSection = ({
   };
 
   const filteredComments = filterReviewerComments(comments);
-  const unresolvedComments = filteredComments.filter(c => !c.resolved && !c.isResolved);
-  const resolvedComments = filteredComments.filter(c => c.resolved || c.isResolved);
-  const displayComments = showResolved ? resolvedComments : unresolvedComments;
 
   const handleAddComment = async () => {
     if (newComment.trim() && onAddComment && !isSubmitting) {
@@ -124,9 +116,9 @@ const CommunicationSection = ({
             <MessageSquare className={`w-5 h-5 ${textColor}`} />
           </div>
           <h2 className={`text-xl font-semibold ${textColor}`}>Communication</h2>
-          {unresolvedComments.length > 0 && (
+          {filteredComments.length > 0 && (
             <span className={`px-2 py-1 ${activeBtnBg} text-xs font-medium rounded`}>
-              {unresolvedComments.length} active
+              {filteredComments.length} {filteredComments.length === 1 ? 'thread' : 'threads'}
             </span>
           )}
         </div>
@@ -142,53 +134,21 @@ const CommunicationSection = ({
         <div className="mt-4">
           {/* Description */}
           <p className={`text-sm ${textColor} mb-4`}>
-            This section shows comments and discussions from reviewers and committee members only.
+            Discussion threads from reviewers and committee members.
           </p>
-
-          {/* Toggle between Active and Resolved */}
-          <div className="flex items-center gap-2 mb-4">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowResolved(false);
-              }}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                !showResolved ? activeBtnBg : inactiveBtnBg
-              }`}
-            >
-              Active ({unresolvedComments.length})
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowResolved(true);
-              }}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                showResolved ? activeBtnBg : inactiveBtnBg
-              }`}
-            >
-              Resolved ({resolvedComments.length})
-            </button>
-          </div>
 
           {/* Comments List */}
           <div className="space-y-4 max-h-96 overflow-y-auto mb-4">
-            {displayComments.length === 0 ? (
+            {filteredComments.length === 0 ? (
               <div className={`text-center py-8 ${textColor}`}>
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-40" />
-                <p className="text-sm">
-                  {showResolved ? 'No resolved comments.' : 'No active comments from reviewers.'}
-                </p>
+                <p className="text-sm">No comments from reviewers yet.</p>
               </div>
             ) : (
-              displayComments.map((comment) => (
+              filteredComments.map((comment) => (
                 <div 
                   key={comment.id || comment._id} 
-                  className={`p-4 rounded-lg border ${
-                    comment.resolved || comment.isResolved 
-                      ? resolvedBg 
-                      : commentBg
-                  }`}
+                  className={`p-4 rounded-lg border ${commentBg}`}
                 >
                   {/* Comment Header */}
                   <div className="flex items-start justify-between mb-3">
@@ -210,12 +170,6 @@ const CommunicationSection = ({
                         </span>
                       </div>
                     </div>
-                    {(comment.resolved || comment.isResolved) && (
-                      <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
-                        <CheckCircle className="w-3 h-3" />
-                        Resolved
-                      </span>
-                    )}
                   </div>
 
                   {/* Content */}
@@ -243,33 +197,19 @@ const CommunicationSection = ({
                     </div>
                   )}
 
-                  {/* Actions */}
-                  {!(comment.resolved || comment.isResolved) && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowReplyFor(showReplyFor === (comment.id || comment._id) ? null : (comment.id || comment._id));
-                        }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${textColor} border ${borderColor} rounded-lg ${hoverBg} transition-colors`}
-                      >
-                        <Reply className="w-3 h-3" />
-                        Reply
-                      </button>
-                      {canResolve && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onResolve && onResolve(comment.id || comment._id);
-                          }}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${activeBtnBg} rounded-lg transition-colors`}
-                        >
-                          <CheckCircle className="w-3 h-3" />
-                          Resolve
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  {/* Reply Action */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReplyFor(showReplyFor === (comment.id || comment._id) ? null : (comment.id || comment._id));
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${textColor} border ${borderColor} rounded-lg ${hoverBg} transition-colors`}
+                    >
+                      <Reply className="w-3 h-3" />
+                      Reply
+                    </button>
+                  </div>
 
                   {/* Reply Input */}
                   {showReplyFor === (comment.id || comment._id) && (
@@ -306,7 +246,7 @@ const CommunicationSection = ({
                 type="text"
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Add a comment..."
+                placeholder="Start a new discussion..."
                 className={`flex-1 px-4 py-2.5 border ${borderColor} rounded-lg text-sm ${inputBg} focus:outline-none focus:ring-1 focus:ring-blue-500`}
                 onClick={(e) => e.stopPropagation()}
               />
@@ -319,7 +259,7 @@ const CommunicationSection = ({
                 className={`flex items-center gap-2 px-5 py-2.5 ${activeBtnBg} text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <Send className="w-4 h-4" />
-                {isSubmitting ? 'Adding...' : 'Add'}
+                {isSubmitting ? 'Posting...' : 'Post'}
               </button>
             </div>
           </div>

@@ -131,7 +131,7 @@ export const discussionPlugin = createPlatePlugin({
   key: 'discussion',
   options: {
     currentUserId: null,
-    discussions: discussionsData,
+    discussions: [], // Start with empty array - will be loaded from backend
     users: {},
   },
 })

@@ -18,7 +18,7 @@ export function FixedToolbar({ theme = 'light', ...props }) {
       {...props}
       style={{ '--toolbar-hover-bg': toolbarHoverBg, '--input-bg': inputBg }}
       className={cn(
-        'sticky top-0 left-0 z-50 scrollbar-hide w-full justify-between overflow-x-auto rounded-t-lg border-b p-1',
+        'sticky top-0 left-0 z-30 scrollbar-hide w-full justify-between overflow-x-auto rounded-t-lg border-b p-1',
         bgClass,
         borderClass,
         textClass,

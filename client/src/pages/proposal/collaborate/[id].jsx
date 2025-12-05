@@ -6,6 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import LoadingScreen from '../../../components/LoadingScreen';
 import { useSocketCollaboration } from '../../../hooks/useSocketCollaboration';
+import { getUserColor } from '../../../hooks/useYjsCollaboration';
 import { getCollaborateStorage } from '../../../utils/collaborateStorage';
 import apiClient from '../../../utils/api';
 import { Clock, MessageSquare, TrendingUp, ChevronDown, ChevronUp, FileCheck, Moon, Sun, MoonStar } from 'lucide-react';
@@ -127,8 +128,15 @@ function CollaborateContent() {
   const [hasDraft, setHasDraft] = useState(false);
   const [draftVersionLabel, setDraftVersionLabel] = useState('');
 
+  // Yjs collaboration state - received from AdvancedProposalEditor via callbacks
+  const [yjsState, setYjsState] = useState({
+    connected: false,
+    synced: false,
+    users: [],
+    awareness: null
+  });
 
-  // Initialize socket collaboration hook
+  // Initialize socket collaboration hook (for chat and comments)
   const {
     isConnected,
     connectedUsers,
@@ -146,12 +154,67 @@ function CollaborateContent() {
     debounceDelay: SOCKET_UPDATE_DELAY
   });
 
-  // Update online users when socket users change
-  useEffect(() => {
-    if (connectedUsers && connectedUsers.length > 0) {
-      setOnlineUsers(connectedUsers);
+  // Track previous state to avoid unnecessary updates that steal focus
+  const prevYjsStateRef = useRef({ connected: false, synced: false, usersCount: 0 });
+
+  // Handle collaboration state updates from the editor
+  // Only update React state if something meaningful changed
+  const handleCollaborationStateChange = useCallback((state) => {
+    const prev = prevYjsStateRef.current;
+    const newUsersCount = state.users?.length || 0;
+    
+    // Only update if connection status or user count changed
+    // This prevents focus-stealing re-renders from awareness updates
+    if (
+      prev.connected !== state.connected ||
+      prev.synced !== state.synced ||
+      prev.usersCount !== newUsersCount
+    ) {
+      console.log('[Collaborate] Yjs state changed:', {
+        connected: state.connected,
+        synced: state.synced,
+        usersCount: newUsersCount
+      });
+      prevYjsStateRef.current = {
+        connected: state.connected,
+        synced: state.synced,
+        usersCount: newUsersCount
+      };
+      setYjsState(state);
     }
-  }, [connectedUsers]);
+  }, []);
+
+  // Update online users from Yjs state (primary) or Socket.io (fallback)
+  useEffect(() => {
+    // Prefer Yjs users for online presence (more accurate for editor collaboration)
+    if (yjsState.connected && yjsState.users && yjsState.users.length > 0) {
+      const normalizedUsers = yjsState.users.map(u => ({
+        _id: u.id,
+        fullName: u.name || 'Unknown',
+        email: u.email || '',
+        role: u.role || 'USER',
+        color: u.color || getUserColor(u.id)
+      }));
+      setOnlineUsers(normalizedUsers);
+    } else if (connectedUsers && connectedUsers.length > 0) {
+      // Fallback to socket users
+      const normalizedUsers = connectedUsers.map(cu => ({
+        _id: cu.user?._id || cu.userId || cu._id,
+        fullName: cu.user?.fullName || cu.fullName || 'Unknown',
+        email: cu.user?.email || cu.email || '',
+        role: cu.user?.roles?.[0] || cu.role || 'USER'
+      }));
+      setOnlineUsers(normalizedUsers);
+    } else if (user) {
+      // If no collaboration data, at least show current user
+      setOnlineUsers([{
+        _id: user._id,
+        fullName: user.fullName || 'You',
+        email: user.email || '',
+        role: user.roles?.[0] || 'USER'
+      }]);
+    }
+  }, [yjsState.connected, yjsState.users, connectedUsers, user]);
 
   // Permission checks
   const isPI = useCallback(() => {
@@ -195,6 +258,18 @@ function CollaborateContent() {
   const canSaveChanges = isPI() || isCI() || isSuperAdmin();
   const isSuggestionMode = (isReviewer() || isCommitteeMember()) && !isSuperAdmin();
   const currentCICount = collaborators.filter(c => c.role === 'CI').length;
+
+  // Debug permissions
+  console.log('[CollaboratePage] Permissions:', {
+    userId: user?._id,
+    createdById: proposal?.createdBy?._id || proposal?.createdBy,
+    isPI: isPI(),
+    isCI: isCI(),
+    isSuperAdmin: isSuperAdmin(),
+    canEditEditor,
+    isSuggestionMode,
+    proposalLoaded: !!proposal
+  });
 
   // Initialize local storage
   useEffect(() => {
@@ -242,8 +317,9 @@ function CollaborateContent() {
   }, [id, proposal, isDirty, saveToLocalStorage]);
 
   // Sync to DB on page unload/navigation - creates/updates x.1 draft version
+  // Only PI and CI can save drafts - committee members and experts cannot
   const syncToDatabase = useCallback(async () => {
-    if (!id || !isDirty) return;
+    if (!id || !isDirty || !canSaveChanges) return;
 
     try {
       // Use the new saveDraftVersion API to create/update x.1 draft
@@ -256,12 +332,12 @@ function CollaborateContent() {
     } catch (err) {
       console.error('[DB SYNC] Failed to sync:', err);
     }
-  }, [id, isDirty, proposalInfo, proposal]);
+  }, [id, isDirty, canSaveChanges, proposalInfo, proposal]);
 
   // Handle page unload
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (isDirty) {
+      if (isDirty && canSaveChanges) {
         syncToDatabase();
         e.preventDefault();
         e.returnValue = '';
@@ -269,7 +345,7 @@ function CollaborateContent() {
     };
 
     const handleRouteChange = () => {
-      if (isDirty) {
+      if (isDirty && canSaveChanges) {
         syncToDatabase();
         saveToLocalStorage();
       }
@@ -282,7 +358,7 @@ function CollaborateContent() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       router.events.off('routeChangeStart', handleRouteChange);
     };
-  }, [isDirty, syncToDatabase, saveToLocalStorage, router.events]);
+  }, [isDirty, canSaveChanges, syncToDatabase, saveToLocalStorage, router.events]);
 
   // Listen for socket updates from other users
   useEffect(() => {
@@ -599,8 +675,14 @@ function CollaborateContent() {
           const userId = userData._id?.toString() || userData.toString();
           // Only add if not already present (first occurrence wins)
           if (!collabMap.has(userId)) {
+            // Handle both populated and non-populated user objects
             const user = typeof userData === 'object' ? userData : { _id: userData };
-            collabMap.set(userId, { ...user, _id: userId, role });
+            collabMap.set(userId, {
+              _id: userId,
+              fullName: user.fullName || user.name || 'Unknown',
+              email: user.email || '',
+              role
+            });
           }
         };
 
@@ -619,9 +701,9 @@ function CollaborateContent() {
         // Add collaborators from collaboration endpoint (reviewers, committee members, etc.)
         if (collaboratorsData.length > 0) {
           collaboratorsData.forEach(collab => {
-            // Extract user data from the collaborator object
+            // Extract user data from the collaborator object - handle nested user object
             const userData = collab.user || collab;
-            const role = collab.role || 'COLLABORATOR';
+            const role = collab.role || userData.role || 'COLLABORATOR';
             addCollaborator(userData, role);
           });
         }
@@ -766,6 +848,7 @@ function CollaborateContent() {
         <CommentsSuggestionsPanel
           comments={comments}
           canResolve={canResolveComments}
+          currentUserId={user?._id}
           onReply={handleReplyToComment}
           onResolve={handleResolveComment}
           onAddComment={handleAddComment}
@@ -799,6 +882,7 @@ function CollaborateContent() {
               canSuggest={isSuggestionMode}
               readOnly={!canEditEditor && !isSuggestionMode}
               theme={theme}
+              onCollaborationStateChange={handleCollaborationStateChange}
             />
           </Suspense>
         </CollaborativeEditor>
@@ -896,6 +980,7 @@ function CollaborateContent() {
             setShowChatWindow={setShowTeamChat}
             messages={chatMessages}
             onSendMessage={handleSendChatMessage}
+            theme={theme}
           />
         )}
       </Suspense>

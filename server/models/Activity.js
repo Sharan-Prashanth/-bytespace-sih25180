@@ -33,7 +33,9 @@ const activitySchema = new mongoose.Schema({
       'REPORT_SUBMITTED',
       'CLARIFICATION_REQUESTED',
       'PROPOSAL_APPROVED',
-      'PROPOSAL_REJECTED'
+      'PROPOSAL_REJECTED',
+      'UPDATE_DISCUSSIONS',
+      'DRAFT_UPDATED'
     ]
   },
   details: {

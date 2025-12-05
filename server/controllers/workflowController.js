@@ -65,6 +65,21 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
     });
   }
 
+  // Track if expert review was skipped during CMPDI stage
+  // When CMPDI directly accepts or rejects without going to expert review
+  if (isCMPDI && (status === 'CMPDI_ACCEPTED' || status === 'CMPDI_REJECTED')) {
+    // Check if expert review was ever initiated (CMPDI_EXPERT_REVIEW status in timeline)
+    const hadExpertReview = proposal.timeline.some(t => t.status === 'CMPDI_EXPERT_REVIEW');
+    
+    if (!hadExpertReview && proposal.expertReviewSkipped === null) {
+      // Expert review was skipped - CMPDI made direct decision
+      proposal.expertReviewSkipped = true;
+    } else if (hadExpertReview) {
+      // Expert review was conducted
+      proposal.expertReviewSkipped = false;
+    }
+  }
+
   // Update status
   proposal.status = status;
   proposal.timeline.push({
@@ -74,14 +89,31 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
     notes: notes || ''
   });
 
-  // Auto-assign collaborators based on new status
-  proposal.collaborators = await updateCollaboratorsForStatus(proposal, status);
-  
-  // If moving to expert review, auto-assign all expert reviewers
-  if (status === 'CMPDI_EXPERT_REVIEW') {
-    proposal.assignedReviewers = await updateAssignedReviewersForExpertReview(proposal, req.user._id);
-    console.log(`[AUTO-ASSIGN] Added ${proposal.assignedReviewers.length} expert reviewers`);
+  // Auto-transition: CMPDI_ACCEPTED -> TSSRC_REVIEW and TSSRC_ACCEPTED -> SSRC_REVIEW
+  // This ensures the next committee can immediately review after acceptance
+  if (status === 'CMPDI_ACCEPTED') {
+    proposal.status = 'TSSRC_REVIEW';
+    proposal.timeline.push({
+      status: 'TSSRC_REVIEW',
+      changedBy: req.user._id,
+      changedAt: new Date(),
+      notes: 'Auto-transitioned from CMPDI acceptance for TSSRC review'
+    });
+  } else if (status === 'TSSRC_ACCEPTED') {
+    proposal.status = 'SSRC_REVIEW';
+    proposal.timeline.push({
+      status: 'SSRC_REVIEW',
+      changedBy: req.user._id,
+      changedAt: new Date(),
+      notes: 'Auto-transitioned from TSSRC acceptance for SSRC final review'
+    });
   }
+
+  // Auto-assign collaborators based on new status (use final status after auto-transition)
+  proposal.collaborators = await updateCollaboratorsForStatus(proposal, proposal.status);
+  
+  // Note: Expert reviewers are NOT auto-assigned when moving to CMPDI_EXPERT_REVIEW
+  // CMPDI must explicitly select expert reviewers via the selectExpertReviewers endpoint
 
   await proposal.save();
 
@@ -96,16 +128,16 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
   };
   console.log(`[AUTO-ASSIGN] Collaborators for ${proposal.proposalCode}:`, collaboratorCounts);
 
-  // Send notification email
+  // Send notification email (use final status after any auto-transition)
   await emailService.sendStatusChangeEmail(
     proposal.createdBy.email,
     proposal.createdBy.fullName,
     proposal.proposalCode,
     oldStatus,
-    status
+    proposal.status
   );
 
-  // Log activity
+  // Log activity (use the original decision status for logging)
   await activityLogger.log({
     user: req.user._id,
     action: status.includes('ACCEPTED') ? 'PROPOSAL_APPROVED' : (status.includes('REJECTED') ? 'PROPOSAL_REJECTED' : 'STATUS_UPDATED'),
@@ -113,7 +145,8 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
     details: { 
       proposalCode: proposal.proposalCode,
       oldStatus,
-      newStatus: status
+      decisionStatus: status,
+      newStatus: proposal.status
     },
     ipAddress: req.ip
   });
@@ -125,6 +158,173 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
       proposalCode: proposal.proposalCode,
       status: proposal.status
     }
+  });
+});
+
+/**
+ * @route   POST /api/proposals/:proposalId/select-expert-reviewers
+ * @desc    CMPDI selects expert reviewers and sends for expert review
+ * @access  Private (CMPDI only)
+ */
+export const selectExpertReviewers = asyncHandler(async (req, res) => {
+  const { reviewerIds, notes } = req.body;
+
+  // Validate CMPDI member
+  const isCMPDI = req.user.roles.includes('CMPDI_MEMBER');
+  const isAdmin = req.user.roles.includes('SUPER_ADMIN');
+  
+  if (!isCMPDI && !isAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only CMPDI members can select expert reviewers'
+    });
+  }
+
+  if (!reviewerIds || !Array.isArray(reviewerIds) || reviewerIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'At least one expert reviewer must be selected'
+    });
+  }
+
+  const proposal = await Proposal.findById(req.params.proposalId).populate('createdBy', 'fullName email');
+
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Validate proposal is in CMPDI_REVIEW status
+  if (proposal.status !== 'CMPDI_REVIEW') {
+    return res.status(400).json({
+      success: false,
+      message: 'Proposal must be in CMPDI_REVIEW status to send for expert review'
+    });
+  }
+
+  // Validate all selected users are expert reviewers
+  const reviewers = await User.find({ 
+    _id: { $in: reviewerIds },
+    roles: 'EXPERT_REVIEWER',
+    isActive: true
+  });
+
+  if (reviewers.length !== reviewerIds.length) {
+    return res.status(400).json({
+      success: false,
+      message: 'All selected users must be active expert reviewers'
+    });
+  }
+
+  const oldStatus = proposal.status;
+
+  // Mark that expert review was NOT skipped since CMPDI is sending for expert review
+  proposal.expertReviewSkipped = false;
+
+  // Update status to CMPDI_EXPERT_REVIEW
+  proposal.status = 'CMPDI_EXPERT_REVIEW';
+  proposal.timeline.push({
+    status: 'CMPDI_EXPERT_REVIEW',
+    changedBy: req.user._id,
+    changedAt: new Date(),
+    notes: notes || 'Sent for expert review'
+  });
+
+  // Assign the selected expert reviewers
+  proposal.assignedReviewers = await updateAssignedReviewersForExpertReview(proposal, req.user._id, reviewerIds);
+  console.log(`[EXPERT-ASSIGN] Added ${proposal.assignedReviewers.length} expert reviewers selected by CMPDI`);
+
+  // Add expert reviewers as collaborators
+  for (const reviewer of reviewers) {
+    const existingCollaborator = proposal.collaborators.find(
+      c => c.userId.toString() === reviewer._id.toString()
+    );
+    if (!existingCollaborator) {
+      proposal.collaborators.push({
+        userId: reviewer._id,
+        role: 'REVIEWER',
+        addedAt: new Date()
+      });
+    }
+  }
+
+  await proposal.save();
+
+  // Send notification emails to selected reviewers
+  for (const reviewer of reviewers) {
+    await emailService.sendReviewerAssignmentEmail(
+      reviewer.email,
+      reviewer.fullName,
+      proposal.proposalCode,
+      proposal.title,
+      null // No due date specified
+    );
+  }
+
+  // Send notification email to PI
+  await emailService.sendStatusChangeEmail(
+    proposal.createdBy.email,
+    proposal.createdBy.fullName,
+    proposal.proposalCode,
+    oldStatus,
+    'CMPDI_EXPERT_REVIEW'
+  );
+
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'EXPERT_REVIEWERS_ASSIGNED',
+    proposalId: proposal._id,
+    details: { 
+      proposalCode: proposal.proposalCode,
+      reviewerCount: reviewers.length,
+      reviewerNames: reviewers.map(r => r.fullName)
+    },
+    ipAddress: req.ip
+  });
+
+  res.json({
+    success: true,
+    message: `Proposal sent for expert review with ${reviewers.length} reviewer(s)`,
+    data: {
+      proposalCode: proposal.proposalCode,
+      status: proposal.status,
+      assignedReviewers: reviewers.map(r => ({
+        id: r._id,
+        fullName: r.fullName,
+        email: r.email,
+        expertiseDomains: r.expertiseDomains
+      }))
+    }
+  });
+});
+
+/**
+ * @route   GET /api/users/expert-reviewers
+ * @desc    Get list of all expert reviewers (for CMPDI selection modal)
+ * @access  Private (CMPDI/Admin)
+ */
+export const getExpertReviewers = asyncHandler(async (req, res) => {
+  const isCMPDI = req.user.roles.includes('CMPDI_MEMBER');
+  const isAdmin = req.user.roles.includes('SUPER_ADMIN');
+  
+  if (!isCMPDI && !isAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only CMPDI members can view expert reviewers list'
+    });
+  }
+
+  const expertReviewers = await User.find({
+    roles: 'EXPERT_REVIEWER',
+    isActive: true
+  }).select('_id fullName email expertiseDomains organization');
+
+  res.json({
+    success: true,
+    data: expertReviewers
   });
 });
 

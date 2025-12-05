@@ -9,8 +9,9 @@ import DashboardLayout from "./Layout/DashboardLayout";
 
 // Import Section Components
 import FinanceSection from "./Sections/FinanceSection";
+import GISMapSection from "./Sections/GISMapSection";
 import OverviewSection from "./Sections/OverviewSection";
-import ProposalsSection from "./Sections/ProposalsSection";
+import AdminProposalsSection from "./Admin/Sections/AdminProposalsSection";
 import RolesSection from "./Sections/RolesSection";
 import StaffSection from "./Sections/StaffSection";
 import UsersSection from "./Sections/UsersSection";
@@ -118,6 +119,14 @@ function AdminDashboardContent() {
     onMonthChange: handleMonthChange
   }), [metrics, selectedMetrics]);
 
+  // Proposal search term state for navigation from UsersSection
+  const [proposalSearchTerm, setProposalSearchTerm] = useState('');
+
+  const handleNavigateToProposals = (searchTerm) => {
+    setProposalSearchTerm(searchTerm);
+    setActiveSection('proposals');
+  };
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -139,13 +148,15 @@ function AdminDashboardContent() {
           overrideMonths={overrideMonths}
         />;
       case 'users':
-        return <UsersSection theme={theme} />;
+        return <UsersSection theme={theme} onNavigateToProposals={handleNavigateToProposals} />;
       case 'staff':
         return <StaffSection theme={theme} />;
       case 'proposals':
-        return <ProposalsSection theme={theme} />;
+        return <AdminProposalsSection theme={theme} initialSearchTerm={proposalSearchTerm} />;
       case 'finance':
         return <FinanceSection theme={theme} />;
+      case 'gismap':
+        return <GISMapSection theme={theme} />;
       case 'roles':
         return <RolesSection theme={theme} />;
       default:

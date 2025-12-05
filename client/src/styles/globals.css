@@ -70,6 +70,29 @@ div[data-plate-floating-toolbar] button:hover {
   color: #ffffff !important;
 }
 
+/* Dark mode CSS variables - when .dark class is applied */
+.dark {
+  --background: #111827;
+  --foreground: #f9fafb;
+  --card: #1f2937;
+  --card-foreground: #f9fafb;
+  --popover: #1f2937;
+  --popover-foreground: #f9fafb;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #374151;
+  --secondary-foreground: #f9fafb;
+  --muted: #374151;
+  --muted-foreground: #9ca3af;
+  --accent: #374151;
+  --accent-foreground: #f9fafb;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #f9fafb;
+  --border: #374151;
+  --input: #374151;
+  --ring: #1d4ed8;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #111827;

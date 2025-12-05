@@ -9,19 +9,26 @@ import {
   ChevronDown,
   AlertTriangle,
   Lock,
-  Info
+  Info,
+  FileText,
+  Send
 } from 'lucide-react';
 
 const ReviewDecisionPanel = ({ 
   userRoles = [],
   proposalStatus,
   onSubmitDecision,
+  onOpenExpertReportModal, // Opens report editor modal for experts
   isSubmitting = false,
+  isSubmittingExpertReport = false,
   hasUserMadeDecision = false,
+  hasExpertSubmittedReport = false,
+  showExpertReportSection = false,
   theme = 'light'
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedDecision, setSelectedDecision] = useState('');
+  const [showExpertConfirmation, setShowExpertConfirmation] = useState(false);
 
   // Theme helpers
   const isDark = theme === 'dark' || theme === 'darkest';
@@ -33,21 +40,23 @@ const ReviewDecisionPanel = ({
   const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-black/10';
   const infoBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-black/5 border-black/10';
   const btnBg = isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-black/90';
+  const secondaryBtnBg = isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-black/5 text-black hover:bg-black/10';
 
-  // Check if user is an expert reviewer - experts cannot see this panel
-  const isExpert = userRoles.includes('EXPERT_REVIEWER') && 
-                   !userRoles.some(role => ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER', 'SUPER_ADMIN'].includes(role));
+  // Check if user is an expert reviewer only (not a committee member)
+  const isExpertOnly = userRoles.includes('EXPERT_REVIEWER') && 
+                       !userRoles.some(role => ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER', 'SUPER_ADMIN'].includes(role));
   
-  // Check if user is CMPDI member
+  // Check if user is a committee member
   const isCMPDI = userRoles.includes('CMPDI_MEMBER');
   const isTSSRC = userRoles.includes('TSSRC_MEMBER');
   const isSSRC = userRoles.includes('SSRC_MEMBER');
   const isAdmin = userRoles.includes('SUPER_ADMIN');
+  const isCommitteeMember = isCMPDI || isTSSRC || isSSRC || isAdmin;
 
-  // If user is only an expert reviewer, do not render this panel
-  if (isExpert) {
-    return null;
-  }
+  // Use showExpertReportSection prop if passed, otherwise fall back to local detection
+  const canExpertSubmitReport = showExpertReportSection !== undefined 
+    ? showExpertReportSection 
+    : (isExpertOnly && proposalStatus === 'CMPDI_EXPERT_REVIEW' && !hasExpertSubmittedReport);
 
   // Check if user can make a decision based on proposal status
   const canMakeDecision = () => {
@@ -141,6 +150,17 @@ const ReviewDecisionPanel = ({
     }
   };
 
+  const handleExpertReportSubmit = () => {
+    setShowExpertConfirmation(true);
+  };
+
+  const handleConfirmExpertReport = () => {
+    setShowExpertConfirmation(false);
+    if (onOpenExpertReportModal) {
+      onOpenExpertReportModal(); // Opens the report editor modal in parent
+    }
+  };
+
   // Get message explaining why user cannot make decision
   const getRestrictedMessage = () => {
     if (hasUserMadeDecision) {
@@ -161,6 +181,164 @@ const ReviewDecisionPanel = ({
 
     return 'You are not authorized to make a decision at the current review stage.';
   };
+
+  // ===== EXPERT REVIEWER PANEL =====
+  if (isExpertOnly) {
+    // Expert has already submitted report
+    if (hasExpertSubmittedReport) {
+      return (
+        <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+            <div className="flex items-center">
+              <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center mr-3`}>
+                <FileText className={`w-5 h-5 ${textColor}`} />
+              </div>
+              <h2 className={`text-xl font-semibold ${textColor}`}>Expert Review</h2>
+            </div>
+            <button className={`p-1 ${hoverBg} rounded transition-colors`}>
+              <ChevronDown className={`w-5 h-5 ${textColor} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {isOpen && (
+            <div className="mt-4">
+              <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-black font-medium">Report Submitted</p>
+                  <p className="text-sm text-black mt-1">
+                    Your expert review report has been submitted. Thank you for your contribution.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Expert can submit report
+    if (canExpertSubmitReport) {
+      return (
+        <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+            <div className="flex items-center">
+              <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center mr-3`}>
+                <FileText className={`w-5 h-5 ${textColor}`} />
+              </div>
+              <h2 className={`text-xl font-semibold ${textColor}`}>Expert Review</h2>
+            </div>
+            <button className={`p-1 ${hoverBg} rounded transition-colors`}>
+              <ChevronDown className={`w-5 h-5 ${textColor} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {isOpen && (
+            <div className="mt-4">
+              {/* Expert Confirmation Dialog */}
+              {showExpertConfirmation ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-black font-medium">Confirm Report Submission</p>
+                      <p className="text-sm text-black mt-1">
+                        Are you sure you want to submit your expert review report? This action cannot be undone, 
+                        and your report will be shared with the CMPDI committee for their decision.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowExpertConfirmation(false)}
+                      className={`flex-1 py-3 px-6 ${secondaryBtnBg} border ${borderColor} font-semibold rounded-lg transition-colors`}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleConfirmExpertReport}
+                      disabled={isSubmittingExpertReport}
+                      className={`flex-1 py-3 px-6 ${btnBg} font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {isSubmittingExpertReport ? 'Submitting...' : 'Confirm Submit'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className={`text-sm ${textColor}`}>
+                    As an expert reviewer, you can submit a detailed review report for this proposal. 
+                    Your report will be considered by the CMPDI committee in their decision-making process.
+                  </p>
+
+                  <div className={`flex items-start gap-3 p-4 ${infoBg} border rounded-lg`}>
+                    <Info className={`w-5 h-5 ${textColor} flex-shrink-0 mt-0.5`} />
+                    <div>
+                      <p className={`text-sm ${textColor} font-medium`}>What to include in your report:</p>
+                      <ul className={`text-sm ${textColor} mt-1 list-disc list-inside space-y-1`}>
+                        <li>Technical feasibility assessment</li>
+                        <li>Alignment with S&T goals</li>
+                        <li>Potential benefits to coal industry</li>
+                        <li>Recommendations for improvement</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleExpertReportSubmit}
+                    disabled={isSubmittingExpertReport}
+                    className={`w-full flex items-center justify-center gap-2 py-3 px-6 ${btnBg} font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <Send className="w-4 h-4" />
+                    {isSubmittingExpertReport ? 'Processing...' : 'Write Expert Report'}
+                  </button>
+
+                  <p className={`text-xs ${textColor} text-center`}>
+                    You will be prompted to write a detailed report before submission.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Expert cannot submit (not at expert review stage)
+    return (
+      <div className={`${cardBg} border rounded-lg p-6 mb-6`}>
+        <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+          <div className="flex items-center">
+            <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center mr-3`}>
+              <Lock className={`w-5 h-5 ${isDark ? 'text-white/50' : 'text-black/50'}`} />
+            </div>
+            <h2 className={`text-xl font-semibold ${textColor}`}>Expert Review</h2>
+          </div>
+          <button className={`p-1 ${hoverBg} rounded transition-colors`}>
+            <ChevronDown className={`w-5 h-5 ${textColor} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        {isOpen && (
+          <div className="mt-4">
+            <div className={`flex items-start gap-3 p-4 ${infoBg} border rounded-lg`}>
+              <Info className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-black/60'} flex-shrink-0 mt-0.5`} />
+              <div>
+                <p className={`text-sm ${textColor} font-medium`}>Report Submission Not Available</p>
+                <p className={`text-sm ${textColor} mt-1`}>
+                  {proposalStatus === 'CMPDI_EXPERT_REVIEW' 
+                    ? 'You can only submit one expert report per proposal.'
+                    : 'Expert report submission is only available when the proposal is at the Expert Review stage.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ===== COMMITTEE MEMBER PANEL =====
 
   // If no decision options available and user cannot make decision, show locked state
   if (decisionOptions.length === 0 && !userCanMakeDecision) {

@@ -10,6 +10,7 @@ export { default as CommitModal } from './CommitModal';
 export { default as DecisionSuccessModal } from './DecisionSuccessModal';
 export { default as ClarificationModal } from './ClarificationModal';
 export { default as ExpertOpinionSection } from './ExpertOpinionSection';
+export { default as ExpertReviewerSelectionModal } from './ExpertReviewerSelectionModal';
 
 // New components
 export { default as ReviewProposalInformation } from './ReviewProposalInformation';
