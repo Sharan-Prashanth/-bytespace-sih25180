@@ -251,15 +251,16 @@
 
   <!-- ================= JSON INPUT UI ================= -->
   <div id="json-ui">
-    <textarea id="jsonInput" placeholder="JSON will be auto-fetched from /full-analysis endpoint"></textarea>
+    <textarea id="jsonInput" placeholder="JSON will be auto-fetched and rendered when API returns 200"></textarea>
     <div class="controls">
-      <input type="text" id="jsonUrl" value="/full-analysis" placeholder="API endpoint (default: /full-analysis)" />
-      <button id="fetchBtn" class="secondary">Fetch & Render Now</button>
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
-        <input type="checkbox" id="autoFetchToggle" checked /> Auto-fetch on data change
+      <input type="text" id="jsonUrl" value="http://localhost:8000/full-analysis/latest" placeholder="Full API URL" style="font-size:11px;" />
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;background:#e8f5e9;padding:6px 10px;border-radius:4px;border:1px solid #4caf50;">
+        <input type="checkbox" id="autoFetchToggle" checked /> <strong>Auto-fetch & render on 200</strong>
       </label>
+      <button id="fetchBtn" class="secondary">Manual Fetch</button>
+      <button id="renderBtn" style="background:#6c757d;">Render from Textarea</button>
       <button id="clearBtn" style="background:#888;">Clear</button>
-      <div id="json-status">Status: Monitoring /full-analysis for updates...</div>
+      <div id="json-status">🔄 Monitoring API endpoint... Will auto-render on 200 response</div>
     </div>
   </div>
 
@@ -862,6 +863,7 @@
       if(!parsed) { if(st) st.textContent = "Invalid JSON — please paste the exact JSON response."; return; }
       try {
         populateReport(parsed);
+        st.textContent = "✅ Report rendered from textarea. " + new Date().toLocaleTimeString();
       } catch(e) {
         if(st) st.textContent = "Error rendering: " + (e.message || e);
         console.error(e);
@@ -883,36 +885,93 @@
       return hash;
     }
 
-    // Fetch and render function
+    // Fetch and render function - AUTO RENDER ON 200 STATUS
     async function fetchAndRender(showStatus = true) {
-      const url = document.getElementById('jsonUrl').value.trim() || '/full-analysis';
+      const url = document.getElementById('jsonUrl').value.trim() || 'http://localhost:8000/full-analysis/latest';
       const st = document.getElementById('json-status');
       try {
-        if(showStatus) st.textContent = "Fetching JSON from " + url + "...";
-        const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
-        if(!res.ok) { 
-          if(showStatus) st.textContent = "Failed to fetch: HTTP " + res.status; 
-          return false; 
-        }
-        const json = await res.json();
-        const jsonStr = JSON.stringify(json, null, 2);
-        const currentHash = simpleHash(jsonStr);
+        if(showStatus) st.textContent = "🔄 Fetching from " + url + "...";
         
-        // Check if data has changed
-        if(currentHash !== lastJsonHash) {
-          lastJsonHash = currentHash;
-          st.textContent = "New data detected. Rendering report...";
-          document.getElementById('jsonInput').value = jsonStr;
-          populateReport(json);
-          st.textContent = "Report rendered successfully. Last update: " + new Date().toLocaleTimeString();
-          return true;
+        const res = await fetch(url, { 
+          method: 'GET', 
+          headers: { 
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          mode: 'cors',
+          credentials: 'same-origin'
+        });
+        
+        console.log('Fetch response status:', res.status);
+        
+        // Check for 200 status - AUTO RENDER
+        if (res.status === 200 || res.ok) {
+          const text = await res.text();
+          console.log('Response text:', text.substring(0, 500));
+          
+          let json;
+          try {
+            json = JSON.parse(text);
+          } catch (parseErr) {
+            console.error('JSON parse error:', parseErr);
+            st.textContent = "❌ Error parsing JSON response: " + parseErr.message;
+            st.style.color = "#d32f2f";
+            return false;
+          }
+          
+          // Skip if still waiting status
+          if (json.status === "waiting") {
+            if(showStatus) {
+              st.textContent = "⏳ Waiting for analysis... " + new Date().toLocaleTimeString();
+              st.style.color = "#f57c00";
+            }
+            return false;
+          }
+          
+          console.log('Parsed JSON:', json);
+          
+          const jsonStr = JSON.stringify(json, null, 2);
+          const currentHash = simpleHash(jsonStr);
+          
+          // Always render on first successful fetch, or when data changes
+          if (currentHash !== lastJsonHash || lastJsonHash === null) {
+            lastJsonHash = currentHash;
+            st.textContent = "✅ Status 200 received! Auto-rendering report...";
+            st.style.color = "#2e7d32";
+            document.getElementById('jsonInput').value = jsonStr;
+            
+            // AUTO RENDER ON 200
+            try {
+              populateReport(json);
+              st.textContent = "✅ Report auto-rendered successfully! (Status 200) - " + new Date().toLocaleTimeString();
+              console.log('Report rendered successfully');
+            } catch (renderErr) {
+              console.error('Render error:', renderErr);
+              st.textContent = "❌ Error rendering report: " + renderErr.message;
+              st.style.color = "#d32f2f";
+            }
+            return true;
+          } else {
+            if (showStatus) {
+              st.textContent = "✅ Status 200 - No new data. Last check: " + new Date().toLocaleTimeString();
+              st.style.color = "#666";
+            }
+            return false;
+          }
         } else {
-          if(showStatus) st.textContent = "No new data. Last check: " + new Date().toLocaleTimeString();
+          // Non-200 status - waiting
+          if (showStatus) {
+            st.textContent = "⏳ Waiting for 200 status... Current: HTTP " + res.status + " - " + new Date().toLocaleTimeString();
+            st.style.color = "#f57c00";
+          }
           return false;
         }
       } catch(e) {
-        if(showStatus) st.textContent = "Error fetching: " + (e.message || e);
-        console.error(e);
+        console.error('Fetch error:', e);
+        if(showStatus) {
+          st.textContent = "⏳ Waiting for API... (" + (e.message || 'Connection pending') + ")";
+          st.style.color = "#666";
+        }
         return false;
       }
     }
@@ -921,18 +980,20 @@
     function startPolling() {
       if(pollingInterval) clearInterval(pollingInterval);
       const st = document.getElementById('json-status');
-      st.textContent = "Monitoring /full-analysis for updates...";
+      const url = document.getElementById('jsonUrl').value.trim() || 'http://localhost:8000/full-analysis/latest';
+      st.textContent = "🔄 Auto-monitoring " + url + " - Will render automatically on 200 status...";
+      st.style.color = "#1976d2";
       
       // Initial fetch
       fetchAndRender(true);
       
-      // Poll every 3 seconds for changes
+      // Poll every 2 seconds for changes (faster response)
       pollingInterval = setInterval(() => {
         const autoFetch = document.getElementById('autoFetchToggle');
         if(autoFetch && autoFetch.checked) {
           fetchAndRender(false);
         }
-      }, 3000);
+      }, 2000);
     }
 
     // Stop polling
@@ -957,7 +1018,7 @@
         startPolling();
       } else {
         stopPolling();
-        st.textContent = "Auto-fetch disabled. Use 'Fetch & Render Now' button.";
+        st.textContent = "Auto-fetch disabled.";
       }
     });
 
@@ -967,6 +1028,28 @@
       lastJsonHash = null;
     });
 
+    // Auto-render on paste
+    document.getElementById('jsonInput').addEventListener('paste', () => {
+      setTimeout(() => {
+        const st = document.getElementById('json-status');
+        const txt = document.getElementById('jsonInput').value.trim();
+        if (txt) {
+          const parsed = safeParseJSON(txt);
+          if (parsed) {
+            try {
+              populateReport(parsed);
+              lastJsonHash = simpleHash(txt);
+              st.textContent = "✅ Report rendered from pasted JSON. " + new Date().toLocaleTimeString();
+            } catch (e) {
+              st.textContent = "❌ Error rendering: " + (e.message || e);
+            }
+          } else {
+            st.textContent = "JSON pasted but format is invalid.";
+          }
+        }
+      }, 100);
+    });
+
     // Start auto-polling on page load
     window.addEventListener('load', async () => {
       const params = new URLSearchParams(window.location.search);
@@ -974,8 +1057,13 @@
       if(customUrl) {
         document.getElementById('jsonUrl').value = customUrl;
       }
-      // Start polling automatically
-      startPolling();
+      // Start polling automatically (checkbox is checked by default)
+      const autoFetch = document.getElementById('autoFetchToggle');
+      if (autoFetch && autoFetch.checked) {
+        startPolling();
+      } else {
+        document.getElementById('json-status').textContent = "Ready. Enable auto-fetch or click 'Manual Fetch'.";
+      }
     });
 
     // Cleanup on page unload
