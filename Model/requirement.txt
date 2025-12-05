@@ -36,3 +36,4 @@ paddlepaddle
 paddleocr 
 torch-geometric
 pdfplumber
+duckduckgo-search

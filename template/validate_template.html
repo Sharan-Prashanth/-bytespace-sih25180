@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MOC Dynamic Assessment Report</title>
+  <style>
+    /* ================= JSON UI PANEL ================= */
+    #json-ui { display:flex; gap:8px; align-items:flex-start; padding:10px; background:#f7f9fb; border-bottom:1px solid #e6e6e6; position:sticky; top:0; z-index:1000; }
+    #json-ui textarea { width:64%; height:140px; padding:8px; border:1px solid #ddd; border-radius:6px; font-family: monospace; resize:vertical; font-size:11px; }
+    #json-ui .controls { width:36%; display:flex; flex-direction:column; gap:8px; }
+    #json-ui input[type=text] { padding:8px; border:1px solid #ddd; border-radius:6px; width:100%; }
+    #json-ui button { padding:10px; border: none; background:#0057b7; color:#fff; border-radius:6px; cursor:pointer; font-weight:bold; }
+    #json-ui .secondary { background:#2a9d8f; }
+    #json-status { font-size:13px; color:#333; margin-top:4px; }
+    @media print { #json-ui { display:none !important; } }
+
+    /* ================= DOCUMENT SETUP ================= */
+    @page {
+      size: A4;
+      margin: 15mm; /* Browser print margin */
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: "Calibri", "Roboto", Arial, sans-serif;
+      background: #555; /* Dark background for screen contrast */
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+
+    /* The "Sheet" of paper on screen */
+    .report-container {
+      max-width: 210mm;
+      min-height: 297mm; /* Visual height for screen only */
+      margin: 20px auto;
+      background: #ffffff;
+      padding: 15mm;
+      position: relative;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      
+      /* Gov styling accents */
+      border-top: 5px solid #ff9933; /* Saffron */
+      border-bottom: 5px solid #138808; /* Green */
+    }
+
+    /* ================= TYPOGRAPHY & UTILS ================= */
+    h1 { font-size: 24px; color: #002855; margin: 0; text-transform: uppercase; }
+    
+    h2 { 
+      font-size: 18px; 
+      color: #002855; 
+      border-bottom: 2px solid #eee; 
+      padding-bottom: 5px; 
+      margin-top: 25px; 
+      margin-bottom: 15px; 
+    }
+    
+    h3 { font-size: 14px; color: #555; margin-bottom: 5px; margin-top: 0; }
+    
+    .status-pill { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: #fff; display: inline-block; }
+    .bg-red { background: #d81b60; }
+    .bg-orange { background: #ff9933; color: #222; }
+    .bg-green { background: #138808; }
+
+    /* ================= HEADER ================= */
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 15px; }
+    .header img { height: 60px; }
+    .header-text { text-align: right; }
+    .header-text div { font-size: 12px; color: #666; }
+
+    /* ================= TABLES ================= */
+    .info-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
+    .info-table th { background: #f4f4f4; text-align: left; padding: 8px; border: 1px solid #ddd; color: #002855; width: 25%; }
+    .info-table td { border: 1px solid #ddd; padding: 8px; }
+
+    .cost-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+    .cost-table th { background: #002855; color: #fff; padding: 8px; text-align: left; }
+    .cost-table td { border-bottom: 1px solid #eee; padding: 8px; }
+    .cost-right { text-align: right; font-family: monospace; font-weight: bold; }
+    .cost-total-row { background: #fff3e6; font-weight: bold; }
+
+    /* ================= CARDS & BLOCKS ================= */
+    .fault-card { 
+      border-left: 4px solid #d81b60; 
+      background: #fff0f5; 
+      padding: 10px; 
+      margin-bottom: 10px; 
+      font-size: 12px; 
+    }
+    .fault-title { font-weight: bold; color: #d81b60; margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .fault-reason { color: #444; }
+
+    .data-block { 
+      margin-bottom: 15px; 
+      border: 1px solid #eee; 
+      padding: 10px; 
+      border-radius: 4px; 
+      background: #fff;
+    }
+    .data-label { font-size: 11px; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+    .data-value { font-size: 12px; line-height: 1.4; white-space: pre-wrap; }
+
+    /* ================= PRINT SPECIFIC MAGIC ================= */
+    @media print {
+      body { 
+        background: none; 
+        padding: 0; 
+        margin: 0; 
+      }
+      .report-container { 
+        width: 100%; 
+        max-width: none; 
+        box-shadow: none; 
+        margin: 0; 
+        padding: 0; /* Let @page margins handle the whitespace */
+        border: none; 
+      }
+      .no-print { display: none; }
+
+      /* PREVENT BREAKING INSIDE ELEMENTS */
+      .fault-card, 
+      .data-block, 
+      .info-table, 
+      .cost-table,
+      tr, 
+      td,
+      th,
+      .header { 
+        break-inside: avoid; 
+        page-break-inside: avoid; 
+      }
+
+      /* Keep headings with their following content */
+      h2, h3 { 
+        break-after: avoid; 
+        page-break-after: avoid; 
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================= JSON INPUT UI ================= -->
+<div id="json-ui">
+  <textarea id="jsonInput" placeholder="JSON will be auto-fetched and rendered when API returns 200"></textarea>
+  <div class="controls">
+    <input type="text" id="jsonUrl" value="http://localhost:8000/validation/latest-result" placeholder="Full API URL" style="font-size:11px;" />
+    <label style="font-size:12px;display:flex;align-items:center;gap:6px;background:#e8f5e9;padding:6px 10px;border-radius:4px;border:1px solid #4caf50;">
+      <input type="checkbox" id="autoFetchToggle" checked /> <strong>Auto-fetch & render on 200</strong>
+    </label>
+    <button id="fetchBtn" class="secondary">Manual Fetch</button>
+    <button id="renderBtn" style="background:#6c757d;">Render from Textarea</button>
+    <button id="clearBtn" style="background:#888;">Clear</button>
+    <div id="json-status">🔄 Monitoring API endpoint... Will auto-render on 200 response</div>
+  </div>
+</div>
+
+<div class="report-container">
+  
+  <div class="header">
+    <div style="display:flex; gap:10px; align-items:center;">
+      <img src="./assets/moc.jpg" alt="MoC Logo" onerror="this.style.display='none'; document.getElementById('alt-logo').style.display='block'">
+      <div id="alt-logo" style="display:none; font-weight:bold; font-size:20px; color:#ff9933;">MoC</div>
+      <div>
+        <h1>Ministry of Coal</h1>
+        <div style="font-size:12px; color:#555;">Science & Technology Grant Evaluation</div>
+      </div>
+    </div>
+    <div class="header-text">
+      <div id="report-date">Date: --</div>
+      <div style="font-weight:bold; color:#d81b60;" id="overall-status">STATUS: PENDING</div>
+    </div>
+  </div>
+
+  <div id="section-details">
+    <h2>1. Project & Financial Overview</h2>
+    <table class="info-table">
+      <tr>
+        <th>Project Title</th>
+        <td colspan="3" id="p-title" style="font-weight:bold;">--</td>
+      </tr>
+      <tr>
+        <th>Principal Investigator</th>
+        <td id="p-pi">--</td>
+        <th>Agency</th>
+        <td id="p-agency">--</td>
+      </tr>
+      <tr>
+        <th>Submission Date</th>
+        <td id="p-date">--</td>
+        <th>Total Outlay</th>
+        <td id="p-cost">--</td>
+      </tr>
+    </table>
+
+    <h3>Financial Breakdown (₹ Lakhs)</h3>
+    <table class="cost-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th class="cost-right">Year 1</th>
+          <th class="cost-right">Total</th>
+        </tr>
+      </thead>
+      <tbody id="cost-body">
+        </tbody>
+      <tfoot id="cost-foot">
+        </tfoot>
+    </table>
+  </div>
+
+  <div id="section-faults">
+    <h2>2. Validation Faults (Action Required)</h2>
+    <div id="fault-container">
+      </div>
+  </div>
+
+  <div id="section-guidelines">
+    <h2>3. S&T Guidelines Reference</h2>
+    <div style="font-size:12px; color:#444; line-height:1.5; background:#f9f9f9; padding:10px; border:1px solid #eee; break-inside: avoid; page-break-inside: avoid;">
+      <p style="margin-top:0;"><strong>Compliance Standard:</strong> This proposal was evaluated against the "Guidelines for Support to Coal S&T Projects (2025)".</p>
+      <ul>
+        <li><strong>Objectives:</strong> Must be listed as bullet points (2-5 max) and specific.</li>
+        <li><strong>Work Plan:</strong> Must define clear phases and milestones.</li>
+        <li><strong>Budget:</strong> Equipment and Manpower must be strictly justified.</li>
+      </ul>
+      <p style="margin-bottom:0;"><em>Any items listed in Section 2 above indicate a direct deviation from these standards and must be corrected before the proposal can proceed to the Technical Committee.</em></p>
+    </div>
+  </div>
+
+  <div id="section-data">
+    <h2>4. Submitted Data Content</h2>
+    <div style="font-size:11px; color:#777; margin-bottom:10px;">Below is the raw text extracted from the submission form.</div>
+    <div id="data-container">
+      </div>
+  </div>
+
+</div>
+
+<button onclick="window.print()" class="no-print" style="position:fixed; bottom:20px; right:20px; padding:15px 25px; background:#002855; color:white; border:none; border-radius:30px; cursor:pointer; font-weight:bold; box-shadow:0 2px 10px rgba(0,0,0,0.3);">Print Report</button>
+
+<script>
+  // ============================================
+  // HELPER FUNCTIONS
+  // ============================================
+  function safeParseJSON(txt) {
+    try { return JSON.parse(txt); } catch(e) { return null; }
+  }
+
+  function simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return hash;
+  }
+
+  // ============================================
+  // POPULATE REPORT FROM JSON DATA
+  // ============================================
+  function populateReport(jsonData) {
+    if (!jsonData || typeof jsonData !== 'object') {
+      throw new Error("Invalid JSON data");
+    }
+
+    const valRes = jsonData.validation_result || {};
+    const extract = jsonData.extracted_data || {};
+    const costs = extract.cost_breakdown || {};
+    const basicInfo = extract.basic_information || {};
+
+    // 1. Header Info
+    document.getElementById('report-date').textContent = "Date: " + new Date().toLocaleDateString();
+    
+    if (valRes.overall_validation) {
+      document.getElementById('overall-status').textContent = "STATUS: APPROVED";
+      document.getElementById('overall-status').style.color = "green";
+    } else {
+      document.getElementById('overall-status').textContent = "STATUS: REVISION REQUIRED";
+      document.getElementById('overall-status').style.color = "#d81b60";
+    }
+
+    // 2. Project Details
+    document.getElementById('p-title').textContent = basicInfo.project_title || "--";
+    document.getElementById('p-pi').textContent = basicInfo.project_leader_name || "--";
+    document.getElementById('p-agency').textContent = basicInfo.principal_implementing_agency || "--";
+    document.getElementById('p-date').textContent = basicInfo.submission_date || "--";
+    
+    const totalCost = costs.total_project_cost?.total || "0";
+    document.getElementById('p-cost').textContent = "₹ " + totalCost + " Lakhs";
+
+    // 3. Cost Table
+    const costBody = document.getElementById('cost-body');
+    costBody.innerHTML = ''; // Clear existing rows
+    
+    const rev = costs.revenue_expenditure || {};
+    const cap = costs.capital_expenditure || {};
+
+    const addCostRow = (name, obj) => {
+      if (!obj) return;
+      const total = parseFloat(obj.total || 0).toFixed(2);
+      const y1 = parseFloat(obj.year1 || 0).toFixed(2);
+      if (total == "0.00") return;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${name}</td>
+        <td class="cost-right">${y1}</td>
+        <td class="cost-right">${total}</td>
+      `;
+      costBody.appendChild(tr);
+    };
+
+    addCostRow("Salaries / Manpower", rev.salaries);
+    addCostRow("Consumables", rev.consumables);
+    addCostRow("Travel", rev.travel);
+    addCostRow("Workshop / Seminar", rev.workshop_seminar);
+    addCostRow("Equipment (Capital)", cap.equipment);
+    addCostRow("Land & Building", cap.land_building);
+
+    // Update footer totals
+    const costFoot = document.getElementById('cost-foot');
+    const y1Total = parseFloat(costs.total_project_cost?.year1 || 0).toFixed(2);
+    const grandTotal = parseFloat(costs.total_project_cost?.total || 0).toFixed(2);
+    costFoot.innerHTML = `
+      <tr class="cost-total-row">
+        <td>TOTAL PROJECT COST</td>
+        <td class="cost-right">₹ ${y1Total}</td>
+        <td class="cost-right">₹ ${grandTotal}</td>
+      </tr>
+    `;
+
+    // 4. Validation Faults
+    const faultContainer = document.getElementById('fault-container');
+    faultContainer.innerHTML = ''; // Clear existing faults
+    let hasFaults = false;
+
+    if (valRes.columns_missing_value && valRes.columns_missing_value.length > 0) {
+      hasFaults = true;
+      valRes.columns_missing_value.forEach(field => {
+        const div = document.createElement('div');
+        div.className = 'fault-card';
+        div.innerHTML = `
+          <div class="fault-title">
+            <span>${field}</span>
+            <span class="status-pill bg-red">MISSING DATA</span>
+          </div>
+          <div class="fault-reason">This field is mandatory but was left empty in the submission.</div>
+        `;
+        faultContainer.appendChild(div);
+      });
+    }
+
+    if (valRes.columns_not_following_guidelines && valRes.columns_not_following_guidelines.length > 0) {
+      hasFaults = true;
+      valRes.columns_not_following_guidelines.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'fault-card';
+        div.style.borderLeftColor = "#ff9933";
+        div.innerHTML = `
+          <div class="fault-title" style="color:#cc7a00">
+            <span>${item.field}</span>
+            <span class="status-pill bg-orange">GUIDELINE ISSUE</span>
+          </div>
+          <div class="fault-reason">${item.reason}</div>
+        `;
+        faultContainer.appendChild(div);
+      });
+    }
+
+    if (!hasFaults) {
+      faultContainer.innerHTML = `<div style="padding:10px; background:#eef8f0; border:1px solid #138808; color:#138808; font-weight:bold;">No validation faults detected.</div>`;
+    }
+
+    // 5. Full Data List
+    const dataContainer = document.getElementById('data-container');
+    dataContainer.innerHTML = ''; // Clear existing data blocks
+    
+    if (valRes.fields && Array.isArray(valRes.fields)) {
+      valRes.fields.forEach(f => {
+        const div = document.createElement('div');
+        div.className = 'data-block';
+        
+        let borderStyle = "1px solid #eee";
+        if (f.validation_result === 'not_following_guidelines') borderStyle = "1px solid #ff9933";
+        if (f.validation_result === 'not_filled') borderStyle = "1px solid #d81b60";
+        div.style.border = borderStyle;
+
+        let valText = f.value ? f.value : "<em>[No Data Provided]</em>";
+        
+        div.innerHTML = `
+          <div class="data-label">${f.field_name}</div>
+          <div class="data-value">${valText}</div>
+        `;
+        dataContainer.appendChild(div);
+      });
+    }
+
+    // Update status
+    const st = document.getElementById('json-status');
+    if (st) st.textContent = "Report rendered successfully. Last update: " + new Date().toLocaleTimeString();
+  }
+
+  // ============================================
+  // AUTO-FETCH & POLLING LOGIC
+  // ============================================
+  let lastJsonHash = null;
+  let pollingInterval = null;
+
+  async function fetchAndRender(showStatus = true) {
+    const url = document.getElementById('jsonUrl').value.trim() || '/validation-result';
+    const st = document.getElementById('json-status');
+    try {
+      if (showStatus) st.textContent = "🔄 Fetching from " + url + "...";
+      
+      const res = await fetch(url, { 
+        method: 'GET', 
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        mode: 'cors',
+        credentials: 'same-origin'
+      });
+      
+      console.log('Fetch response status:', res.status);
+      
+      // Check for 200 status - AUTO RENDER
+      if (res.status === 200 || res.ok) {
+        const text = await res.text();
+        console.log('Response text:', text.substring(0, 500));
+        
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch (parseErr) {
+          console.error('JSON parse error:', parseErr);
+          st.textContent = "❌ Error parsing JSON response: " + parseErr.message;
+          st.style.color = "#d32f2f";
+          return false;
+        }
+        
+        console.log('Parsed JSON:', json);
+        
+        const jsonStr = JSON.stringify(json, null, 2);
+        const currentHash = simpleHash(jsonStr);
+        
+        // Always render on first successful fetch, or when data changes
+        if (currentHash !== lastJsonHash || lastJsonHash === null) {
+          lastJsonHash = currentHash;
+          st.textContent = "✅ Status 200 received! Auto-rendering report...";
+          st.style.color = "#2e7d32";
+          document.getElementById('jsonInput').value = jsonStr;
+          
+          // AUTO RENDER ON 200
+          try {
+            populateReport(json);
+            st.textContent = "✅ Report auto-rendered successfully! (Status 200) - " + new Date().toLocaleTimeString();
+            console.log('Report rendered successfully');
+          } catch (renderErr) {
+            console.error('Render error:', renderErr);
+            st.textContent = "❌ Error rendering report: " + renderErr.message;
+            st.style.color = "#d32f2f";
+          }
+          return true;
+        } else {
+          if (showStatus) {
+            st.textContent = "✅ Status 200 - No new data. Last check: " + new Date().toLocaleTimeString();
+            st.style.color = "#666";
+          }
+          return false;
+        }
+      } else {
+        // Non-200 status - waiting
+        if (showStatus) {
+          st.textContent = "⏳ Waiting for 200 status... Current: HTTP " + res.status + " - " + new Date().toLocaleTimeString();
+          st.style.color = "#f57c00";
+        }
+        return false;
+      }
+    } catch (e) {
+      console.error('Fetch error:', e);
+      if (showStatus) {
+        st.textContent = "⏳ Waiting for API... (" + (e.message || 'Connection pending') + ")";
+        st.style.color = "#666";
+      }
+      return false;
+    }
+  }
+
+  function startPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    const st = document.getElementById('json-status');
+    const url = document.getElementById('jsonUrl').value.trim() || '/validation-result';
+    st.textContent = "🔄 Auto-monitoring " + url + " - Will render automatically on 200 status...";
+    st.style.color = "#1976d2";
+    
+    // Initial fetch
+    fetchAndRender(true);
+    
+    // Poll every 2 seconds for changes (faster response)
+    pollingInterval = setInterval(() => {
+      const autoFetch = document.getElementById('autoFetchToggle');
+      if (autoFetch && autoFetch.checked) {
+        fetchAndRender(false);
+      }
+    }, 2000);
+  }
+
+  function stopPolling() {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+  }
+
+  // ============================================
+  // UI EVENT HANDLERS
+  // ============================================
+  
+  // Render from textarea button
+  document.getElementById('renderBtn').addEventListener('click', () => {
+    const st = document.getElementById('json-status');
+    const txt = document.getElementById('jsonInput').value.trim();
+    if (!txt) {
+      st.textContent = "Error: No JSON in textarea. Please paste JSON data first.";
+      return;
+    }
+    const parsed = safeParseJSON(txt);
+    if (!parsed) {
+      st.textContent = "Error: Invalid JSON format. Please check your JSON syntax.";
+      return;
+    }
+    try {
+      populateReport(parsed);
+      lastJsonHash = simpleHash(txt);
+      st.textContent = "Report rendered successfully from pasted JSON. " + new Date().toLocaleTimeString();
+    } catch (e) {
+      st.textContent = "Error rendering: " + (e.message || e);
+      console.error(e);
+    }
+  });
+
+  // Fetch from API button
+  document.getElementById('fetchBtn').addEventListener('click', async () => {
+    lastJsonHash = null; // Force re-render even if same data
+    await fetchAndRender(true);
+  });
+
+  document.getElementById('autoFetchToggle')?.addEventListener('change', (e) => {
+    const st = document.getElementById('json-status');
+    if (e.target.checked) {
+      st.textContent = "Auto-fetch enabled. Monitoring for updates...";
+      startPolling();
+    } else {
+      stopPolling();
+      st.textContent = "Auto-fetch disabled.";
+    }
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    document.getElementById('jsonInput').value = "";
+    document.getElementById('json-status').textContent = "Cleared. Paste new JSON and click Render.";
+    lastJsonHash = null;
+  });
+
+  // Auto-render on paste (with small delay to ensure paste completes)
+  document.getElementById('jsonInput').addEventListener('paste', () => {
+    setTimeout(() => {
+      const st = document.getElementById('json-status');
+      const txt = document.getElementById('jsonInput').value.trim();
+      if (txt) {
+        const parsed = safeParseJSON(txt);
+        if (parsed) {
+          try {
+            populateReport(parsed);
+            lastJsonHash = simpleHash(txt);
+            st.textContent = "Report rendered automatically from pasted JSON. " + new Date().toLocaleTimeString();
+          } catch (e) {
+            st.textContent = "Error rendering: " + (e.message || e);
+          }
+        } else {
+          st.textContent = "JSON pasted but format is invalid. Check syntax and click Render.";
+        }
+      }
+    }, 100);
+  });
+
+  // ============================================
+  // PAGE LOAD INITIALIZATION
+  // ============================================
+  window.addEventListener('load', async () => {
+    const params = new URLSearchParams(window.location.search);
+    const customUrl = params.get('json_url');
+    if (customUrl) {
+      document.getElementById('jsonUrl').value = customUrl;
+    }
+    
+    // Auto-start polling (checkbox is checked by default)
+    // This will automatically render when API returns 200
+    const autoFetch = document.getElementById('autoFetchToggle');
+    if (autoFetch && autoFetch.checked) {
+      startPolling();
+    } else {
+      document.getElementById('json-status').textContent = "Ready. Enable auto-fetch or click 'Manual Fetch'.";
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    stopPolling();
+  });
+</script>
+</body>
+</html>

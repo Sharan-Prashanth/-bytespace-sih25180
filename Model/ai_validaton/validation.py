@@ -796,6 +796,19 @@ def get_value_from_extracted_payload(extracted_payload: Dict[str, Any], field_la
 app = FastAPI(title="FORM-I Validator (Extractor integrated)", version="1.0")
 router = APIRouter(prefix="/validation", tags=["validation"])
 
+# Store latest validation result for GET endpoint (auto-render on frontend)
+latest_validation_result = {"status": "waiting", "message": "No validation has been performed yet"}
+
+@router.get("/latest-result")
+async def get_latest_validation_result():
+    """
+    GET endpoint to retrieve the latest validation result.
+    Frontend can poll this endpoint and auto-render when status 200 is returned with data.
+    """
+    if latest_validation_result.get("status") == "waiting":
+        return JSONResponse(status_code=202, content=latest_validation_result)
+    return JSONResponse(status_code=200, content=latest_validation_result)
+
 @router.post("/validate-form1")
 async def validate_form1(file: UploadFile = File(...)):
     """
@@ -928,6 +941,10 @@ async def validate_form1(file: UploadFile = File(...)):
             "raw_extracted": raw_extracted,
             "guidelines_used": os.path.basename(GUIDELINES_PDF_PATH)
         }
+
+        # Store latest result for GET endpoint (auto-render on frontend)
+        global latest_validation_result
+        latest_validation_result = response
 
         return JSONResponse(status_code=200, content=response)
 
