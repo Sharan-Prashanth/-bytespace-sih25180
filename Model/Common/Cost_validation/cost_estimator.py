@@ -6,7 +6,6 @@ from io import BytesIO
 from datetime import datetime
 from typing import Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi import APIRouter, UploadFile, File, HTTPException
 import pandas as pd
 import numpy as np
 import joblib
@@ -27,37 +26,18 @@ try:
 except Exception:
     StandardScaler = None
 
-# Optional/soft imports - guard heavy or environment-specific libraries
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:
-    SentenceTransformer = None
-
-try:
-    from sklearn.ensemble import RandomForestRegressor
-except Exception:
-    RandomForestRegressor = None
-
-try:
-    from sklearn.preprocessing import StandardScaler
-except Exception:
-    StandardScaler = None
-
 try:
     import PyPDF2
-except Exception:
 except Exception:
     PyPDF2 = None
 
 try:
     import chardet
 except Exception:
-except Exception:
     chardet = None
 
 try:
     import docx
-except Exception:
 except Exception:
     docx = None
 
@@ -205,167 +185,13 @@ def _find_similar_projects(description: str, target_year: int, top_k: int = 3, s
         similar_projects = []
         for idx in top_indices:
             try:
-# --- Notebook / Model-based ML predictor (replaces LLM-based estimation) ---
-router = APIRouter()
-def notebook_ml_predict(text: str, target_year: int = 2025):
-    """Obtain ML prediction using the enhanced predictor or saved model artifacts.
-
-    Returns: (predicted_cost, confidence_score, breakdown_dict)
-    """
-    # Prefer enhanced_predictor instance if available
-    try:
-        if enhanced_predictor is not None:
-            res = enhanced_ml_cost_estimate(text, target_year=target_year)
-            return res.get('predicted_cost'), res.get('confidence_score'), res.get('cost_breakdown')
-
-        # Try loading a saved joblib model package
-        candidate_paths = [
-            os.path.join(os.path.dirname(__file__), 'pre-trained', 'Enhanced_Multi_Regression_Cost_Model.joblib'),
-            os.path.join(os.path.dirname(__file__), 'pre-trained', 'Enhanced_Cost_Predictor.joblib'),
-            os.path.join(os.path.dirname(__file__), 'Enhanced_Multi_Regression_Cost_Model.joblib'),
-            os.path.join(os.path.dirname(__file__), 'Enhanced_Cost_Predictor.joblib')
-        ]
-        for p in candidate_paths:
-            try:
-                if os.path.exists(p):
-                    pkg = joblib.load(p)
-                    # pkg may be dict-like
-                    model = pkg.get('best_model') if isinstance(pkg, dict) else pkg
-                    preproc = pkg.get('preprocessor') if isinstance(pkg, dict) else None
-                    metadata = pkg.get('metadata', {}) if isinstance(pkg, dict) else {}
-
-                    # Build X_new similar to predict_cost
-                    emb = _get_text_embedding(text)
-                    emb_vec = np.asarray(emb).reshape(1, -1)
-                    num_feats = np.array([[0.0, 0.0, target_year]])
-                    if preproc is not None:
-                        # best-effort: try using preprocessor transform
-                        try:
-                            feat_dict = {'abstract_text': text, 'agency': '', 'proposal_year': target_year,
-                                         'capital_total': 0.0, 'revenue_total': 0.0}
-                            X_new = preproc.transform([feat_dict])
-                        except Exception:
-                            X_new = np.hstack([emb_vec, num_feats])
-                    else:
-                        X_new = np.hstack([emb_vec, num_feats])
-
-                    y_pred_base = float(model.predict(X_new)[0])
-                    base_year = metadata.get('base_year', INFLATION_METADATA['base_year'])
-                    y_pred_nominal = adjust_cost_from_base(y_pred_base, target_year, base_year=base_year)
-                    confidence = metadata.get('training_mae', None) or 50.0
-                    return round(float(y_pred_nominal), 2), float(confidence), {}
-            except Exception:
-                continue
-
-    except Exception:
-        pass
-
-    return None, None, {}
-
-
-def usage_comment_simple(final_budget: int, ml_cost: float, breakdown: dict, validation_status: str) -> str:
-    """Generate a short 5-line usage comment without calling an LLM."""
-    lines = []
-    lines.append(f"Final budget set to {int(final_budget)} Lakhs after ML validation.")
-    lines.append(f"ML predicted cost: {int(round(ml_cost or 0))} Lakhs; validation: {validation_status}.")
-    lines.append("Consider phased implementation to match budget and scope.")
-    lines.append("Allocate funds for critical equipment and validation studies.")
-    lines.append("Use milestone-based releases and maintain detailed procurement docs.")
-    return "\n".join(lines)
-    
-def _extract_project_features(text: str) -> dict:
-    """Extract project type, technology focus, and complexity indicators"""
-    text = str(text).lower()
-
-    tech_keywords = {
-        'iot_ai': ['iot', 'artificial intelligence', 'ai', 'machine learning', 'sensor', 'automation'],
-        'mining_equipment': ['mining', 'excavation', 'drilling', 'conveyor', 'crusher', 'machinery'],
-        'safety_monitoring': ['safety', 'monitoring', 'warning', 'detection', 'alert', 'surveillance'],
-        'environmental': ['environment', 'pollution', 'emission', 'water', 'air quality', 'waste'],
-        'software': ['software', 'application', 'system', 'platform', 'algorithm', 'programming']
-    }
-
-    scale_keywords = {
-        'pilot': ['pilot', 'prototype', 'demonstration', 'proof of concept'],
-        'medium': ['implementation', 'deployment', 'installation', 'integration'],
-        'large': ['commercial', 'industrial', 'full scale', 'mass production', 'nationwide']
-    }
-
-    org_keywords = {
-        'academic': ['university', 'college', 'institute', 'iit', 'nit', 'research'],
-        'government': ['cmpdi', 'cil', 'ministry', 'department', 'govt', 'government'],
-        'private': ['ltd', 'pvt', 'private', 'company', 'corporation'],
-        'public_sector': ['ongc', 'ntpc', 'bhel', 'sail', 'coal india']
-    }
-
-    features = {}
-    for tech_type, keywords in tech_keywords.items():
-        features[f'tech_{tech_type}'] = sum(1 for keyword in keywords if keyword in text)
-
-    for scale_type, keywords in scale_keywords.items():
-        features[f'scale_{scale_type}'] = sum(1 for keyword in keywords if keyword in text)
-
-    for org_type, keywords in org_keywords.items():
-        features[f'org_{org_type}'] = sum(1 for keyword in keywords if keyword in text)
-
-    features['text_length'] = len(text)
-    features['technical_terms'] = len(re.findall(r'\b(development|technology|system|equipment|monitoring|analysis)\b', text))
-    features['cost_keywords'] = len(re.findall(r'\b(equipment|machinery|software|development|installation)\b', text))
-
-    return features
-
-
-def _find_similar_projects(description: str, target_year: int, top_k: int = 3, sbert_encoder=None, historical_data=None):
-    """Find similar historical projects using an SBERT encoder if available."""
-    try:
-        encoder = sbert_encoder
-        if encoder is None and os.path.exists(_SENTENCE_ENCODER_PATH):
-            try:
-                encoder = joblib.load(_SENTENCE_ENCODER_PATH)
-            except Exception:
-                encoder = None
-
-        if encoder is None:
-            return []
-
-        hist = historical_data if historical_data is not None else globals().get('historical_data')
-        if hist is None or 'clean_text' not in hist:
-            return []
-
-        query_embedding = encoder.encode([description])
-        historical_texts = list(hist['clean_text'])
-        historical_embeddings = encoder.encode(historical_texts)
-        similarities = query_embedding.dot(historical_embeddings.T)[0]
-
-        import numpy as _np
-        top_indices = _np.argsort(similarities)[-top_k:][::-1]
-
-        similar_projects = []
-        for idx in top_indices:
-            try:
                 project = {
-                    'similarity': float(round(float(similarities[idx]), 3)),
-                    'year': int(hist.iloc[idx].get('Financial Year', 0)),
-                    'cost': float(hist.iloc[idx].get('Cost (Lakhs)', 0)),
-                    'description': str(hist.iloc[idx].get('clean_text', ''))[:100] + '...'
                     'similarity': float(round(float(similarities[idx]), 3)),
                     'year': int(hist.iloc[idx].get('Financial Year', 0)),
                     'cost': float(hist.iloc[idx].get('Cost (Lakhs)', 0)),
                     'description': str(hist.iloc[idx].get('clean_text', ''))[:100] + '...'
                 }
                 similar_projects.append(project)
-            except Exception:
-                continue
-
-        return similar_projects
-    except Exception:
-        return []
-
-
-def _calculate_confidence(predicted_cost, similar_projects, project_features):
-    """Calculate confidence score based on multiple factors"""
-    confidence = 0.5
-    try:
             except Exception:
                 continue
 
@@ -386,69 +212,13 @@ def _calculate_confidence(predicted_cost, similar_projects, project_features):
                 confidence += (1 - min(cost_variance, 1)) * 0.3
 
         total_features = sum(project_features.values()) if isinstance(project_features, dict) else 0
-            import numpy as _np
-            similar_costs = [p.get('cost', 0) for p in similar_projects]
-            if len(similar_costs) > 0 and _np.mean(similar_costs) != 0:
-                cost_variance = float(_np.std(similar_costs) / (abs(_np.mean(similar_costs)) + 1))
-                confidence += (1 - min(cost_variance, 1)) * 0.3
-
-        total_features = sum(project_features.values()) if isinstance(project_features, dict) else 0
         if total_features > 10:
             confidence += 0.15
         elif total_features > 5:
             confidence += 0.1
 
         if 50 <= predicted_cost <= 1000:
-
-        if 50 <= predicted_cost <= 1000:
             confidence += 0.15
-
-        return min(confidence * 100, 95)
-    except Exception:
-        return min(confidence * 100, 95)
-
-
-def _generate_cost_breakdown(total_cost, project_features):
-    breakdown = {}
-    base_breakdown = {
-        'manpower': 0.45,
-        'equipment': 0.25,
-        'software_tools': 0.08,
-        'data_collection': 0.10,
-        'travel_fieldwork': 0.05,
-        'contingency': 0.07
-    }
-
-    if project_features.get('tech_iot_ai', 0) > 2:
-        base_breakdown['software_tools'] += 0.05
-        base_breakdown['equipment'] += 0.05
-        base_breakdown['manpower'] = max(0.0, base_breakdown['manpower'] - 0.10)
-
-    if project_features.get('tech_mining_equipment', 0) > 2:
-        base_breakdown['equipment'] += 0.15
-        base_breakdown['manpower'] = max(0.0, base_breakdown['manpower'] - 0.10)
-        base_breakdown['contingency'] = max(0.0, base_breakdown['contingency'] - 0.05)
-
-    for category, percentage in base_breakdown.items():
-        breakdown[category] = round(float(total_cost) * percentage, 2)
-
-    return breakdown
-
-
-def _generate_recommendations(predicted_cost, project_features):
-    recommendations = []
-    if predicted_cost > 1000:
-        recommendations.append("Consider phasing the project over multiple years")
-        recommendations.append("Explore partnerships to share costs")
-
-    if project_features.get('tech_iot_ai', 0) > 0:
-        recommendations.append("Leverage existing IoT platforms to reduce development costs")
-
-    if project_features.get('scale_pilot', 0) > 0:
-        recommendations.append("Start with pilot implementation to validate approach")
-
-    recommendations.append("Regular milestone-based reviews to control costs")
-    return recommendations
 
         return min(confidence * 100, 95)
     except Exception:
@@ -509,82 +279,9 @@ ENHANCED_PREDICTOR_PATHS = [
     r"Enhanced_Multi_Regression_Cost_Model.joblib",  # Alternative name
     r"pre-trained\Enhanced_Multi_Regression_Cost_Model.joblib",  # Alternative in pre-trained
     r"c:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\Common\Cost_validation\Enhanced_Cost_Predictor.joblib"  # Absolute path
-    r"c:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\Common\Cost_validation\Enhanced_Cost_Predictor.joblib"  # Absolute path
 ]
 
 print("Loading Enhanced Multi-Regression Cost Model...")
-
-class EnhancedCostPredictor:
-    """
-    Lightweight compatibility wrapper for an enhanced cost predictor package.
-    Provides a minimal predict_cost(...) implementation used by the rest of the module.
-    """
-    def __init__(self, model=None, sbert_encoder=None, feature_scaler=None, historical_data=None):
-        self.model = model
-        self.sbert_encoder = sbert_encoder
-        self.feature_scaler = feature_scaler
-        self.historical_data = historical_data
-
-    def predict_cost(self, project_description, target_year=2025, agency_type="government", project_scale="medium"):
-        # Construct embedding/features
-        try:
-            if self.sbert_encoder is not None:
-                try:
-                    emb = self.sbert_encoder.encode([project_description])
-                except Exception:
-                    emb = _get_text_embedding(project_description)
-            else:
-                emb = _get_text_embedding(project_description)
-            emb_vec = np.asarray(emb).reshape(1, -1)
-        except Exception:
-            emb_vec = np.array([[len(str(project_description))]])
-
-        # numeric features placeholder: (capital_total, revenue_total, year)
-        num_feats = np.array([[0.0, 0.0, float(target_year)]])
-        X = np.hstack([emb_vec, num_feats])
-
-        # apply scaler if exists
-        try:
-            if self.feature_scaler is not None:
-                try:
-                    X = self.feature_scaler.transform(X)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # predict using model if available otherwise fallback heuristic
-        try:
-            if self.model is not None and hasattr(self.model, "predict"):
-                y_base = float(self.model.predict(X)[0])
-            else:
-                y_base = float(simple_cost_fallback(project_description))
-        except Exception:
-            y_base = float(simple_cost_fallback(project_description))
-
-        # convert from base-year prediction to target year nominal
-        base_year = INFLATION_METADATA.get("base_year", 2019)
-        predicted_nominal = adjust_cost_from_base(y_base, target_year, base_year=base_year)
-
-        # supplementary outputs
-        project_features = _extract_project_features(project_description)
-        similar_projects = _find_similar_projects(project_description, target_year, top_k=5, sbert_encoder=self.sbert_encoder, historical_data=self.historical_data)
-        confidence_score = _calculate_confidence(predicted_nominal, similar_projects, project_features)
-        try:
-            confidence_score = float(confidence_score)
-        except Exception:
-            confidence_score = 50.0
-
-        cost_breakdown = _generate_cost_breakdown(predicted_nominal, project_features)
-
-        return {
-            "predicted_cost_lakhs": round(float(predicted_nominal), 2),
-            "confidence_score": confidence_score,
-            "cost_breakdown": cost_breakdown,
-            "year_analysis": {"target_year": int(target_year), "base_year": int(base_year)},
-            "similar_projects": similar_projects,
-            "recommendations": _generate_recommendations(predicted_nominal, project_features)
-        }
 
 class EnhancedCostPredictor:
     """
@@ -1020,372 +717,11 @@ def predict_cost(form_json_input, prediction_year: int = None):
         }
 
 
-
-# ------------------ Helper: Inflation Series & Adjustment ------------------
-# Fallback synthetic inflation index (CPI-like) for demonstration only.
-# Replace `INFLATION_INDEX` with official RBI/CPI series for production use.
-INFLATION_INDEX = {
-    2010: 68.0, 2011: 72.0, 2012: 75.0, 2013: 78.0, 2014: 82.0,
-    2015: 85.0, 2016: 88.0, 2017: 92.0, 2018: 96.0, 2019: 100.0,
-    2020: 104.0, 2021: 110.0, 2022: 120.0, 2023: 130.0, 2024: 140.0,
-    2025: 145.0
-}
-
-INFLATION_METADATA = {
-    'series_name': 'Fallback synthetic CPI-like index',
-    'source': 'Local fallback table (replace with RBI or MOSPI CPI series for production)',
-    'base_year': 2019
-}
-
-def _get_inflation_index(year: int) -> float:
-    # Return index for a given year, fallback to nearest available year
-    if year in INFLATION_INDEX:
-        return INFLATION_INDEX[year]
-    # nearest year fallback
-    yrs = sorted(INFLATION_INDEX.keys())
-    if year < yrs[0]:
-        return INFLATION_INDEX[yrs[0]]
-    return INFLATION_INDEX[yrs[-1]]
-
-def adjust_cost_to_base(cost: float, from_year: int, base_year: int = None) -> float:
-    if base_year is None:
-        base_year = INFLATION_METADATA['base_year']
-    idx_from = _get_inflation_index(from_year)
-    idx_base = _get_inflation_index(base_year)
-    if idx_from <= 0:
-        return cost
-    return float(cost) * (idx_base / idx_from)
-
-def adjust_cost_from_base(cost_real: float, to_year: int, base_year: int = None) -> float:
-    if base_year is None:
-        base_year = INFLATION_METADATA['base_year']
-    idx_to = _get_inflation_index(to_year)
-    idx_base = _get_inflation_index(base_year)
-    return float(cost_real) * (idx_to / idx_base)
-
-
-# ------------------ Helper: Preprocessing from FORM-I JSON ------------------
-def _safe_float(x):
-    try:
-        if x is None:
-            return 0.0
-        if isinstance(x, (int, float)):
-            return float(x)
-        # strip commas and non-numeric
-        s = str(x).strip().replace(',', '')
-        return float(re.findall(r"-?\d+\.?\d*", s)[0])
-    except Exception:
-        return 0.0
-
-def _combine_form_text(form_json: Dict) -> str:
-    parts = []
-    pdict = form_json.get('project_details', {}) or {}
-    fields = ['definition_of_issue', 'objectives', 'justification_subject_area',
-              'project_benefits', 'work_plan', 'methodology', 'organization_of_work']
-    for f in fields:
-        v = pdict.get(f)
-        if v:
-            parts.append(str(v))
-    # fallback to basic_information.project_title
-    bi = form_json.get('basic_information', {}) or {}
-    if bi.get('project_title'):
-        parts.insert(0, str(bi.get('project_title')))
-    text = '\n'.join([p for p in parts if p and str(p).strip()])
-    # clean
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text if text else '<no_text>'
-
-def _extract_numeric_breakdown(form_json: Dict) -> Dict:
-    cb = form_json.get('cost_breakdown', {}) or {}
-    cap = cb.get('capital_expenditure', {}) or {}
-    rev = cb.get('revenue_expenditure', {}) or {}
-    def sum_years(obj):
-        total = 0.0
-        if not obj or not isinstance(obj, dict):
-            return 0.0
-        # support nested categories
-        for k, v in obj.items():
-            if isinstance(v, dict):
-                for subk, subv in v.items():
-                    if subk.lower().startswith('year'):
-                        total += _safe_float(subv)
-            else:
-                if str(k).lower().startswith('year'):
-                    total += _safe_float(v)
-        return total
-    cap_sum = sum_years(cap)
-    rev_sum = sum_years(rev)
-    total_reported = 0.0
-    # also try 'total_project_cost' if present
-    tpc = cb.get('total_project_cost', {}) or {}
-    if isinstance(tpc, dict) and tpc.get('total'):
-        total_reported = _safe_float(tpc.get('total'))
-    return {
-        'capital_total_years': cap_sum,
-        'revenue_total_years': rev_sum,
-        'reported_total_if_any': total_reported,
-        'num_years': 3  # default; could be improved by inspecting fields
-    }
-
-
-# ------------------ Helper: Embeddings / Vectorizer ------------------
-_TFIDF_VECTORIZER_PATH = os.path.join(os.path.dirname(__file__), 'tfidf_vectorizer.joblib')
-_SENTENCE_ENCODER_PATH = os.path.join(os.path.dirname(__file__), 'sbert_encoder.joblib')
-
-def _get_text_embedding(text: str, historical_corpus: list = None):
-    """Return a dense vector for `text`.
-    Priority: saved SentenceTransformer instance -> installed SentenceTransformer -> TF-IDF fallback.
-    """
-    # Try loading saved SBERT encoder
-    try:
-        if os.path.exists(_SENTENCE_ENCODER_PATH):
-            encoder = joblib.load(_SENTENCE_ENCODER_PATH)
-            return encoder.encode([text])
-    except Exception:
-        pass
-
-    # If sentence-transformers available, load a lightweight model (non-blocking)
-    try:
-        if SentenceTransformer is not None:
-            model = SentenceTransformer('all-MiniLM-L6-v2')
-            # optionally persist it for next time
-            try:
-                joblib.dump(model, _SENTENCE_ENCODER_PATH)
-            except Exception:
-                pass
-            return model.encode([text])
-    except Exception:
-        pass
-
-    # TF-IDF fallback: fit on historical_corpus if provided otherwise use a tiny local fit
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    try:
-        if os.path.exists(_TFIDF_VECTORIZER_PATH):
-            vec = joblib.load(_TFIDF_VECTORIZER_PATH)
-            v = vec.transform([text]).toarray()
-            return v
-        corpus = (historical_corpus or [text, '<no_text>'])
-        vec = TfidfVectorizer(max_features=256, ngram_range=(1,2))
-        vec.fit(corpus)
-        try:
-            joblib.dump(vec, _TFIDF_VECTORIZER_PATH)
-        except Exception:
-            pass
-        return vec.transform([text]).toarray()
-    except Exception:
-        # as ultimate fallback, return bag-of-length value
-        return np.array([[len(text)]])
-
-
-# ------------------ Main predict_cost function ------------------
-def predict_cost(form_json_input, prediction_year: int = None):
-    """Main entry: accepts parsed JSON (dict) or JSON string.
-
-    Returns the required JSON structure with predicted total cost in INR lakhs.
-    """
-    # Accept string input
-    if isinstance(form_json_input, str):
-        try:
-            form = json.loads(form_json_input)
-        except Exception:
-            return {'error': 'Invalid JSON input'}
-    else:
-        form = form_json_input or {}
-
-    # 1. Prepare text and numeric features
-    abstract_text = _combine_form_text(form)
-    numeric_break = _extract_numeric_breakdown(form)
-
-    # Determine target year
-    bi = form.get('basic_information', {}) or {}
-    sub_date = bi.get('submission_date') or bi.get('submissionDate')
-    proposal_year = None
-    if prediction_year is not None:
-        proposal_year = int(prediction_year)
-    else:
-        if sub_date:
-            try:
-                # support DD-MM-YYYY or YYYY-MM-DD
-                if '-' in sub_date:
-                    parts = sub_date.split('-')
-                    if len(parts[0]) == 4:
-                        proposal_year = int(parts[0])
-                    else:
-                        proposal_year = int(parts[-1])
-                else:
-                    proposal_year = int(sub_date)
-            except Exception:
-                proposal_year = INFLATION_METADATA['base_year']
-        else:
-            proposal_year = INFLATION_METADATA['base_year']
-
-    # 2. Agency
-    agency = (bi.get('principal_implementing_agency') or bi.get('sub_implementing_agency') or '').strip()
-
-    # 3. Build text embedding
-    try:
-        # if historical data available in module, use for TF-IDF fit
-        hist_corpus = None
-        if 'historical_texts' in globals() and globals().get('historical_texts'):
-            hist_corpus = globals().get('historical_texts')
-        emb = _get_text_embedding(abstract_text, historical_corpus=hist_corpus)
-        emb_vec = np.asarray(emb).reshape(1, -1)
-    except Exception:
-        emb_vec = np.array([[len(abstract_text)]])
-
-    # 4. Attempt to load saved enhanced predictor metadata
-    predictor_paths = ENHANCED_PREDICTOR_PATHS if 'ENHANCED_PREDICTOR_PATHS' in globals() else []
-    loaded = None
-    for p in predictor_paths:
-        try:
-            if os.path.exists(p):
-                loaded = joblib.load(p)
-                break
-        except Exception:
-            continue
-
-    # If loaded is a dict/package with model & preprocessor
-    model = None
-    preproc = None
-    metadata = {}
-    if isinstance(loaded, dict):
-        model = loaded.get('model')
-        preproc = loaded.get('preprocessor')
-        metadata = loaded.get('metadata', {})
-    elif loaded is not None:
-        model = loaded
-
-    # Build feature vector expected by model
-    # If preprocessor exists, use it; else create a simple concatenation
-    X_new = None
-    try:
-        if preproc is not None:
-            # preprocessor should accept dict-like input
-            feat_dict = {
-                'abstract_text': abstract_text,
-                'agency': agency,
-                'proposal_year': proposal_year,
-                'capital_total': numeric_break['capital_total_years'],
-                'revenue_total': numeric_break['revenue_total_years']
-            }
-            X_new = preproc.transform([feat_dict])
-        else:
-            # simple numeric vector: embedding + numeric_break + year
-            num_feats = np.array([[numeric_break['capital_total_years'], numeric_break['revenue_total_years'], proposal_year]])
-            # concat
-            X_new = np.hstack([emb_vec, num_feats])
-    except Exception:
-        X_new = np.hstack([emb_vec, np.array([[numeric_break['capital_total_years'], numeric_break['revenue_total_years'], proposal_year]])])
-
-    # 5. Predict using model if available
-    if model is None:
-        # fallback heuristic
-        est = simple_cost_fallback(abstract_text)
-        est_nominal = adjust_cost_from_base(est, proposal_year, base_year=INFLATION_METADATA['base_year'])
-        low = max(1.0, est_nominal * 0.75)
-        high = est_nominal * 1.25
-        explain = {
-            'top_text_features': [],
-            'top_numeric_features': {},
-            'rationale': 'Fallback rule-based estimate (no trained model available).'
-        }
-        return {
-            'predicted_total_cost_in_INR_lakhs': round(float(est_nominal), 2),
-            'prediction_year': int(proposal_year),
-            'inflation_adjusted_to_year': int(proposal_year),
-            'model_used': 'fallback_rule_based',
-            'confidence_interval_in_lakhs': [round(low, 2), round(high, 2)],
-            'explainability': explain,
-            'inflation_series': INFLATION_METADATA
-        }
-
-    try:
-        # model predicts in base-year units if metadata contains base_year
-        base_year = metadata.get('base_year', INFLATION_METADATA['base_year'])
-        y_pred_base = float(model.predict(X_new)[0])
-        # adjust to nominal target year
-        y_pred_nominal = adjust_cost_from_base(y_pred_base, proposal_year, base_year=base_year)
-
-        # confidence interval: use training_mae if available, else 20% rule
-        training_mae = metadata.get('training_mae')
-        if training_mae:
-            mae_nominal = adjust_cost_from_base(training_mae, proposal_year, base_year=base_year)
-            low = max(0.0, y_pred_nominal - 1.96 * mae_nominal)
-            high = y_pred_nominal + 1.96 * mae_nominal
-        else:
-            low = max(0.0, y_pred_nominal * 0.8)
-            high = y_pred_nominal * 1.2
-
-        # Explainability: try to extract top text features if linear model + TF-IDF
-        top_text = []
-        top_numeric = {}
-        try:
-            if hasattr(model, 'coef_') and preproc is not None and hasattr(preproc, 'named_transformers_'):
-                # attempt to get tfidf feature names
-                tfs = None
-                for name, trans in preproc.named_transformers_.items():
-                    try:
-                        if hasattr(trans, 'vocabulary_') or hasattr(trans, 'get_feature_names_out'):
-                            tfs = trans
-                            break
-                    except Exception:
-                        continue
-                if tfs is not None and hasattr(tfs, 'get_feature_names_out'):
-                    fn = tfs.get_feature_names_out()
-                    coefs = np.array(model.coef_[:len(fn)])
-                    contrib = coefs * (preproc.transform([{'abstract_text': abstract_text}]).toarray()[0][:len(fn)])
-                    top_idx = np.argsort(np.abs(contrib))[-5:][::-1]
-                    top_text = [fn[i] for i in top_idx]
-        except Exception:
-            top_text = []
-
-        # Agency effect: compute simple delta from metadata if present
-        agency_effect = None
-        if metadata.get('agency_means') and agency in metadata.get('agency_means'):
-            agency_effect = metadata['agency_means'][agency]
-            top_numeric['agency_effect'] = round(float(agency_effect), 2)
-
-        # Year effect: simple slope if present
-        if metadata.get('year_slope') is not None:
-            top_numeric['year_effect'] = round(float(metadata.get('year_slope')), 3)
-
-        rationale = f"Model predicted {y_pred_nominal:.2f} Lakhs (nominal {proposal_year})."
-        explain = {
-            'top_text_features': top_text,
-            'top_numeric_features': top_numeric,
-            'rationale': rationale
-        }
-
-        return {
-            'predicted_total_cost_in_INR_lakhs': round(float(y_pred_nominal), 2),
-            'prediction_year': int(proposal_year),
-            'inflation_adjusted_to_year': int(proposal_year),
-            'model_used': metadata.get('model_name', type(model).__name__),
-            'confidence_interval_in_lakhs': [round(float(low), 2), round(float(high), 2)],
-            'explainability': explain,
-            'inflation_series': INFLATION_METADATA
-        }
-    except Exception as e:
-        # if prediction fails, fallback
-        est = simple_cost_fallback(abstract_text)
-        est_nominal = adjust_cost_from_base(est, proposal_year, base_year=INFLATION_METADATA['base_year'])
-        return {
-            'predicted_total_cost_in_INR_lakhs': round(float(est_nominal), 2),
-            'prediction_year': int(proposal_year),
-            'inflation_adjusted_to_year': int(proposal_year),
-            'model_used': 'fallback_after_error',
-            'confidence_interval_in_lakhs': [round(est_nominal*0.8,2), round(est_nominal*1.2,2)],
-            'explainability': {'rationale': f'Fallback due to error: {str(e)}'},
-            'inflation_series': INFLATION_METADATA
-        }
-
-
 # First, try to load model components separately to avoid class loading issues
 try:
     component_paths = [
         r"Enhanced_Multi_Regression_Cost_Model.joblib",
         r"pre-trained\Enhanced_Multi_Regression_Cost_Model.joblib",
-        r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\Common\Cost_validation\Enhanced_Multi_Regression_Cost_Model.joblib"
         r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\Common\Cost_validation\Enhanced_Multi_Regression_Cost_Model.joblib"
     ]
     
@@ -1397,14 +733,10 @@ try:
                 file_size_mb = os.path.getsize(comp_path) / 1024 / 1024
                 print(f"File size: {file_size_mb:.1f} MB - Loading...")
 
-
                 import time
                 start_time = time.time()
                 components = joblib.load(comp_path)
                 load_time = time.time() - start_time
-
-                print(f"[OK] Loaded in {load_time:.1f} seconds")
-
 
                 print(f"[OK] Loaded in {load_time:.1f} seconds")
 
@@ -1414,12 +746,9 @@ try:
                     required_keys = ['best_model', 'sbert_encoder', 'feature_scaler', 'historical_data']
                     missing_keys = [key for key in required_keys if key not in components]
 
-
                     if missing_keys:
                         print(f"[ERR] Missing required keys: {missing_keys}")
-                        print(f"[ERR] Missing required keys: {missing_keys}")
                         continue
-
 
                     # Create enhanced predictor from components
                     enhanced_predictor = EnhancedCostPredictor(
@@ -1429,25 +758,20 @@ try:
                         historical_data=components['historical_data']
                     )
                     print("[OK] Enhanced Cost Predictor created from components!")
-                    print("[OK] Enhanced Cost Predictor created from components!")
                     print("Features: 403 (SBERT + Year trends + Technology categories + Agency types)")
                     print("Model: Random Forest with 14.6% improved accuracy")
                     components_loaded = True
                     break
                 else:
                     print(f"[ERR] Components is not a dictionary: {type(components)}")
-                    print(f"[ERR] Components is not a dictionary: {type(components)}")
                     continue
             except Exception as e:
                 print(f"[ERR] Error loading {comp_path}: {e}")
-                print(f"[ERR] Error loading {comp_path}: {e}")
                 continue
-
 
     if not components_loaded:
         raise FileNotFoundError("Model components file not found or invalid")
 except Exception as e:
-    print(f"[ERR] Error loading from components: {e}")
     print(f"[ERR] Error loading from components: {e}")
     
     # Fallback: try direct joblib loading
@@ -1465,29 +789,16 @@ except Exception as e:
                         setattr(_sys.modules['__main__'], 'EnhancedCostPredictor', EnhancedCostPredictor)
                     except Exception:
                         pass
-                    # Ensure unpickling can find local classes saved as __main__.EnhancedCostPredictor
-                    try:
-                        import sys as _sys
-                        _sys.modules.setdefault('__main__', None)
-                        if _sys.modules.get('__main__') is None:
-                            import types as _types
-                            _sys.modules['__main__'] = _types.ModuleType('__main__')
-                        setattr(_sys.modules['__main__'], 'EnhancedCostPredictor', EnhancedCostPredictor)
-                    except Exception:
-                        pass
                     enhanced_predictor = joblib.load(path)
-                    print(f"[OK] Enhanced Cost Predictor loaded from: {path}")
                     print(f"[OK] Enhanced Cost Predictor loaded from: {path}")
                     print("Features: 403 (SBERT + Year trends + Technology categories + Agency types)")
                     print("Model: Random Forest with 14.6% improved accuracy")
                     break
             except Exception as e:
                 print(f"[ERR] Error loading from {path}: {e}")
-                print(f"[ERR] Error loading from {path}: {e}")
                 continue
 
 if enhanced_predictor is None:
-    print("[ERR] Enhanced model file not found in any location. Attempting to create simplified enhanced predictor...")
     print("[ERR] Enhanced model file not found in any location. Attempting to create simplified enhanced predictor...")
     
     # Try to create a simplified enhanced predictor with basic components
@@ -1536,20 +847,16 @@ if enhanced_predictor is None:
             )
             
             print("[OK] Simplified Enhanced Cost Predictor created successfully!")
-            print("[OK] Simplified Enhanced Cost Predictor created successfully!")
             print("Features: Basic (text length + keyword counting + simple ML)")
             print("Model: Simplified Random Forest for compatibility")
             
         else:
             print("[ERR] Required packages not available for simplified model")
-            print("[ERR] Required packages not available for simplified model")
             
     except Exception as e:
         print(f"[ERR] Error creating simplified enhanced predictor: {e}")
-        print(f"[ERR] Error creating simplified enhanced predictor: {e}")
 
 if enhanced_predictor is None:
-    print("[ERR] All enhanced model attempts failed. Using basic fallback mode.")
     print("[ERR] All enhanced model attempts failed. Using basic fallback mode.")
     print("Available files in current directory:")
     try:
@@ -2593,505 +1900,6 @@ def generate_budget_recommendations(total_budget: int, breakdown: dict) -> list:
 
 
 # ===============================================================
-#             CONTENT-BASED COST ESTIMATION FUNCTIONS
-# ===============================================================
-
-def estimate_cost_from_content_only(text: str, json_structure: dict) -> int:
-    """Estimate project cost based solely on PDF content analysis."""
-    
-    # Base cost estimation using content analysis
-    base_cost = 500  # Default baseline
-    
-    # Factor 1: Project scope indicators
-    scope_keywords = {
-        'large_scale': ['commercial', 'industrial', 'full scale', 'nationwide', 'mass production'],
-        'medium_scale': ['implementation', 'deployment', 'pilot', 'demonstration'],
-        'research': ['research', 'study', 'analysis', 'investigation', 'survey']
-    }
-    
-    text_lower = text.lower()
-    
-    # Scale multiplier based on project scope
-    if any(keyword in text_lower for keyword in scope_keywords['large_scale']):
-        scale_multiplier = 3.0
-    elif any(keyword in text_lower for keyword in scope_keywords['medium_scale']):
-        scale_multiplier = 2.0
-    else:
-        scale_multiplier = 1.5
-    
-    # Factor 2: Technology complexity
-    tech_keywords = {
-        'high_tech': ['artificial intelligence', 'machine learning', 'iot', 'automation', 'sensor'],
-        'medium_tech': ['software', 'application', 'system', 'monitoring', 'detection'],
-        'basic_tech': ['manual', 'conventional', 'traditional']
-    }
-    
-    if any(keyword in text_lower for keyword in tech_keywords['high_tech']):
-        tech_multiplier = 2.5
-    elif any(keyword in text_lower for keyword in tech_keywords['medium_tech']):
-        tech_multiplier = 1.8
-    else:
-        tech_multiplier = 1.2
-    
-    # Factor 3: Equipment intensity
-    equipment_keywords = ['equipment', 'machinery', 'hardware', 'installation', 'infrastructure']
-    equipment_count = sum(1 for keyword in equipment_keywords if keyword in text_lower)
-    equipment_multiplier = 1.0 + (equipment_count * 0.3)
-    
-    # Factor 4: Duration indicator (from text length as proxy)
-    duration_multiplier = min(2.0, 1.0 + (len(text) / 10000))
-    
-    # Calculate estimated cost
-    estimated_cost = int(base_cost * scale_multiplier * tech_multiplier * equipment_multiplier * duration_multiplier)
-    
-    # Ensure reasonable bounds
-    return max(200, min(estimated_cost, 5000))
-
-
-def analyze_content_quality(text: str, json_structure: dict) -> int:
-    """Analyze the quality and completeness of extracted content."""
-    
-    quality_score = 50  # Base score
-    
-    # Check if key sections are populated
-    basic_info = json_structure.get('basic_information', {})
-    project_details = json_structure.get('project_details', {})
-    
-    # Increase score for populated fields
-    if basic_info.get('project_title'):
-        quality_score += 10
-    if basic_info.get('principal_implementing_agency'):
-        quality_score += 10
-    if project_details.get('objectives'):
-        quality_score += 15
-    if project_details.get('methodology'):
-        quality_score += 15
-    
-    # Text length and detail
-    if len(text) > 5000:
-        quality_score += 10
-    if len(text) > 10000:
-        quality_score += 10
-    
-    return min(100, quality_score)
-
-
-def generate_content_based_comment(budget: int, base_cost: int, breakdown: dict, method: str, json_structure: dict) -> str:
-    """Generate assessment comment based on content analysis."""
-    
-    project_title = json_structure.get('basic_information', {}).get('project_title', 'Project')
-    
-    if method == "form_extracted":
-        comment = f"Government budget of ₹{budget} lakhs approved based on detailed cost breakdown extracted from Form-I. "
-        comment += f"This represents 85% of the requested ₹{base_cost} lakhs, following government funding guidelines. "
-    else:
-        comment = f"Government budget of ₹{budget} lakhs estimated through content analysis of project description. "
-        comment += f"Estimated project scope and complexity indicate funding requirement of ₹{base_cost} lakhs. "
-    
-    # Add breakdown insights
-    if breakdown:
-        top_categories = sorted(breakdown.items(), key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0, reverse=True)[:2]
-        if top_categories and isinstance(top_categories[0][1], (int, float)):
-            comment += f"Major allocations: {top_categories[0][0].replace('_', ' ').title()} (₹{top_categories[0][1]} lakhs)"
-            if len(top_categories) > 1 and isinstance(top_categories[1][1], (int, float)):
-                comment += f" and {top_categories[1][0].replace('_', ' ').title()} (₹{top_categories[1][1]} lakhs). "
-    
-    comment += "Budget breakdown ensures compliance with government funding norms and project feasibility."
-    
-    return comment
-
-
-def generate_content_based_recommendations(budget: int, breakdown: dict, json_structure: dict) -> list:
-    """Generate recommendations based on content analysis."""
-    
-    recommendations = []
-    
-    # Budget-based recommendations
-    if budget > 2000:
-        recommendations.append("Implement project in phases to ensure effective monitoring and fund utilization")
-        recommendations.append("Establish quarterly review meetings with funding agency")
-    
-    if budget > 1000:
-        recommendations.append("Consider partnership opportunities to share costs and expertise")
-    
-    # Content-based recommendations
-    project_details = json_structure.get('project_details', {})
-    
-    if 'technology' in str(project_details).lower() or 'software' in str(project_details).lower():
-        recommendations.append("Allocate sufficient budget for technology training and capacity building")
-    
-    if 'equipment' in str(project_details).lower():
-        recommendations.append("Plan for equipment maintenance and operational costs beyond project period")
-    
-    # General recommendations
-    recommendations.append("Maintain detailed financial records for audit compliance")
-    recommendations.append("Ensure all procurements follow government guidelines (GFR)")
-    
-    if budget < 500:
-        recommendations.append("Consider leveraging existing infrastructure to optimize costs")
-    
-    return recommendations
-
-
-# ===============================================================
-#             HELPER FUNCTIONS FOR JSON EXTRACTION AND BUDGETING
-# ===============================================================
-
-def extract_json_from_text(content: str) -> dict:
-    """Extract structured JSON from text content using AI."""
-    if not genai:
-        # Fallback to basic structure
-        return create_basic_json_structure(content)
-    
-    try:
-        extraction_prompt = f"""
-        You are an expert at extracting information from FORM-I S&T grant proposals for the Ministry of Coal.
-        
-        Extract the following information from the provided content and return it as a JSON object with these exact keys:
-        
-        {{
-            "form_type": "FORM-I S&T Grant Proposal",
-            "basic_information": {{
-                "project_title": "",
-                "principal_implementing_agency": "",
-                "project_leader_name": "",
-                "sub_implementing_agency": "",
-                "co_investigator_name": "",
-                "contact_email": "",
-                "contact_phone": "",
-                "submission_date": "",
-                "project_duration": ""
-            }},
-            "project_details": {{
-                "definition_of_issue": "",
-                "objectives": "",
-                "justification_subject_area": "",
-                "project_benefits": "",
-                "work_plan": "",
-                "methodology": "",
-                "organization_of_work": "",
-                "time_schedule": "",
-                "foreign_exchange_details": ""
-            }},
-            "cost_breakdown": {{
-                "capital_expenditure": {{
-                    "land_building": {{
-                        "total": null,
-                        "year1": "0",
-                        "year2": "0",
-                        "year3": "0",
-                        "justification": ""
-                    }},
-                    "equipment": {{
-                        "total": null,
-                        "year1": "0",
-                        "year2": "0",
-                        "year3": "0",
-                        "justification": ""
-                    }}
-                }},
-                "revenue_expenditure": {{
-                    "salaries": {{
-                        "total": null,
-                        "year1": "0",
-                        "year2": "0",
-                        "year3": "0"
-                    }},
-                    "consumables": {{
-                        "total": null,
-                        "year1": "0",
-                        "year2": "0",
-                        "year3": "0",
-                        "notes": ""
-                    }},
-                    "travel": {{
-                        "total": null,
-                        "year1": "0",
-                        "year2": "0",
-                        "year3": "0"
-                    }},
-                    "workshop_seminar": {{
-                        "total": null,
-                        "year1": "0",
-                        "year2": "0",
-                        "year3": "0"
-                    }}
-                }},
-                "total_project_cost": {{
-                    "total": null,
-                    "year1": "0",
-                    "year2": "0",
-                    "year3": "0"
-                }},
-                "fund_phasing": ""
-            }},
-            "additional_information": {{
-                "cv_details": "",
-                "past_experience": "",
-                "other_details": ""
-            }}
-        }}
-        
-        Instructions:
-        1. Extract exact text as it appears in the document
-        2. For cost fields, extract only numerical values (without "Rs." or "lakhs")
-        3. If information is not found, use empty string "" or null as appropriate
-        4. For long text fields, preserve the original formatting and content
-        5. Return ONLY the JSON object, no additional text
-        
-        Content to extract from:
-        {content}
-        """
-        
-        response = genai.GenerativeModel("gemini-2.5-flash-lite").generate_content(extraction_prompt)
-        extracted_json = response.text.strip()
-        
-        # Clean the response to ensure it's valid JSON
-        if extracted_json.startswith('```json'):
-            extracted_json = extracted_json[7:]
-        if extracted_json.endswith('```'):
-            extracted_json = extracted_json[:-3]
-        
-        extracted_data = json.loads(extracted_json)
-        return extracted_data
-        
-    except Exception as e:
-        print(f"Error in AI JSON extraction: {str(e)}")
-        return create_basic_json_structure(content)
-
-
-def _is_meaningful_extraction(json_structure: dict, raw_text: str) -> bool:
-    """Return True if extraction contains meaningful user-provided content.
-
-    This helps avoid making up estimates when the extractor returns
-    only placeholder/default values (from `create_basic_json_structure`).
-    """
-    try:
-        # Raw text check: require some selectable / non-whitespace text
-        if raw_text and isinstance(raw_text, str) and len(raw_text.strip()) >= 200:
-            return True
-
-        # Check for non-default basic information
-        basic = json_structure.get('basic_information', {}) or {}
-        project_details = json_structure.get('project_details', {}) or {}
-
-        # Fields that indicate a meaningful extraction if non-empty and not placeholder
-        candidates = [
-            basic.get('project_title', ''),
-            basic.get('principal_implementing_agency', ''),
-            project_details.get('objectives', ''),
-            project_details.get('methodology', '')
-        ]
-
-        for v in candidates:
-            if v and isinstance(v, str):
-                s = v.strip().lower()
-                # ignore common placeholder snippets
-                if s and not any(p in s for p in [
-                    'project title comes here', 'issue will come here',
-                    'methodology will come here', 'work plan will come here',
-                    'project title', 'project title comes here'
-                ]):
-                    return True
-
-        # Check cost breakdown numeric presence
-        cb = json_structure.get('cost_breakdown', {}) or {}
-        tpc = cb.get('total_project_cost', {}) or {}
-        total_val = tpc.get('total')
-        if total_val is not None:
-            try:
-                if float(total_val) > 0:
-                    return True
-            except Exception:
-                pass
-
-        # Finally reject as not meaningful
-        return False
-    except Exception:
-        return False
-
-
-def create_basic_json_structure(content: str) -> dict:
-    """Create a basic JSON structure when AI extraction fails."""
-    # Extract basic information using regex patterns
-    title_match = re.search(r'project\s+title[:\s]*([^\n]+)', content, re.IGNORECASE)
-    agency_match = re.search(r'principal\s+implementing\s+agency[:\s]*([^\n]+)', content, re.IGNORECASE)
-    
-    return {
-        "form_type": "FORM-I S&T Grant Proposal",
-        "basic_information": {
-            "project_title": title_match.group(1).strip() if title_match else "Project title comes here",
-            "principal_implementing_agency": agency_match.group(1).strip() if agency_match else None,
-            "project_leader_name": "principal",
-            "sub_implementing_agency": "Sub-agency",
-            "co_investigator_name": None,
-            "contact_email": None,
-            "contact_phone": None,
-            "submission_date": datetime.now().strftime("%d-%m-%Y"),
-            "project_duration": None
-        },
-        "project_details": {
-            "definition_of_issue": "Issue will come here",
-            "objectives": content[:200] + "..." if len(content) > 200 else content,
-            "justification_subject_area": "Justify",
-            "project_benefits": "Very very beneficial",
-            "work_plan": "Work plan will come here",
-            "methodology": "Methodology will come here",
-            "organization_of_work": "Organization of work elements will come here",
-            "time_schedule": "Bar Chart/PERT chart will come here",
-            "foreign_exchange_details": "50%"
-        },
-        "cost_breakdown": {
-            "capital_expenditure": {
-                "land_building": {
-                    "total": None,
-                    "year1": "0",
-                    "year2": "0", 
-                    "year3": "0",
-                    "justification": None
-                },
-                "equipment": {
-                    "total": None,
-                    "year1": "0",
-                    "year2": "0",
-                    "year3": "0",
-                    "justification": None
-                }
-            },
-            "revenue_expenditure": {
-                "salaries": {
-                    "total": None,
-                    "year1": "0",
-                    "year2": "0",
-                    "year3": "0"
-                },
-                "consumables": {
-                    "total": None,
-                    "year1": "0",
-                    "year2": "0",
-                    "year3": "0",
-                    "notes": None
-                },
-                "travel": {
-                    "total": None,
-                    "year1": "0",
-                    "year2": "0",
-                    "year3": "0"
-                },
-                "workshop_seminar": {
-                    "total": None,
-                    "year1": "0",
-                    "year2": "0",
-                    "year3": "0"
-                }
-            },
-            "total_project_cost": {
-                "total": None,
-                "year1": "0",
-                "year2": "0", 
-                "year3": "0"
-            },
-            "fund_phasing": None
-        },
-        "additional_information": {
-            "cv_details": None,
-            "past_experience": None,
-            "other_details": None
-        }
-    }
-
-
-def generate_government_budget_breakdown(total_budget: int, json_structure: dict, llm_breakdown: dict, cost_analysis: dict) -> dict:
-    """Generate realistic government budget breakdown."""
-    
-    # Government funding typically has different allocations compared to industry estimates
-    # Government funding priorities: Equipment > Manpower > Operations > Contingency
-    
-    # Check if we have extracted cost data from Form-I
-    extracted_costs = cost_analysis.get("extracted_costs", {})
-    has_form_data = cost_analysis.get("has_valid_data", False)
-    
-    if has_form_data and sum(extracted_costs.values()) > 0:
-        # Use Form-I data as base, but adjust to government budget
-        ratio = total_budget / sum(extracted_costs.values())
-        government_breakdown = {}
-        
-        for category, value in extracted_costs.items():
-            government_breakdown[category] = max(0, int(value * ratio))
-        
-        # Ensure total matches
-        total_allocated = sum(government_breakdown.values())
-        if total_allocated != total_budget:
-            diff = total_budget - total_allocated
-            # Add difference to largest category
-            max_category = max(government_breakdown, key=government_breakdown.get)
-            government_breakdown[max_category] += diff
-    else:
-        # Use government funding patterns
-        government_breakdown = {
-            "equipment_and_infrastructure": int(total_budget * 0.35),  # 35% for equipment/infrastructure
-            "manpower_and_salaries": int(total_budget * 0.30),        # 30% for personnel
-            "consumables_and_materials": int(total_budget * 0.15),    # 15% for consumables
-            "travel_and_fieldwork": int(total_budget * 0.08),         # 8% for travel
-            "software_and_tools": int(total_budget * 0.05),           # 5% for software
-            "contingency_and_overhead": int(total_budget * 0.07)      # 7% for contingency
-        }
-        
-        # Adjust total to match exactly
-        total_allocated = sum(government_breakdown.values())
-        if total_allocated != total_budget:
-            diff = total_budget - total_allocated
-            government_breakdown["contingency_and_overhead"] += diff
-    
-    # Add government-specific constraints and recommendations
-    government_breakdown["funding_constraints"] = {
-        "maximum_equipment_per_year": int(total_budget * 0.25),
-        "minimum_manpower_allocation": int(total_budget * 0.20),
-        "mandatory_contingency": int(total_budget * 0.05),
-        "compliance_requirements": "All expenses must follow GFR and departmental guidelines"
-    }
-    
-    return government_breakdown
-
-
-def generate_budget_recommendations(total_budget: int, breakdown: dict) -> list:
-    """Generate budget optimization recommendations."""
-    recommendations = []
-    
-    # Analyze budget size
-    if total_budget > 2000:
-        recommendations.append("Consider implementing the project in multiple phases to ensure better monitoring and control")
-        recommendations.append("Establish milestone-based fund release mechanism")
-    
-    if total_budget > 5000:
-        recommendations.append("Recommend forming a Project Monitoring Committee (PMC) for oversight")
-        recommendations.append("Consider co-funding opportunities with industry partners")
-    
-    # Analyze breakdown ratios
-    equipment_ratio = breakdown.get("equipment_and_infrastructure", 0) / total_budget
-    manpower_ratio = breakdown.get("manpower_and_salaries", 0) / total_budget
-    
-    if equipment_ratio > 0.40:
-        recommendations.append("High equipment cost ratio - consider leasing options or shared facilities")
-    
-    if manpower_ratio > 0.35:
-        recommendations.append("High manpower allocation - explore collaboration with existing institutions")
-    
-    if manpower_ratio < 0.15:
-        recommendations.append("Low manpower allocation may indicate insufficient human resources for project execution")
-    
-    # General government guidelines
-    recommendations.append("Ensure compliance with GFR (General Financial Rules) for all procurements")
-    recommendations.append("Maintain detailed documentation for audit and transparency")
-    recommendations.append("Plan for quarterly progress reviews and budget utilization reports")
-    
-    if total_budget > 1000:
-        recommendations.append("Consider establishing dedicated project account for better fund management")
-    
-    return recommendations
-
-
-# ===============================================================
 #                    FASTAPI ENDPOINTS
 # ===============================================================
 
@@ -3135,18 +1943,8 @@ async def estimate_from_form1_data(form_data: dict):
         similar_projects = get_similar_projects_enhanced(project_summary, top_k=5)
         
         # Perform cost estimation using the notebook / enhanced ML model
-        # Perform cost estimation using the notebook / enhanced ML model
         enhanced_result = enhanced_ml_cost_estimate(project_summary, target_year=2025)
         ml_cost_value = enhanced_result.get('predicted_cost', 500.0)
-
-        # Get ML prediction from notebook / saved model (preferred)
-        ml_nb_cost, ml_nb_conf, ml_nb_breakdown = notebook_ml_predict(project_summary, target_year=2025)
-        if ml_nb_cost is None:
-            # fallback to enhanced_result
-            ml_nb_cost = ml_cost_value
-            ml_nb_conf = enhanced_result.get('confidence_score', 50.0)
-            ml_nb_breakdown = enhanced_result.get('cost_breakdown', {})
-
 
         # Get ML prediction from notebook / saved model (preferred)
         ml_nb_cost, ml_nb_conf, ml_nb_breakdown = notebook_ml_predict(project_summary, target_year=2025)
@@ -3161,20 +1959,11 @@ async def estimate_from_form1_data(form_data: dict):
         has_form_costs = cost_analysis["has_valid_data"]
 
         # Calculate final recommendation using ML prediction from notebook
-
-        # Calculate final recommendation using ML prediction from notebook
         if has_form_costs and extracted_total > 0:
             # Weight: 60% ML (notebook) + 40% Form-I extracted data
             final_estimate = int((0.6 * ml_nb_cost) + (0.4 * extracted_total))
             confidence_note = "Based on Form-I data and ML prediction (notebook)"
-            # Weight: 60% ML (notebook) + 40% Form-I extracted data
-            final_estimate = int((0.6 * ml_nb_cost) + (0.4 * extracted_total))
-            confidence_note = "Based on Form-I data and ML prediction (notebook)"
         else:
-            # Use ML prediction alone
-            final_estimate = int(ml_nb_cost)
-            confidence_note = "Based on ML model prediction (notebook)"
-
             # Use ML prediction alone
             final_estimate = int(ml_nb_cost)
             confidence_note = "Based on ML model prediction (notebook)"
@@ -3191,13 +1980,6 @@ async def estimate_from_form1_data(form_data: dict):
         else:
             avg_diff = ml_diff
 
-
-        ml_diff = abs(final_estimate - ml_nb_cost) / (ml_nb_cost + 1) if ml_nb_cost else 0
-        if has_form_costs:
-            avg_diff = (ml_diff + form_diff) / 2
-        else:
-            avg_diff = ml_diff
-
         validation_status = (
             "high_confidence" if avg_diff <= 0.15 else
             "medium_confidence" if avg_diff <= 0.30 else
@@ -3205,26 +1987,18 @@ async def estimate_from_form1_data(form_data: dict):
         )
 
         # Generate final breakdown (prefer ML notebook breakdown, adjust if Form-I data available)
-
-        # Generate final breakdown (prefer ML notebook breakdown, adjust if Form-I data available)
         if has_form_costs and cost_analysis["extracted_costs"]:
-            # Blend ML breakdown with Form-I extracted costs
             # Blend ML breakdown with Form-I extracted costs
             final_breakdown = {}
             for category in ml_nb_breakdown:
-            for category in ml_nb_breakdown:
                 form_value = cost_analysis["extracted_costs"].get(category, 0)
-                ml_value = ml_nb_breakdown.get(category, 0)
                 ml_value = ml_nb_breakdown.get(category, 0)
                 if form_value > 0:
                     # Use weighted average favoring Form-I actual data
                     final_breakdown[category] = int((0.7 * form_value) + (0.3 * ml_value))
-                    final_breakdown[category] = int((0.7 * form_value) + (0.3 * ml_value))
                 else:
                     final_breakdown[category] = ml_value
-                    final_breakdown[category] = ml_value
         else:
-            final_breakdown = ml_nb_breakdown
             final_breakdown = ml_nb_breakdown
         
         # Ensure breakdown sums to final estimate
@@ -3239,11 +2013,6 @@ async def estimate_from_form1_data(form_data: dict):
         
         # Calculate score
         score_pct = int(round(max(0.0, min(1.0, 1.0 - avg_diff)) * 100))
-        
-        # Generate usage comment (simple deterministic generator)
-        usage_comment = usage_comment_simple(
-            final_estimate, ml_nb_cost, final_breakdown, validation_status
-        )
         
         # Generate usage comment (simple deterministic generator)
         usage_comment = usage_comment_simple(
@@ -3321,8 +2090,6 @@ Top budget allocations (top 4):\n"""
             "estimation_details": {
                 "ml_predicted_cost": round(ml_nb_cost, 2),
                 "llm_predicted_cost": None,
-                "ml_predicted_cost": round(ml_nb_cost, 2),
-                "llm_predicted_cost": None,
                 "form_extracted_cost": extracted_total if has_form_costs else None,
                 "confidence_note": confidence_note,
                 "breakdown_assessment": breakdown_assessment,
@@ -3363,34 +2130,9 @@ async def _process_and_estimate_impl(file):
         # Read uploaded file
         file_bytes = await file.read()
         
-
-# Register the endpoint with FastAPI router if available
-if globals().get('router') is not None:
-    try:
-        _router = globals().get('router')
-        # Safely call post only if the router object exposes it
-        if _router is not None and hasattr(_router, 'post') and callable(getattr(_router, 'post')):
-            _router.post("/estimate-from-form1-data")(estimate_from_form1_data)
-    except Exception:
-        pass
-
-# Define the endpoint outside the conditional to avoid type annotation issues
-async def _process_and_estimate_impl(file):
-    """
-    Comprehensive processing and estimation endpoint that:
-    1. Extracts JSON from the uploaded FORM-I document
-    2. Performs cost estimation using ML and LLM models
-    3. Provides government budget breakdown with realistic allocations
-    4. Returns complete analysis in a single response
-    """
-    try:
-        # Read uploaded file
-        file_bytes = await file.read()
-        
         # Validate file metadata
         if not getattr(file, "filename", None):
             return {"success": False, "error": "No filename provided"}
-        
         
         ext = file.filename.lower().split(".")[-1]
         if ext not in ["pdf", "docx", "txt"]:
@@ -3418,150 +2160,7 @@ async def _process_and_estimate_impl(file):
         # Enhanced ML model prediction
         enhanced_result = enhanced_ml_cost_estimate(extracted_text, target_year=2025)
         ml_cost_value = enhanced_result.get('predicted_cost', 500.0)
-        # Step 1: Extract text from document
-        extracted_text = extract_text(file.filename, file_bytes)
-        if not extracted_text or len(extracted_text.strip()) < 30:
-            return {"success": False, "error": "Unable to extract meaningful text content from the file"}
 
-        # Step 2: Extract structured JSON data using AI (similar to existing extraction logic)
-        json_structure = extract_json_from_text(extracted_text)
-
-        # Strict check: ensure extraction is meaningful before proceeding.
-        if not _is_meaningful_extraction(json_structure, extracted_text):
-            return {
-                "success": False,
-                "error": "Insufficient extractable content: uploaded file appears empty or extraction returned only placeholders.",
-                "details": "Please upload a filled FORM-I PDF (text-selectable) or ensure OCR/extraction is enabled. No estimation was performed."
-            }
-        
-        # Step 3: Cost estimation using multiple models
-        similar_projects = get_similar_projects_enhanced(extracted_text, top_k=5)
-        
-        # Enhanced ML model prediction
-        enhanced_result = enhanced_ml_cost_estimate(extracted_text, target_year=2025)
-        ml_cost_value = enhanced_result.get('predicted_cost', 500.0)
-
-        # Get ML prediction from notebook / saved model (preferred)
-        ml_nb_cost, ml_nb_conf, ml_nb_breakdown = notebook_ml_predict(extracted_text, target_year=2025)
-        if ml_nb_cost is None:
-            ml_nb_cost = ml_cost_value
-            ml_nb_conf = enhanced_result.get('confidence_score', 50.0)
-            ml_nb_breakdown = enhanced_result.get('cost_breakdown', {})
-
-        # Analyze Form-I extracted costs if available
-        cost_analysis = analyze_form1_cost_breakdown(json_structure)
-        extracted_total = cost_analysis["total_extracted"]
-        has_form_costs = cost_analysis["has_valid_data"]
-
-        # Step 4: Calculate final government budget estimate
-        if has_form_costs and extracted_total > 0:
-            government_budget = int((0.6 * ml_nb_cost) + (0.4 * extracted_total))
-        else:
-            government_budget = int(ml_nb_cost)
-
-        # Step 5: Generate government cost breakdown with realistic budget allocation
-        realistic_breakdown = generate_government_budget_breakdown(
-            government_budget, json_structure, ml_nb_breakdown, cost_analysis
-        )
-
-        # Step 6: Calculate confidence and validation metrics
-        ml_diff = abs(government_budget - ml_nb_cost) / (ml_nb_cost + 1) if ml_nb_cost else 0
-        if has_form_costs:
-            form_diff = abs(government_budget - extracted_total) / (extracted_total + 1)
-            avg_diff = (ml_diff + form_diff) / 2
-        else:
-            avg_diff = ml_diff
-        
-        validation_status = (
-            "high_confidence" if avg_diff <= 0.15 else
-            "medium_confidence" if avg_diff <= 0.30 else
-            "low_confidence"
-        )
-        
-        confidence_score = int(round(max(0.0, min(1.0, 1.0 - avg_diff)) * 100))
-        
-        # Step 7: Generate usage comment and recommendations (simple generator)
-        usage_comment = usage_comment_simple(
-            government_budget, ml_nb_cost, realistic_breakdown, validation_status
-        )
-        
-        # Step 8: Save complete record to database
-        if globals().get('supabase'):
-            _supabase = globals().get('supabase')
-            save_record = {
-                "filename": file.filename,
-                "final_cost": government_budget,
-                "ml_cost": ml_nb_cost,
-                "llm_cost": None,
-                "form_extracted_cost": extracted_total if has_form_costs else None,
-                "validation_status": validation_status,
-                "confidence_score": confidence_score,
-                "breakdown": realistic_breakdown,
-                "json_structure": json_structure,
-                "raw_text": extracted_text[:15000],  # Limit text size
-                "created_at": datetime.utcnow().isoformat()
-            }
-            
-            try:
-                _supabase.table("comprehensive_estimations").insert(save_record).execute()
-            except Exception as e:
-                print(f"Supabase Insert Error: {e}")
-        
-        # Step 9: Return comprehensive response
-        return {
-            "success": True,
-            "extracted_json": json_structure,
-            "cost_estimation": {
-                "government_budget_lakhs": government_budget,
-                "confidence_score": confidence_score,
-                "validation_status": validation_status,
-                "breakdown": realistic_breakdown,
-                "usage_comment": usage_comment,
-                "recommendations": generate_budget_recommendations(government_budget, realistic_breakdown)
-            },
-            "analysis_details": {
-                "ml_predicted_cost": round(ml_cost_value, 2),
-                "llm_predicted_cost": None,
-                "form_extracted_cost": extracted_total if has_form_costs else None,
-                "similar_projects_found": len(similar_projects),
-                "text_length": len(extracted_text),
-                "extraction_confidence": "high" if has_form_costs else "medium",
-                "processing_note": "Complete Form-I extraction and cost analysis performed"
-            },
-            "file_info": {
-                "filename": file.filename,
-                "processed_at": datetime.utcnow().isoformat(),
-                "file_type": ext.upper()
-            }
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Processing error: {str(e)}",
-            "details": "Please ensure the uploaded file is a valid FORM-I document"
-        }
-
-
-# Safe FastAPI endpoint registration: avoid NameError when FastAPI isn't available
-try:
-    from fastapi import File, UploadFile
-except Exception:
-    File = None
-    UploadFile = None
-
-# if globals().get('router') is not None and File is not None and UploadFile is not None:
-@router.post("/process-and-estimate")
-async def process_and_estimate(file: UploadFile = File(...)):
-    """
-    Comprehensive processing and estimation endpoint that:
-    1. Extracts JSON from the uploaded FORM-I document
-    2. Performs cost estimation based solely on PDF content
-    3. Provides government budget breakdown with realistic allocations
-    4. Returns complete analysis in a single response
-    """
-    file_bytes = await file.read()
-    text = extract_text(file.filename, file_bytes)
         # Get ML prediction from notebook / saved model (preferred)
         ml_nb_cost, ml_nb_conf, ml_nb_breakdown = notebook_ml_predict(extracted_text, target_year=2025)
         if ml_nb_cost is None:
@@ -3749,73 +2348,7 @@ async def process_and_estimate(file: UploadFile = File(...)):
 
     if len(text) < 30:
         return {"error": "Unable to extract meaningful text"}
-    if len(text) < 30:
-        return {"error": "Unable to extract meaningful text"}
 
-    # --- EXTRACT JSON STRUCTURE FIRST ---
-    json_structure = extract_json_from_text(text)
-
-    # If extraction is not meaningful, abort and inform user (avoid dummy estimates)
-    if not _is_meaningful_extraction(json_structure, text):
-        return {
-            "success": False,
-            "error": "Insufficient extractable content: uploaded file appears empty or extraction returned only placeholders.",
-            "details": "Please upload a filled FORM-I PDF (text-selectable) or ensure OCR/extraction is enabled. No estimation was performed."
-        }
-    
-    # --- ANALYZE EXTRACTED COST DATA FROM FORM-I ---
-    cost_analysis = analyze_form1_cost_breakdown(json_structure)
-    form_extracted_total = cost_analysis.get("total_extracted", 0)
-    has_form_costs = cost_analysis.get("has_valid_data", False)
-    
-    # --- CONTENT-BASED COST ESTIMATION ---
-    if has_form_costs and form_extracted_total > 0:
-        # Use extracted costs as primary estimate
-        base_cost = form_extracted_total
-        confidence_level = "high"
-        estimation_method = "form_extracted"
-    else:
-        # Fallback: Estimate based on content analysis
-        base_cost = estimate_cost_from_content_only(text, json_structure)
-        confidence_level = "medium" 
-        estimation_method = "content_analysis"
-    
-    # --- APPLY GOVERNMENT BUDGET ADJUSTMENTS ---
-    # Government typically provides 80-90% of requested amount
-    government_adjustment_factor = 0.85
-    government_budget = int(base_cost * government_adjustment_factor)
-    
-    # --- GENERATE REALISTIC GOVERNMENT BUDGET BREAKDOWN ---
-    realistic_breakdown = generate_government_budget_breakdown(
-        government_budget, json_structure, {}, cost_analysis
-    )
-    
-    # --- CALCULATE CONFIDENCE SCORE ---
-    if has_form_costs:
-        confidence_score = 90  # High confidence when we have form data
-    else:
-        # Base confidence on content richness
-        content_quality = analyze_content_quality(text, json_structure)
-        confidence_score = min(85, max(60, content_quality))
-    
-    # --- GENERATE ASSESSMENT COMMENT ---
-    assessment_comment = generate_content_based_comment(
-        government_budget, base_cost, realistic_breakdown, estimation_method, json_structure
-    )
-    
-    # --- SAVE TO SUPABASE ---
-    save_record = {
-        "filename": file.filename,
-        "final_cost": government_budget,
-        "base_cost": base_cost,
-        "estimation_method": estimation_method,
-        "confidence_level": confidence_level,
-        "confidence_score": confidence_score,
-        "breakdown": realistic_breakdown,
-        "json_structure": json_structure,
-        "raw_text": text[:20000],
-        "created_at": datetime.utcnow().isoformat()
-    }
     # --- EXTRACT JSON STRUCTURE FIRST ---
     json_structure = extract_json_from_text(text)
 
@@ -3943,45 +2476,6 @@ Top budget allocations (top 4):\n"""
         "created_at": datetime.utcnow().isoformat()
     }
 
-    if globals().get('supabase'):
-        try:
-            # Write to the canonical `cost_estimations` table if available
-            # (older code used `content_based_estimations` which may not exist)
-            target_table = "cost_estimations"
-            _supabase = globals().get('supabase')
-            if _supabase is not None:
-                _supabase.table(target_table).insert(save_record).execute()
-        except Exception as e:
-            # Log the error but do not fail the request
-            print(f"Supabase Insert Error for table '{target_table}': {e}")
-
-    # --- FINAL RESPONSE BASED SOLELY ON PDF CONTENT ---        
-    return {
-        "success": True,
-        "extracted_json": json_structure,
-        "cost_estimation": {
-            "government_budget_lakhs": government_budget,
-            "confidence_score": confidence_score,
-            "confidence_level": confidence_level,
-            "estimation_method": estimation_method,
-            "breakdown": realistic_breakdown,
-            "comment": assessment_comment,
-            "recommendations": generate_content_based_recommendations(government_budget, realistic_breakdown, json_structure)
-        },
-        "analysis_details": {
-            "base_estimated_cost": base_cost,
-            "government_adjustment_factor": government_adjustment_factor,
-            "form_extracted_cost": form_extracted_total if has_form_costs else None,
-            "has_form_cost_data": has_form_costs,
-            "text_length": len(text),
-            "processing_note": f"Cost estimation based on {estimation_method}"
-        },
-        "file_info": {
-            "filename": file.filename,
-            "processed_at": datetime.utcnow().isoformat(),
-            "file_type": file.filename.split('.')[-1].upper()
-        }
-    }
     if globals().get('supabase'):
         try:
             # Write to the canonical `cost_estimations` table if available
