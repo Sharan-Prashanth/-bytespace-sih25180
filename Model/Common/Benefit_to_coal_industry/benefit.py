@@ -242,7 +242,7 @@ async def benefit_check(file: UploadFile = File(...)):
 
         return JSONResponse({
             "benefit_score": int(round(score)),
-            "comment": comment,
+            "comments": comment,
             "meta": meta,
             "flagged_lines": flagged,
             "flagged_count": len(flagged)

@@ -2,8 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>MOC Report</title>
+  <title>MOC Report — JSON Renderer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    /* Small topbar UI */
+    #json-ui { display:flex; gap:8px; align-items:flex-start; padding:10px; background:#f7f9fb; border-bottom:1px solid #e6e6e6; }
+    #json-ui textarea { width:64%; height:140px; padding:8px; border:1px solid #ddd; border-radius:6px; font-family: monospace; resize:vertical; }
+    #json-ui .controls { width:36%; display:flex; flex-direction:column; gap:8px; }
+    #json-ui input[type=text] { padding:8px; border:1px solid #ddd; border-radius:6px; width:100%; }
+    #json-ui button { padding:10px; border: none; background:#0057b7; color:#fff; border-radius:6px; cursor:pointer; }
+    #json-ui .secondary { background:#2a9d8f; }
+
+    /* Provide a small status area */
+    #json-status { font-size:13px; color:#333; margin-top:4px; }
+
+    /* copy of your test.html CSS below (kept intact) */
     /* Basic page & print setup */
     @page {
       size: A4;
@@ -18,7 +31,6 @@
       font-family: Arial, Helvetica, sans-serif;
       margin: 0;
       padding: 0;
-      /* Keep outside area white; page containers carry the GOV gradient */
       background: #ffffff;
       color: #333;
     }
@@ -27,29 +39,26 @@
       width: 214mm;
       min-height: 297mm;
       margin: 8px auto;
-      /* Government-themed page background (saffron -> white -> green) */
       background: linear-gradient(180deg, #fff3e6 0%, #ffffff 48%, #eef8f0 100%);
       padding: 12mm 12mm 18mm;
       position: relative;
       box-shadow: 0 0 4px rgba(0, 0, 0, 0.12);
       page-break-after: always;
-      /* subtle left/right accent lines matching gov colors */
       border-left: 3px solid rgba(255,153,51,0.12);
       border-right: 3px solid rgba(19,136,8,0.07);
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
-    /* Ensure printer respects background colors */
     @media print {
       .page { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      #json-ui { display:none !important; } /* hide UI when printing */
     }
 
     .page:last-child {
       page-break-after: auto;
     }
 
-    /* watermark / subtle background emblem */
     .page::before{
       content: '';
       position: absolute;
@@ -58,6 +67,7 @@
       width: 460px;
       height: 120px;
       background-image: url('./assets/moc.jpg');
+      background-image: url('./assets/moc.jpg');
       background-size: contain;
       background-repeat: no-repeat;
       opacity: 0.06;
@@ -65,633 +75,147 @@
       z-index: 0;
     }
 
-    /* Ensure all page children are above the watermark */
-    .page > * {
-      position: relative;
-      z-index: 1;
-    }
+    .page > * { position: relative; z-index: 1; }
 
     :root{
-      /* Government of India palette */
       --gov-saffron: #ff9933;
       --gov-green: #138808;
       --gov-navy: #002855;
       --gov-mid: #6b6f71;
       --gov-light: #ffffff;
       --paper-bg: #fbfbfb;
+      --coal-navy: #002855;
+      --coal-dark: #22323b;
+      /* Additional aliases for consistent rendering */
+      --coal-light: #fbfbfb;
+      --coal-mid: #6b6f71;
     }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 20px;
-    }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
+    .header-left { display:flex; align-items:flex-start; gap:12px; }
+    .moc-logo{ height:64px; width:auto; object-fit:contain; margin-top:4px; }
+    .header-title { font-size:22px; font-weight:bold; color:var(--coal-navy); }
+    .header-subtext { font-size:11px; max-width:320px; margin-top:6px; line-height:1.4; }
+    .candidate-info { font-size:11px; text-align:right; line-height:1.5; }
+    .candidate-info .label { font-weight:bold; }
 
-    .header-left {
-      display:flex;
-      align-items:flex-start;
-      gap:12px;
-    }
+    .overall-section { display:flex; margin-top:20px; }
+    .overall-left { flex:2; padding-right:20px; border-right:1px solid #ddd; }
+    .overall-right { flex:3; padding-left:20px; }
 
-    .moc-logo{
-      height:64px;
-      width:auto;
-      object-fit:contain;
-      margin-top:4px;
-    }
+    .overall-score-box { display:flex; align-items:center; gap:25px; }
+    .overall-score-circle { width:90px; height:90px; border-radius:50%; border:4px solid var(--coal-navy); display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:bold; color:var(--coal-navy); background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent); }
+    .overall-score-circle .score-label { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; }
+    .overall-score-circle .score-value { font-size:26px; margin-top:3px; }
 
-    .header-title {
-      font-size: 22px;
-      font-weight: bold;
-      color: var(--coal-navy);
-    }
+    .overall-score-details { font-size:11px; line-height:1.5; }
+    .overall-score-details .cefr { font-size:13px; font-weight:bold; margin-bottom:4px; }
 
-    .header-subtext {
-      font-size: 11px;
-      max-width: 320px;
-      margin-top: 6px;
-      line-height: 1.4;
-    }
+    .intelligibility-box { margin-top:20px; padding:10px 12px; background:var(--coal-light); border-left:4px solid var(--coal-navy); font-size:11px; line-height:1.5; }
+    .intelligibility-box .title-row { display:flex; justify-content:space-between; font-weight:bold; margin-bottom:4px; }
 
-    .candidate-info {
-      font-size: 11px;
-      text-align: right;
-      line-height: 1.5;
-    }
+    .skill-summary-table { width:100%; border-collapse:collapse; margin-top:25px; font-size:11px; }
+    .skill-summary-table th, .skill-summary-table td { padding:6px 4px; text-align:center; }
+    .skill-summary-table th { font-weight:bold; border-bottom:1px solid #ccc; font-size:11px; }
 
-    .candidate-info .label {
-      font-weight: bold;
-    }
+    .scale-legend { margin-top:10px; font-size:10px; display:flex; justify-content:space-between; align-items:center; }
+    .scale-bar { position:relative; height:10px; background:linear-gradient(90deg,#e9ecec,#f7f7f7); border-radius:6px; margin-top:8px; margin-bottom:8px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+    .scale-marker { position:absolute; top:-5px; width:4px; height:20px; background:var(--coal-navy); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.12); }
 
-    .overall-section {
-      display: flex;
-      margin-top: 20px;
-    }
+    .skill-row { margin-top:10px; }
+    .skill-row-header { display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; }
+    .skill-row-header .score { font-weight:bold; }
 
-    .overall-left {
-      flex: 2;
-      padding-right: 20px;
-      border-right: 1px solid #ddd;
-    }
+    .score-badges { display:flex; gap:12px; margin-top:6px; font-size:10px; color:#666; }
+    .score-badges span { padding:2px 6px; border-radius:3px; background:#f5f5f5; }
 
-    .overall-right {
-      flex: 3;
-      padding-left: 20px;
-    }
-
-    .overall-score-box {
-      display: flex;
-      align-items: center;
-      gap: 25px;
-    }
-
-    .overall-score-circle {
-      width: 90px;
-      height: 90px;
-      border-radius: 50%;
-      border: 4px solid var(--coal-navy);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      color: var(--coal-navy);
-      background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
-    }
-
-    .overall-score-circle .score-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .overall-score-circle .score-value {
-      font-size: 26px;
-      margin-top: 3px;
-    }
-
-    .overall-score-details {
-      font-size: 11px;
-      line-height: 1.5;
-    }
-
-    .overall-score-details .cefr {
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 4px;
-    }
-
-    .intelligibility-box {
-      margin-top: 20px;
-      padding: 10px 12px;
-      background: var(--coal-light);
-      border-left: 4px solid var(--coal-navy);
-      font-size: 11px;
-      line-height: 1.5;
-    }
-
-    .intelligibility-box .title-row {
-      display: flex;
-      justify-content: space-between;
-      font-weight: bold;
-      margin-bottom: 4px;
-    }
-
-    .skill-summary-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 25px;
-      font-size: 11px;
-    }
-
-    .skill-summary-table th,
-    .skill-summary-table td {
-      padding: 6px 4px;
-      text-align: center;
-    }
-
-    .skill-summary-table th {
-      font-weight: bold;
-      border-bottom: 1px solid #ccc;
-      font-size: 11px;
-    }
-
-    .skill-summary-table .skill-name {
-      text-align: left;
-      font-weight: bold;
-    }
-
-    .scale-legend {
-      margin-top: 10px;
-      font-size: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .scale-bar {
-      position: relative;
-      height: 10px;
-      background: linear-gradient(90deg,#e9ecec,#f7f7f7);
-      border-radius: 6px;
-      margin-top: 8px;
-      margin-bottom: 8px;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
-    }
-
-    .scale-marker {
-      position: absolute;
-      top: -5px;
-      width: 4px;
-      height: 20px;
-      background: var(--coal-navy);
-      border-radius: 2px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
-    }
-
-    .scale-labels {
-      display: flex;
-      justify-content: space-between;
-      font-size: 9px;
-      margin-top: 4px;
-      color: var(--coal-mid);
-    }
-
-    .skill-row {
-      margin-top: 10px;
-    }
-
-    .skill-row-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      margin-bottom: 4px;
-    }
-
-    .skill-row-header .score {
-      font-weight: bold;
-    }
-
-    .score-badges {
-      display: flex;
-      gap: 12px;
-      margin-top: 6px;
-      font-size: 10px;
-      color: #666;
-    }
-
-    .score-badges span {
-      padding: 2px 6px;
-      border-radius: 3px;
-      background: #f5f5f5;
-    }
-
-    .footer {
-      position: absolute;
-      bottom: 15mm;
-      left: 20mm;
-      right: 20mm;
-      font-size: 9px;
-      color: #777;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-    }
-
-    .footer-left {
-      max-width: 65%;
-      line-height: 1.3;
-    }
-
-    .footer-right {
-      text-align: right;
-      font-size: 9px;
-    }
-
-    .page-number {
-      margin-top: 6px;
-    }
+    .footer { position:absolute; bottom:15mm; left:20mm; right:20mm; font-size:9px; color:#777; display:flex; justify-content:space-between; align-items:flex-end; }
+    .footer-left { max-width:65%; line-height:1.3; }
+    .footer-right { text-align:right; font-size:9px; }
+    .page-number { margin-top:6px; }
 
     /* Page 2 styles */
+    .section-title { font-size:15px; font-weight:bold; color:var(--coal-navy); margin-bottom:10px; }
+    .capability-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; font-size:11px; margin-top:10px; margin-bottom:18px; }
+    .capability-card { border:1px solid #e2e2e2; padding:12px 14px; border-radius:6px; background:#ffffff; min-height:150px; display:flex; flex-direction:column; justify-content:space-between; }
+    .capability-header { font-weight:bold; margin-bottom:4px; color:var(--coal-navy); }
+    .capability-meta { font-size:10px; color:#666; margin-bottom:8px; }
+    .capability-text { font-size:11px; line-height:1.4; margin-bottom:8px; flex:1 1 auto; }
+    .tips-title { font-size:10px; font-weight:bold; margin-top:4px; margin-bottom:2px; }
+    .tips-list { font-size:10px; margin-left:12px; margin-top:6px; margin-bottom:0; padding-left:12px; }
+    .tips-list li { margin-bottom:2px; }
 
-    .section-title {
-      font-size: 15px;
-      font-weight: bold;
-      color: var(--coal-navy);
-      margin-bottom: 10px;
-    }
+    .understanding-section { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; margin-top:10px; font-size:11px; }
+    .understanding-block { border:1px solid #e6e6e6; border-radius:6px; padding:10px 12px; background:#ffffff; min-height:80px; }
+    .understanding-title { font-weight:bold; margin-bottom:4px; color:var(--coal-navy); }
+    .understanding-text { font-size:11px; line-height:1.4; }
 
-    .capability-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px 18px;
-      font-size: 11px;
-      margin-top: 10px;
-      margin-bottom: 18px;
-    }
+    /* banner tweaks: slightly taller and tighter padding to match PDF spacing */
+    .banner { width:100%; height:100px; background-color:var(--paper-bg); border-left:3px solid var(--gov-saffron); border-right:3px solid var(--gov-green); border-radius:6px; display:flex; align-items:center; justify-content:space-between; padding:10px 18px; color:var(--gov-navy); margin-bottom:12px; position:relative; }
+    .banner .banner-left { display:flex; align-items:center; gap:12px; }
+    .banner .banner-title { font-size:20px; font-weight:800; color:var(--gov-navy); text-transform:uppercase; letter-spacing:0.6px; }
+    .banner .gov-sub { font-size:12px; color:var(--gov-navy); opacity:0.9; margin-top:4px; }
+    .banner-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; z-index:2; }
 
-    .capability-card {
-      border: 1px solid #e2e2e2;
-      padding: 12px 14px;
-      border-radius: 6px;
-      background: #ffffff;
-      min-height: 150px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
+    /* project info table: tighter cells and fixed column widths to align with PDF */
+    .employee-info { width:100%; border:1px solid #e6e6e6; margin:8px 0 10px 0; border-radius:6px; overflow:hidden; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+    .employee-info table { width:100%; border-collapse:collapse; font-size:12px; background:#fff; table-layout:fixed; }
+    .employee-info th, .employee-info td { padding:8px 10px; border-right:1px solid #e6e6e6; vertical-align:middle; word-wrap:break-word; }
+    .employee-info th { background: linear-gradient(90deg,#f7f7f7,#ffffff); font-weight:700; text-transform:uppercase; font-size:11px; color:var(--gov-navy); }
+    .employee-info td:last-child, .employee-info th:last-child { border-right:none; }
+    .employee-info tr:first-child th:first-child { width:18%; }
+    .employee-info tr:first-child td { width:32%; }
+    .employee-info tr:nth-child(2) th { width:18%; }
 
-    .capability-header {
-      font-weight: bold;
-      margin-bottom: 4px;
-      color: var(--coal-navy);
-    }
+    /* left column slightly wider to match PDF proportions */
+    .review-main { display:grid; grid-template-columns:140px 1fr; gap:18px; align-items:start; margin-top:6px; }
+    .left-stats { display:flex; flex-direction:column; gap:18px; align-items:flex-start; padding-bottom:4px; padding-left:6px; padding-right:8px; padding-top:6px; }
+    .percent-circle { width:88px; height:88px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-direction:column; color:#111; font-weight:800; box-shadow:0 2px 6px rgba(0,0,0,0.08); background:#fff; text-align:center; }
+    .percent-circle .pct-value { font-size:20px; line-height:1; }
 
-    .capability-meta {
-      font-size: 10px;
-      color: #666;
-      margin-bottom: 8px;
-    }
+    .pct-1 { border:8px solid var(--gov-saffron); }
+    .pct-2 { border:8px solid var(--gov-green); }
+    .pct-3 { border:8px solid #2b8fd6; }
+    .pct-4 { border:8px solid var(--gov-navy); }
 
-    .capability-text {
-      font-size: 11px;
-      line-height: 1.4;
-      margin-bottom: 8px;
-      flex: 1 1 auto;
-    }
+    .stats-grid { display:grid; grid-template-columns:repeat(4, minmax(120px, 1fr)); gap:12px; margin:8px 0 14px 0; }
+    .stat-card { background:white; border:1px solid #e7e7e7; padding:10px 12px; border-radius:6px; box-shadow:0 1px 2px rgba(0,0,0,0.03); text-align:center; font-size:13px; min-width:120px; }
+    .stat-card .value { font-size:18px; font-weight:800; color:var(--gov-navy); }
+    .stat-card .label { font-size:11px; color:#666; margin-top:4px; }
 
-    .tips-title {
-      font-size: 10px;
-      font-weight: bold;
-      margin-top: 4px;
-      margin-bottom: 2px;
-    }
+    .review-sections { display:flex; flex-direction:column; gap:18px; }
+    .review-section { display:block; }
+    .review-section .section-title { font-size:14px; font-weight:700; margin-bottom:6px; color:var(--coal-dark); }
+    .review-section .section-text { font-size:12px; margin-bottom:6px; color:#333; }
+    .review-section ul { margin:6px 0 0 18px; padding:0; font-size:12px; color:#333; }
+    .review-section ul li { margin-bottom:6px; }
 
-    .tips-list {
-      font-size: 10px;
-      margin-left: 12px;
-      margin-top: 6px;
-      margin-bottom: 0;
-      padding-left: 12px;
-    }
-
-    .tips-list li {
-      margin-bottom: 2px;
-    }
-
-    .understanding-section {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px 16px;
-      margin-top: 10px;
-      font-size: 11px;
-    }
-
-    .understanding-block {
-      border: 1px solid #e6e6e6;
-      border-radius: 6px;
-      padding: 10px 12px;
-      background: #ffffff;
-      min-height: 80px;
-    }
-
-    .understanding-title {
-      font-weight: bold;
-      margin-bottom: 4px;
-      color: var(--coal-navy);
-    }
-
-    .understanding-text {
-      font-size: 11px;
-      line-height: 1.4;
-    }
-
-    .tin-note {
-      margin-top: 8px;
-      font-size: 10px;
-    }
-
-    /* Banner and Employee Info */
-    .banner {
-      width: 100%;
-      height: 92px;
-      background-color: var(--paper-bg);
-      border-left: 3px solid var(--gov-saffron);
-      border-right: 3px solid var(--gov-green);
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 18px;
-      color: var(--gov-navy);
-      margin-bottom: 14px;
-      position: relative;
-    }
-
-    .banner .banner-left {
-      display:flex;
-      align-items:center;
-      gap:12px;
-    }
-
-    .banner .banner-title {
-      font-size: 20px;
-      font-weight: 800;
-      color: var(--gov-navy);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-    }
-
-    .banner .gov-sub {
-      font-size: 12px;
-      color: var(--gov-navy);
-      opacity: 0.9;
-      margin-top: 4px;
-    }
-
-    /* Centered banner block - sits visually centered over the banner */
-    .banner-center {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      pointer-events: none;
-      z-index: 2;
-    }
-
-    .employee-info {
-      width: 100%;
-      border: 1px solid #e6e6e6;
-      margin: 10px 0 12px 0;
-      border-radius: 6px;
-      overflow: hidden;
-      background: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-    }
-
-    .employee-info table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      background: #fff;
-    }
-
-    .employee-info th,
-    .employee-info td {
-      padding: 8px 10px;
-      border-right: 1px solid #e6e6e6;
-      vertical-align: middle;
-    }
-
-    .employee-info th {
-      background: linear-gradient(90deg,#f7f7f7,#ffffff);
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 11px;
-      color: var(--gov-navy);
-    }
-
-    .employee-info td:last-child,
-    .employee-info th:last-child {
-      border-right: none;
-    }
-
-    /* Main review layout: left stacked percentage badges, right detail sections */
-    .review-main {
-      display: grid;
-      grid-template-columns: 120px 1fr;
-      gap: 20px;
-      align-items: start;
-      margin-top: 6px;
-    }
-
-    .left-stats {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      align-items: center;
-      padding-bottom: 4px;
-      padding-left: 2px;
-      padding-right: 4px;
-      padding-top: 6px;
-    }
-
-    .percent-circle {
-      width: 96px;
-      height: 96px;
-      border-radius: 50%;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      flex-direction:column;
-      color: #111;
-      font-weight:800;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-      background: #fff;
-      text-align:center;
-    }
-
-    .percent-circle .pct-value {
-      font-size: 20px;
-      line-height: 1;
-    }
-
-    /* colored rings (outer border) */
-    .pct-1 { border: 8px solid var(--gov-saffron); }
-    .pct-2 { border: 8px solid var(--gov-green); }
-    .pct-3 { border: 8px solid #2b8fd6; }
-    .pct-4 { border: 8px solid var(--gov-navy); }
-
-    /* Stats grid (top-right) */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin: 8px 0 14px 0;
-    }
-
-    .stat-card {
-      background: white;
-      border: 1px solid #e7e7e7;
-      padding: 10px 12px;
-      border-radius: 6px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-      text-align: center;
-      font-size: 13px;
-    }
-
-    .stat-card .value { font-size: 20px; font-weight: 800; color: var(--gov-navy); }
-    .stat-card .label { font-size: 11px; color: #666; margin-top: 4px; }
-
-    .review-sections {
-      display:flex;
-      flex-direction:column;
-      gap: 18px;
-    }
-
-    .review-section {
-      display:block;
-    }
-
-    .review-section .section-title {
-      font-size: 14px;
-      font-weight: 700;
-      margin-bottom: 6px;
-      color: var(--coal-dark);
-    }
-
-    .review-section .section-text {
-      font-size: 12px;
-      margin-bottom: 6px;
-      color: #333;
-    }
-
-    .review-section ul {
-      margin: 6px 0 0 18px;
-      padding: 0;
-      font-size: 12px;
-      color: #333;
-    }
-
-    .review-section ul li { margin-bottom: 6px; }
-
-    /* Hide original vertical chart and provide horizontal chart styles */
-    .vertical-bar-chart { display: none; }
-
-    /* Vertical graded chart styles */
     .vertical-graded-chart { display:flex; gap:12px; align-items:flex-start; margin-top:6px; width:100%; }
-    .y-axis { width:70px; position:relative; height:200px; display:flex; flex-direction:column; justify-content:flex-end; padding-left:6px; box-sizing:border-box; font-size:12px; color:var(--gov-navy); }
-    /* hide simple y-axis labels — we'll render ranged grade boxes instead */
-    .y-axis .y-label { display:none; }
-    .y-axis .y-c { bottom: 25%; }
-    .y-axis .y-b { bottom: 50%; }
-    .y-axis .y-a { bottom: 75%; }
-    .y-axis .y-ap { bottom: 90%; }
-
+    .y-axis .y-label { display:block; background:#4b5563; color:#fff; width:44px; height:36px; line-height:36px; text-align:center; border-radius:8px; margin-bottom:8px; font-weight:800; box-shadow:0 2px 6px rgba(0,0,0,0.12); }
+    .y-axis .y-label.active { background: var(--gov-saffron); color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.18); }
     .v-chart { flex:1 1 auto; display:flex; align-items:flex-end; gap:18px; padding:6px 12px; box-sizing:border-box; height:200px; position:relative; }
     .v-chart::before { content:''; position:absolute; left:0; right:0; top:0; bottom:0; background-image: linear-gradient(to bottom, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(to bottom, rgba(0,0,0,0.04) 50%, transparent 50%), linear-gradient(to bottom, rgba(0,0,0,0.04) 75%, transparent 75%); background-size:100% 25%; opacity:0.06; pointer-events:none; }
     .v-bar { width:90px; display:flex; flex-direction:column; align-items:center; gap:6px; }
     .bar-wrap { width:100%; display:flex; align-items:flex-end; position:relative; overflow:visible; }
     .bar-fill { width:100%; height:0%; border-radius:8px 8px 0 0; transition:height 900ms cubic-bezier(.2,.8,.2,1); }
-
-    /* in-bar percentage label */
     .bar-pct { position:absolute; left:50%; transform:translateX(-50%); color:#fff; font-weight:900; font-size:14px; text-shadow:0 1px 0 rgba(0,0,0,0.35); z-index:4; padding:2px 6px; }
-
-    /* grade guide lines */
     .v-chart .grade-line { position:absolute; left:0; right:0; height:0; border-top:2px dashed rgba(0,0,0,0.12); pointer-events:none; }
-    .v-chart .grade-line.g90 { bottom:90%; }
-    .v-chart .grade-line.g75 { bottom:75%; }
-    .v-chart .grade-line.g50 { bottom:50%; }
-
-    /* y-axis labels styled as boxed grades */
-
     .bar-label { font-weight:700; font-size:13px; color:var(--gov-navy); text-align:center; }
-
-    /* overall score line + marker */
     .v-chart .overall-line { position:absolute; left:0; right:0; height:0; border-top:2px solid #f39c12; pointer-events:none; display:block; z-index:6; }
     .v-chart .overall-line .overall-marker { position:absolute; right:-36px; top:-16px; width:34px; height:34px; background:#f39c12; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,0.18); border:3px solid #fff; font-size:13px; }
-
-    /* small grade boxes aligned to guide lines */
-    /* grade boxes removed per user request */
-
-    /* same gradients reused for bars */
     .bar-fill.col-1 { background: linear-gradient(180deg,#1e90ff,#0033aa); }
     .bar-fill.col-2 { background: linear-gradient(180deg,#009688,#00695c); }
     .bar-fill.col-3 { background: linear-gradient(180deg,#f0b429,#c77a00); }
     .bar-fill.col-4 { background: linear-gradient(180deg,#00c8b8,#007f5f); }
     .bar-fill.col-5 { background: linear-gradient(180deg,#7e57c2,#5e35b1); }
     .bar-fill.col-6 { background: linear-gradient(180deg,#d81b60,#8e0f3a); }
-
-    /* Grade ranges that surround the A+/A/B/C labels — sized by JS to match thresholds */
-    .v-chart .grade-range {
-      position: absolute;
-      /* nudge boxes closer to the chart */
-      left: -56px;
-      width: 45px;
-      background: #5f5f5f;
-      color: #fff;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-weight:800;
-      font-size:13px;
-      padding:6px 6px;
-      z-index: 3; /* sit slightly above chart background but below marker */
-    }
+    .v-chart .grade-range { position: absolute; left: -56px; width: 45px; background: #5f5f5f; color: #fff; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.12); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; padding:6px 6px; z-index: 3; }
     .v-chart .grade-range .gr-label { pointer-events: none; margin:0; }
 
-    /* Dashboard (page 3) styles */
-    .dashboard {
-      margin-top: 6px;
-    }
-    .dashboard-header {
-      background: var(--gov-navy);
-      color: #fff;
-      padding: 10px 12px;
-      text-align: center;
-      font-weight: 800;
-      border-radius: 4px;
-      font-size: 18px;
-      letter-spacing: 1px;
-    }
-    .dashboard-top {
-      display:flex;
-      gap:7px;
-      margin-top:12px;
-    }
-    .big-cost-card {
-      flex:1;
-      background:#eef7fb;
-      border:1px solid #dfeff6;
-      padding:18px;
-      border-radius:6px;
-      text-align:center;
-      box-shadow:0 2px 6px rgba(0,0,0,0.06);
-    }
+    .dashboard { margin-top:6px; }
+    .dashboard-header { background: var(--gov-navy); color: #fff; padding:10px 12px; text-align:center; font-weight:800; border-radius:4px; font-size:18px; letter-spacing:1px; }
+    .dashboard-top { display:flex; gap:7px; margin-top:12px; }
+    .big-cost-card { flex:1; background:#eef7fb; border:1px solid #dfeff6; padding:18px; border-radius:6px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
     .big-cost-card .kicker { font-size:12px; color:#234; font-weight:700; margin-bottom:8px; }
     .big-cost-card .amount { font-size:28px; font-weight:900; color:var(--gov-navy); }
     .dashboard-charts { display:flex; gap:12px; margin-top:14px; }
@@ -699,27 +223,8 @@
     .chart-placeholder { height:120px; background:linear-gradient(90deg,#f6f9fb,#ffffff); border-radius:4px; display:flex; align-items:center; justify-content:center; color:#999; font-weight:700; }
     .chart-placeholder svg { display:block; width:100%; height:100%; }
 
-    /* Dashboard (page 3) — switched to page background / light GOV palette to match Pages 1–2 */
-    .dashboard-dark {
-      /* reuse the page gradient for consistency */
-      background: linear-gradient(180deg, #fff3e6 0%, #ffffff 48%, #eef8f0 100%);
-      color: #233447; /* dark slate for body text */
-      padding: 18px;
-      border-radius: 2px;
-      box-shadow: inset 0 1px 0 rgba(0,0,0,0.02);
-      border: 1px solid rgba(0,0,0,0.04);
-    }
-    .dashboard-dark .dash-header {
-      background: linear-gradient(90deg,#f7f7f7,#ffffff);
-      color: var(--gov-navy);
-      padding:14px 18px;
-      border-radius:6px;
-      text-align:center;
-      font-weight:900;
-      letter-spacing:1.2px;
-      font-size:20px;
-      border: 1px solid #e6e6e6;
-    }
+    .dashboard-dark { background: linear-gradient(180deg, #fff3e6 0%, #ffffff 48%, #eef8f0 100%); color: #233447; padding:18px; border-radius:2px; box-shadow: inset 0 1px 0 rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.04); }
+    .dashboard-dark .dash-header { background: linear-gradient(90deg,#f7f7f7,#ffffff); color: var(--gov-navy); padding:14px 18px; border-radius:6px; text-align:center; font-weight:900; letter-spacing:1.2px; font-size:20px; border: 1px solid #e6e6e6; }
     .dashboard-dark .dash-body { display:flex; flex-direction:column; gap:12px; margin-top:12px; }
     .donut-panel { flex:0 0 40%; background:#ffffff; padding:14px; border-radius:6px; border:1px solid #e6e6e6; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
     .donut-svg { width:100%; height:320px; display:flex; align-items:center; justify-content:center; }
@@ -736,7 +241,6 @@
     .total-left { padding:10px; font-weight:900; }
     .right-cost { text-align:right; font-weight:800; }
 
-    /* Validation cards (Page 2) */
     .validation-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
     .validation-card { background:#fff; border:1px solid #e7e7e7; padding:12px; border-radius:6px; font-size:12px; color:#333; }
     .validation-card .vc-title { font-weight:700; color:var(--gov-navy); margin-bottom:6px; }
@@ -744,6 +248,21 @@
   </style>
 </head>
 <body>
+
+  <!-- ================= JSON INPUT UI ================= -->
+  <div id="json-ui">
+    <textarea id="jsonInput" placeholder="Paste the JSON response from /full-analysis here (or leave empty to fetch from URL)"></textarea>
+    <div class="controls">
+      <input type="text" id="jsonUrl" placeholder="Enter URL that returns the JSON (GET)" />
+      <button id="fetchBtn" class="secondary">Fetch & Render from URL</button>
+      <button id="renderBtn">Render Pasted JSON</button>
+      <button id="clearBtn" style="background:#888;">Clear</button>
+      <div id="json-status">Status: waiting for JSON input.</div>
+      <div style="font-size:12px;color:#666;margin-top:6px;">
+        Tip: Enter the API URL above and click "Fetch & Render" — it will automatically fetch and display the report.
+      </div>
+    </div>
+  </div>
 
 <!-- ================= PAGE 1 ================= -->
 <div class="page">
@@ -802,14 +321,13 @@
     <div class="left-stats">
       <div class="percent-circle pct-1"><div class="pct-value">--%</div><div style="font-size:11px;margin-top:6px;">Novelty</div></div>
       <div class="percent-circle pct-2"><div class="pct-value">--%</div><div style="font-size:11px;margin-top:6px;">Feasibility</div></div>
-      <div class="percent-circle pct-3"><div class="pct-value">--%</div><div style="font-size:11px;margin-top:6px;">Cost Efficiency</div></div>
+      <div class="percent-circle pct-3"><div class="pct-value">--%</div><div style="font-size:11px;margin-top:6px;">Cost</div></div>
       <div class="percent-circle pct-4"><div class="pct-value">--%</div><div style="font-size:11px;margin-top:6px;">Deliverable</div></div>
     </div>
 
     <div class="review-sections">
-      
+       
 
-      <!-- Metric Definitions: fixed explanatory text block (always shown on Page 1) -->
       <div id="metric-definitions" style="margin-top:16px;background:#fff;border:1px solid #eee;padding:12px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
         <div style="font-weight:800;color:var(--coal-navy);margin-bottom:10px;font-size:14px;">Metric Definitions</div>
         <div style="display:grid;grid-template-columns:1fr;gap:10px;font-size:13px;color:#222;line-height:1.35;">
@@ -830,8 +348,8 @@
             <div>An automated evaluation generated by an AI tool. It assesses clarity, completeness, relevance, and quality of the proposal.</div>
           </div>
           <div>
-            <div style="font-weight:700;margin-bottom:4px;">Plag (Plagiarism Score)</div>
-            <div>Percentage of text matching existing sources. Indicates originality and whether the content is free from copying.</div>
+            <div style="font-weight:700;margin-bottom:4px;">Benefit to Coal</div>
+            <div>Coal is a dependable and cost-effective energy source that plays a major role in generating electricity. It also supports important industries like steel and cement production, making it valuable for economic development.</div>
           </div>
           <div>
             <div style="font-weight:700;margin-bottom:4px;">Deliverable</div>
@@ -843,7 +361,6 @@
       </div>
   </div>
 
-  <!-- Vertical graded bar chart: x-axis categories, y-axis grades -->
   <div class="vertical-graded-chart" aria-hidden="false">
     <div class="y-axis" aria-hidden="true">
       <div class="y-label y-ap">A+</div>
@@ -853,442 +370,538 @@
     </div>
 
     <div class="v-chart" role="img" aria-label="Scores by category">
-      <!-- grade guide lines: 90%, 75%, 50% -->
       <div class="grade-line g90" aria-hidden="true"></div>
       <div class="grade-line g75" aria-hidden="true"></div>
       <div class="grade-line g50" aria-hidden="true"></div>
-      <!-- grade ranges: A+ (>90), A (75-90), B (50-75), C (<50) -->
-      <div class="grade-range gr-ap" aria-hidden="true"><div class="gr-label">A+</div></div>
-      <div class="grade-range gr-a" aria-hidden="true"><div class="gr-label">A</div></div>
-      <div class="grade-range gr-b" aria-hidden="true"><div class="gr-label">B</div></div>
-      <div class="grade-range gr-c" aria-hidden="true"><div class="gr-label">C</div></div>
-      <!-- vertical grade ladder (stacked boxes) -->
       
-      <!-- overall score marker (positioned by JS) -->
       <div class="overall-line" aria-hidden="true"><div class="overall-marker">0</div></div>
       <div class="v-bar" data-key="novelty">
-        <div class="bar-wrap"><div class="bar-fill col-1" style="height:0%"></div><div class="bar-pct">0%</div></div>
+        <div class="bar-wrap" style="height:160px"><div class="bar-fill col-1" style="height:0%"></div><div class="bar-pct">0%</div></div>
         <div class="bar-label">Novelty</div>
       </div>
 
       <div class="v-bar" data-key="feasibility">
-        <div class="bar-wrap"><div class="bar-fill col-2" style="height:0%"></div><div class="bar-pct">0%</div></div>
+        <div class="bar-wrap" style="height:160px"><div class="bar-fill col-2" style="height:0%"></div><div class="bar-pct">0%</div></div>
         <div class="bar-label">Feasibility</div>
       </div>
 
       <div class="v-bar" data-key="cost">
-        <div class="bar-wrap"><div class="bar-fill col-3" style="height:0%"></div><div class="bar-pct">0%</div></div>
+        <div class="bar-wrap" style="height:160px"><div class="bar-fill col-3" style="height:0%"></div><div class="bar-pct">0%</div></div>
         <div class="bar-label">Cost</div>
       </div>
 
       <div class="v-bar" data-key="ai_score">
-        <div class="bar-wrap"><div class="bar-fill col-4" style="height:0%"></div><div class="bar-pct">0%</div></div>
+        <div class="bar-wrap" style="height:160px"><div class="bar-fill col-4" style="height:0%"></div><div class="bar-pct">0%</div></div>
         <div class="bar-label">AI Score</div>
       </div>
 
       <div class="v-bar" data-key="plagiarism">
-        <div class="bar-wrap"><div class="bar-fill col-5" style="height:0%"></div><div class="bar-pct">0%</div></div>
-        <div class="bar-label">Plag.</div>
+        <div class="bar-wrap" style="height:160px"><div class="bar-fill col-5" style="height:0%"></div><div class="bar-pct">0%</div></div>
+        <div class="bar-label">Benefit to coal</div>
       </div>
 
       <div class="v-bar" data-key="time">
-        <div class="bar-wrap"><div class="bar-fill col-6" style="height:0%"></div><div class="bar-pct">0%</div></div>
+        <div class="bar-wrap" style="height:160px"><div class="bar-fill col-6" style="height:0%"></div><div class="bar-pct">0%</div></div>
         <div class="bar-label">Deliverables</div>
       </div>
     </div>
   </div>
 
   <script>
-    // Populate stats and animate bars (simple inline data placeholder)
-    window.addEventListener('load', function(){
-      const data = {
-        overall_score: 78,
-        risk_index: 32,
-        requested_funds: '₹185 lak',
-        duration_months: 30,
-        novelty: 80,
-        feasibility: 74,
-        cost: 40,
-        ai_score: 100,
-        plagiarism: 97,
-        time: 60,
-        // new fields for pages 2 & 3
-        predicted_actual: '₹ 46,950.00',
-        est_labor_cost: '₹ 35,400.00',
-        actual_labor_cost: '₹ 46,950.00'
-      };
+    // ---------- Helper to safely parse JSON pasted ----------
+    function safeParseJSON(txt) {
+      try { return JSON.parse(txt); } catch(e) { return null; }
+    }
 
-      // Stats grid
-      const statCards = document.querySelectorAll('.stats-grid .stat-card .value');
-      if(statCards && statCards.length >= 4){
-        statCards[0].textContent = data.overall_score + '%';
-        statCards[1].textContent = (data.risk_index).toString();
-        statCards[2].textContent = data.requested_funds;
-        statCards[3].textContent = data.duration_months + ' mon';
-      }
-
-      // Left percent circles: map all four badges to the data keys
-      const pctCircles = document.querySelectorAll('.left-stats .percent-circle .pct-value');
-      const pctKeys = ['novelty','feasibility','cost','time'];
-      if(pctCircles && pctCircles.length) {
-        pctCircles.forEach((el, idx) => {
-          const key = pctKeys[idx];
-          const v = (data && typeof data[key] !== 'undefined' && data[key] !== null) ? Math.round(data[key]) : null;
-          el.textContent = (v === null) ? '--%' : (v + '%');
-        });
-      }
-
-      // Populate vertical metric tiles on Page 2 (vertical list)
-      try{
-        const vertVals = document.querySelectorAll('.left-metrics-vertical .metric-val');
-        vertVals.forEach((el) => {
-          const key = el.getAttribute('data-key');
-          const v = (data && typeof data[key] !== 'undefined' && data[key] !== null) ? Math.round(data[key]) : null;
-          el.textContent = (v === null) ? '--%' : (v + '%');
-        });
-      }catch(e){ /* ignore if page missing */ }
-
-      // Animate vertical bars using data-key attributes and align to v-chart guide lines
-      const vchart = document.querySelector('.v-chart');
-      const vbars = document.querySelectorAll('.v-chart .v-bar');
-      // reserve space (px) at bottom of v-chart for labels/spacing
-      const reserve = 36;
-      const chartH = vchart ? vchart.clientHeight : 220;
-      const availableH = Math.max(40, chartH - reserve);
-      // Make bars static (set final heights immediately) so PDF conversion sees final state
-      vbars.forEach((vbar) => {
-        const key = vbar.getAttribute('data-key');
-        const pct = Number(data[key]) || 0;
-        const fill = vbar.querySelector('.bar-fill');
-        const pctEl = vbar.querySelector('.bar-pct');
-        const wrap = vbar.querySelector('.bar-wrap');
-        if(pctEl) pctEl.textContent = pct + '%';
-        if(wrap) wrap.style.height = availableH + 'px';
-        if(fill){
-          // disable CSS transition so the height is applied instantly
-          fill.style.transition = 'none';
-          const h = Math.round((pct/100) * availableH);
-          fill.style.height = h + 'px';
-          // position percent label inside bar (centered vertically within fill)
-          if(pctEl){
-            const labelCenter = Math.max(6, Math.round(h/2 - 10));
-            pctEl.style.top = 'auto';
-            pctEl.style.bottom = labelCenter + 'px';
-            pctEl.style.fontSize = '12px';
-            pctEl.style.fontWeight = '700';
-            pctEl.style.textShadow = '0 1px 0 rgba(0,0,0,0.35)';
-            // render the percentage as plain text (no circular badge)
-            pctEl.style.display = 'block';
-            pctEl.style.width = 'auto';
-            pctEl.style.height = 'auto';
-            pctEl.style.borderRadius = '0';
-            pctEl.style.background = 'transparent';
-            pctEl.style.border = 'none';
-            pctEl.style.color = '#ffffff';
-            pctEl.style.padding = '2px 6px';
-            pctEl.style.fontSize = '12px';
-            pctEl.style.fontWeight = '700';
-          }
-        }
+    // ---------- Helper to get endpoint output (robust matching) ----------
+    function getOutput(results, endpoint) {
+      if(!Array.isArray(results)) return {};
+      const normalize = s => (s||'').toString().replace(/^\/+/, '').replace(/[-_]/g, '').toLowerCase();
+      const needle = normalize(endpoint || '');
+      const found = results.find(r => {
+        if(!r || !r.endpoint) return false;
+        const e = r.endpoint.toString();
+        // quick direct includes check
+        if(e.includes(endpoint)) return true;
+        const ne = normalize(e);
+        if(ne === needle) return true;
+        if(ne.includes(needle) || needle.includes(ne)) return true;
+        return false;
       });
+      return found ? (found.output || {}) : {};
+    }
 
-      // Insert metric list under Executive Summary: shows novelty, feasibility, cost, AI, plagiarism, deliverable
-      try{
-        const execSection = document.querySelector('.review-section');
-        if(execSection){
-          let metricsWrap = document.getElementById('metric-list');
-          if(!metricsWrap){
-            metricsWrap = document.createElement('div');
-            metricsWrap.id = 'metric-list';
-            metricsWrap.style.display = 'flex';
-            metricsWrap.style.flexWrap = 'wrap';
-            metricsWrap.style.gap = '10px';
-            metricsWrap.style.marginTop = '8px';
-            execSection.insertBefore(metricsWrap, execSection.querySelector('.section-text').nextSibling);
+    // Robust percent extractor: checks many common keys and nested locations
+    function extractPercent(obj) {
+      if(!obj || typeof obj !== 'object') return null;
+      const keys = [
+        'feasibility_percentage','feasibility_score','deliverable_percentage','deliverable_score','changeable_percentage','changeable_percent','novelty_percentage','confidence_score','score','percentage','model_score_pct','model_score','overall_human_percentage','overall_percentage'
+      ];
+      for(const k of keys) {
+        if(Object.prototype.hasOwnProperty.call(obj,k)) {
+          const v = obj[k];
+          if(typeof v === 'number' && !isNaN(v)) return v;
+          if(typeof v === 'string') {
+            const n = Number(v.replace(/[^0-9\.\-]/g,''));
+            if(!isNaN(n)) return n;
           }
-
-          const metricDefs = [
-            {key:'novelty', label:'Novelty'},
-            {key:'feasibility', label:'Feasibility'},
-            {key:'cost', label:'Cost'},
-            {key:'ai_score', label:'AI Score'},
-            {key:'plagiarism', label:'Plagiarism'},
-            {key:'time', label:'Deliverable'}
-          ];
-
-          metricsWrap.innerHTML = '';
-          metricDefs.forEach(md => {
-            const v = (data && typeof data[md.key] !== 'undefined' && data[md.key] !== null) ? data[md.key] : '--';
-            const item = document.createElement('div');
-            item.style.minWidth = '120px';
-            item.style.background = '#fff';
-            item.style.border = '1px solid #eee';
-            item.style.borderRadius = '8px';
-            item.style.padding = '8px 10px';
-            item.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
-            item.style.textAlign = 'center';
-            const val = document.createElement('div');
-            val.style.fontSize = '18px';
-            val.style.fontWeight = '800';
-            val.textContent = (v === '--') ? v : (Math.round(Number(v)) + '%');
-            const lbl = document.createElement('div');
-            lbl.style.fontSize = '12px';
-            lbl.style.color = '#444';
-            lbl.style.marginTop = '6px';
-            lbl.textContent = md.label;
-            item.appendChild(val);
-            item.appendChild(lbl);
-            metricsWrap.appendChild(item);
-          });
         }
-      }catch(e){ console.warn('metric list render failed', e); }
-      // draw overall score guide line and marker and position grade guide lines/boxes in px
-      const overall = Number(data.overall_score) || 0;
-      const overallLine = document.querySelector('.v-chart .overall-line');
-      // grade thresholds (from bottom): first line at 30%, then 65%, then 85%
-      const t85 = 85, t65 = 65, t30 = 30;
-      // compute pixel mapping based on availableH (bar area) so lines align with fills
-      const grade85px = Math.round((t85/100) * availableH);
-      const grade65px = Math.round((t65/100) * availableH);
-      const grade30px = Math.round((t30/100) * availableH);
-      // set grade lines
-      // We'll position guide lines and overall marker once we have the bar-wrap reference
-      const gl90 = document.querySelector('.v-chart .grade-line.g90');
-      const gl75 = document.querySelector('.v-chart .grade-line.g75');
-      const gl50 = document.querySelector('.v-chart .grade-line.g50');
+      }
+      // check nested common structures
+      if(obj.overall_scores && typeof obj.overall_scores === 'object') {
+        const v = obj.overall_scores.overall_human_percentage || obj.overall_scores.overall_percentage;
+        if(typeof v === 'number') return v;
+      }
+      if(obj.output && typeof obj.output === 'object') return extractPercent(obj.output);
+      if(obj.result && typeof obj.result === 'object') return extractPercent(obj.result);
+      return null;
+    }
 
-      // Size and position grade-range boxes to match thresholds
-      const grAp = document.querySelector('.v-chart .grade-range.gr-ap');
-      const grA = document.querySelector('.v-chart .grade-range.gr-a');
-      const grB = document.querySelector('.v-chart .grade-range.gr-b');
-      const grC = document.querySelector('.v-chart .grade-range.gr-c');
-      // Use the first bar-wrap as the reference top and height for the bar area
-      const firstWrap = document.querySelector('.v-chart .v-bar .bar-wrap');
-      if(firstWrap){
-        const wrapTop = firstWrap.offsetTop; // distance from top of v-chart
-        const H = firstWrap.clientHeight; // availableH
-        const setRange = (el, highPct, lowPct) => {
-          if(!el) return;
-          const top = wrapTop + Math.round((1 - highPct/100) * H);
-          const h = Math.max(6, Math.round((highPct - lowPct)/100 * H));
-          el.style.top = top + 'px';
-          el.style.height = h + 'px';
-          el.style.bottom = 'auto';
+    // ---------- populateReport: map JSON to DOM ----------
+    function populateReport(api) {
+      if(!api || typeof api !== 'object') { throw new Error("Invalid API object"); }
+      const results = api.results || [];
+
+      const ai     = getOutput(results, "detect-ai-and-validate");
+      const proc   = getOutput(results, "process-and-estimate");
+      const deliv  = getOutput(results, "deliverable-check") || getOutput(results, "deliverables") || getOutput(results, "deliverable") || {};
+      const novel  = getOutput(results, "analyze-novelty") || getOutput(results, "novelty") || {};
+      const feas   = getOutput(results, "technical-feasibility") || getOutput(results, "technical_feasibility") || getOutput(results, "technical") || getOutput(results, "feasibility") || {};
+      const benefit= getOutput(results, "benefit-check");
+
+      const extracted = proc.extracted_json || {};
+      const cost      = proc.cost_estimation || {};
+
+      // PAGE 1: header fields
+      try {
+        const projectTitleCell = document.querySelector('.employee-info table tr:first-child td');
+        if(projectTitleCell) {
+          projectTitleCell.textContent = extracted.basic_information?.project_title || (api.filename || "Untitled");
+        }
+      } catch(e){ /* ignore */ }
+
+      // PI name (row 2, first td)
+      try {
+        const piCell = document.querySelector('.employee-info table tr:nth-child(2) td');
+        if(piCell) piCell.textContent = extracted.basic_information?.project_leader_name || extracted.basic_information?.project_leader_name || "--";
+      } catch(e){}
+
+      // Institute (row2, 4th cell)
+      try {
+        const instCell = document.querySelector('.employee-info table tr:nth-child(2) td:nth-child(4)');
+        if(instCell) instCell.textContent = extracted.basic_information?.principal_implementing_agency || "--";
+      } catch(e){}
+
+      // Submission date
+      try {
+        const subCell = document.querySelector('.employee-info table tr:nth-child(3) td:nth-child(2)');
+        if(subCell) subCell.textContent = extracted.basic_information?.submission_date || "--";
+      } catch(e){}
+
+      // Budget (display government_budget_lakhs or cost_estimation)
+      try {
+        const budgetCell = document.querySelector('.employee-info table tr:nth-child(3) td:nth-child(4)');
+        if(budgetCell) {
+          const gov = cost.government_budget_lakhs;
+          if(typeof gov === 'number' || (typeof gov === 'string' && gov.trim() !== "")) {
+            budgetCell.textContent = "₹ " + gov + " lakhs";
+          } else {
+            // fallback: use total_project_cost or estimation
+            const fallback = (proc.extracted_json?.cost_breakdown?.total_project_cost?.total) || "--";
+            budgetCell.textContent = (fallback && fallback !== null) ? ("₹ " + fallback) : "₹ --";
+          }
+        }
+      } catch(e){}
+
+      // Duration
+      try {
+        const durCell = document.querySelector('.employee-info table tr:nth-child(4) td:nth-child(2)');
+        if(durCell) durCell.textContent = extracted.basic_information?.project_duration || "--";
+      } catch(e){}
+
+      // Stats grid (top)
+      try {
+        const statVals = document.querySelectorAll('.stats-grid .stat-card .value');
+        if(statVals && statVals.length >= 4) {
+          const overall = ( (cost && cost.confidence_score) ? cost.confidence_score : (ai.model_score_pct || 0) );
+          statVals[0].textContent = (api.overall_score || overall || "--") + (typeof overall === 'number' ? '%' : '');
+          statVals[1].textContent = (api.risk_index || (proc.extracted_json?.project_details?.foreign_exchange_details) || "--");
+          statVals[2].textContent = (cost.government_budget_lakhs ? (cost.government_budget_lakhs + " lak") : (proc.extracted_json?.basic_information?.contact_phone || "--"));
+          statVals[3].textContent = extracted.basic_information?.project_duration || "--";
+        }
+      } catch(e){}
+
+      // Left percent circles: novelty, feasibility, cost, deliverable
+      try {
+        const pctEls = document.querySelectorAll('.left-stats .percent-circle .pct-value');
+        if(pctEls && pctEls.length) {
+          const novelPct = extractPercent(novel) ?? extractPercent(proc) ?? extractPercent(api) ?? '--';
+          const feasPct  = extractPercent(feas) ?? extractPercent(api) ?? '--';
+          const costPct  = extractPercent(cost) ?? extractPercent(proc) ?? '--';
+          const delivPct = extractPercent(deliv) ?? extractPercent(api) ?? '--';
+
+          pctEls[0].textContent = (novelPct === '--' ? '--' : Math.round(novelPct) + '%');
+          pctEls[1].textContent = (feasPct === '--' ? '--' : Math.round(feasPct) + '%');
+          pctEls[2].textContent = (costPct === '--' ? '--' : Math.round(costPct) + '%');
+          pctEls[3].textContent = (delivPct === '--' ? '--' : Math.round(delivPct) + '%');
+        }
+      } catch(e){ console.warn('left-stats update failed', e); }
+
+      // Vertical bars: set .bar-pct text and adjust bar heights (set height via inline style)
+      try {
+        const mapping = {
+          novelty: extractPercent(novel) || extractPercent(proc) || 0,
+          feasibility: extractPercent(feas) || extractPercent(api) || 0,
+          cost: extractPercent(cost) || 0,
+          ai_score: (ai.model_score_pct || ai.model_score || 0),
+          plagiarism: (benefit.benefit_score || benefit.benefit_percentage || 0),
+          time: extractPercent(deliv) || 0
         };
-        // Map ranges to new thresholds: A+ 85-100, A 65-85, B 30-65, C 0-30
-        setRange(grAp, 100, 85);
-        setRange(grA, 85, 65);
-        setRange(grB, 65, 30);
-        setRange(grC, 30, 0);
-
-        // Position the dashed guide lines exactly at the boundaries between boxes
-        if(gl90){ const top = wrapTop + Math.round((1 - 85/100) * H); gl90.style.top = top + 'px'; gl90.style.bottom = 'auto'; }
-        if(gl75){ const top = wrapTop + Math.round((1 - 65/100) * H); gl75.style.top = top + 'px'; gl75.style.bottom = 'auto'; }
-        if(gl50){ const top = wrapTop + Math.round((1 - 30/100) * H); gl50.style.top = top + 'px'; gl50.style.bottom = 'auto'; }
-
-        // Position overall marker using same coordinate system
-        if(overallLine){ const overallTop = wrapTop + Math.round((1 - overall/100) * H); overallLine.style.top = overallTop + 'px'; overallLine.style.bottom = 'auto'; const marker = overallLine.querySelector('.overall-marker'); if(marker) marker.textContent = overall; }
-      }
-
-      // Highlight the appropriate ladder step based on overall score (0-100)
-      // no ladder steps — y-axis labels themselves are styled as boxes
-      // Populate predicted/estimated/actual amounts on page 2 and page 3
-      const predEl = document.getElementById('predicted-actual-amt');
-      if(predEl) predEl.textContent = data.predicted_actual;
-      const estEl = document.getElementById('est-labor');
-      if(estEl) estEl.textContent = data.est_labor_cost;
-      const actEl = document.getElementById('actual-labor');
-      if(actEl) actEl.textContent = data.actual_labor_cost;
-
-      // Page 2 sync removed: Page 2 should not contain dummy percent badges.
-
-      // ---------- Simple SVG chart helpers (dummy data) ----------
-      function clearSvg(id){ const s=document.getElementById(id); if(!s) return; while(s.firstChild) s.removeChild(s.firstChild); }
-
-      function drawBarChart(svgId, labels, estData, actData){
-        const svg = document.getElementById(svgId);
-        if(!svg) return;
-        clearSvg(svgId);
-        const viewW = 800, viewH = 120;
-        svg.setAttribute('viewBox', `0 0 ${viewW} ${viewH}`);
-        const padding = {l:40, r:12, t:12, b:24};
-        const plotW = viewW - padding.l - padding.r;
-        const plotH = viewH - padding.t - padding.b;
-        const n = labels.length;
-        const groupW = plotW / n;
-        const barW = Math.min(40, Math.round(groupW*0.35));
-        const maxVal = Math.max(...estData, ...actData, 1);
-
-        // axis line
-        const axis = document.createElementNS('http://www.w3.org/2000/svg','line');
-        axis.setAttribute('x1', padding.l); axis.setAttribute('y1', padding.t+plotH); axis.setAttribute('x2', padding.l+plotW); axis.setAttribute('y2', padding.t+plotH);
-        axis.setAttribute('stroke','#e0e0e0'); axis.setAttribute('stroke-width','1'); svg.appendChild(axis);
-
-        labels.forEach((lab,i)=>{
-          const gx = padding.l + i*groupW + groupW/2;
-          const estVal = estData[i] || 0; const actVal = actData[i] || 0;
-          const estH = Math.round((estVal/maxVal) * plotH);
-          const actH = Math.round((actVal/maxVal) * plotH);
-
-          // estimated (left)
-          const rectE = document.createElementNS('http://www.w3.org/2000/svg','rect');
-          rectE.setAttribute('x', gx - barW - 6); rectE.setAttribute('y', padding.t + (plotH - estH)); rectE.setAttribute('width', barW); rectE.setAttribute('height', estH);
-          rectE.setAttribute('fill','#2b8fd6'); rectE.setAttribute('rx','4'); svg.appendChild(rectE);
-
-          // actual (right)
-          const rectA = document.createElementNS('http://www.w3.org/2000/svg','rect');
-          rectA.setAttribute('x', gx + 6); rectA.setAttribute('y', padding.t + (plotH - actH)); rectA.setAttribute('width', barW); rectA.setAttribute('height', actH);
-          rectA.setAttribute('fill','#e74c3c'); rectA.setAttribute('rx','4'); svg.appendChild(rectA);
-
-          // label
-          const text = document.createElementNS('http://www.w3.org/2000/svg','text');
-          text.setAttribute('x', gx); text.setAttribute('y', padding.t+plotH+14); text.setAttribute('text-anchor','middle'); text.setAttribute('fill','#3b3b3b'); text.setAttribute('font-size','10');
-          text.textContent = lab;
-          svg.appendChild(text);
-        });
-      }
-
-      function drawLineChart(svgId, labels, values){
-        const svg = document.getElementById(svgId); if(!svg) return; clearSvg(svgId);
-        const viewW = 800, viewH = 120; svg.setAttribute('viewBox', `0 0 ${viewW} ${viewH}`);
-        const padding = {l:40, r:12, t:12, b:24}; const plotW = viewW - padding.l - padding.r; const plotH = viewH - padding.t - padding.b;
-        const maxVal = Math.max(...values, 1);
-        // grid lines
-        for(let g=0; g<=4; g++){ const y = padding.t + Math.round(plotH*(g/4)); const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',padding.l); line.setAttribute('x2',padding.l+plotW); line.setAttribute('y1',y); line.setAttribute('y2',y); line.setAttribute('stroke','#f1f1f1'); line.setAttribute('stroke-width','1'); svg.appendChild(line);} 
-        // polyline
-        const pts = values.map((v,i)=>{ const x = padding.l + Math.round((i/(values.length-1))*plotW); const y = padding.t + Math.round(plotH - (v/maxVal)*plotH); return `${x},${y}`; }).join(' ');
-        const poly = document.createElementNS('http://www.w3.org/2000/svg','polyline'); poly.setAttribute('points', pts); poly.setAttribute('fill','none'); poly.setAttribute('stroke','#2b8fd6'); poly.setAttribute('stroke-width','2'); svg.appendChild(poly);
-        // points
-        values.forEach((v,i)=>{ const x = padding.l + Math.round((i/(values.length-1))*plotW); const y = padding.t + Math.round(plotH - (v/maxVal)*plotH); const c = document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',3); c.setAttribute('fill','#2b8fd6'); svg.appendChild(c);
-          const lbl = document.createElementNS('http://www.w3.org/2000/svg','text'); lbl.setAttribute('x', x); lbl.setAttribute('y', padding.t+plotH+14); lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('fill','#3b3b3b'); lbl.setAttribute('font-size','10'); lbl.textContent = labels[i]; svg.appendChild(lbl);
-        });
-      }
-
-      // Dummy datasets for page 3 (you will provide real data later)
-      const projLabels = ['Manager','Supervisor','QA','MIS/RTA','Associate'];
-      const projEst = [6000,3000,1500,1500,1000];
-      const projAct = [5000,4000,2500,2500,1500];
-      drawBarChart('proj-chart', projLabels, projEst, projAct);
-
-      const contractualVals = [3800,2300,1100,1000,900];
-      drawLineChart('contractual-chart', projLabels, contractualVals);
-
-      const shiftLabels = ['A','B','C'];
-      const shiftVals = [1200,900,700];
-      drawBarChart('shift-chart', shiftLabels, shiftVals, [0,0,0]);
-
-      const totalsLabels = ['Est','Act'];
-      const totalsVals = [35400,46950];
-      drawBarChart('totals-chart', totalsLabels, totalsVals, [0,0]);
-
-      // ------------------ Render dark dashboard donut and cost table ------------------
-      const dashboardData = {
-        categories: [
-          { category: 'Training content development', details: ['Curriculum design','Materials creation'], cost: 5000, percent: 15, color: '#3a86ff' },
-          { category: 'Instructor fees', details: ['Compensation for AI/ML experts/trainers'], cost: 10000, percent: 31, color: '#2556a6' },
-          { category: 'Technology and tools', details: ['Software licenses','Development tools and platforms'], cost: 7000, percent: 21, color: '#0077b6' },
-          { category: 'Participant materials', details: ['Workbooks','Learning resources'], cost: 2000, percent: 6, color: '#00b4d8' },
-          { category: 'Online learning platform', details: ['Subscription fees for e-learning platform'], cost: 1500, percent: 5, color: '#90e0ef' },
-          { category: 'Evaluation and certification', details: ['Assessment tools','Exams and certification costs'], cost: 4500, percent: 14, color: '#48cae4' },
-          { category: 'Miscellaneous', details: ['Contingency and unforeseen expenses'], cost: 2500, percent: 8, color: '#00b894' }
-        ]
-      };
-
-      function drawDonut(svgId, items){
-        // Simplified donut: draw colored slices only and show small percent labels at slice midpoints.
-        const svg = document.getElementById(svgId); if(!svg) return; while(svg.firstChild) svg.removeChild(svg.firstChild);
-        const cx = 160, cy = 160, r = 96, stroke = 36; const C = 2*Math.PI*r;
-        let cum = 0;
-        // draw slices (stroked circles) - each slice is a stroked arc using stroke-dasharray
-        items.forEach((it)=>{
-          const len = (it.percent/100) * C;
-          const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
-          circle.setAttribute('cx', cx);
-          circle.setAttribute('cy', cy);
-          circle.setAttribute('r', r);
-          circle.setAttribute('fill', 'none');
-          circle.setAttribute('stroke', it.color);
-          circle.setAttribute('stroke-width', stroke);
-          circle.setAttribute('stroke-linecap', 'butt');
-          circle.setAttribute('stroke-dasharray', `${len} ${Math.max(0.001, C - len)}`);
-          circle.setAttribute('stroke-dashoffset', -cum);
-          circle.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
-          svg.appendChild(circle);
-          cum += len;
-        });
-
-        // inner hole + center label (keeps visual anchor)
-        const hole = document.createElementNS('http://www.w3.org/2000/svg','circle');
-        // make the center background white to match page cards and improve contrast
-        hole.setAttribute('cx',cx); hole.setAttribute('cy',cy); hole.setAttribute('r', r - stroke/2 - 2); hole.setAttribute('fill', 'var(--gov-light)'); svg.appendChild(hole);
-        // subtle inner border so the hole reads as distinct from donut slices
-        const holeBorder = document.createElementNS('http://www.w3.org/2000/svg','circle');
-        holeBorder.setAttribute('cx',cx); holeBorder.setAttribute('cy',cy); holeBorder.setAttribute('r', r - stroke/2 - 2); holeBorder.setAttribute('fill','none'); holeBorder.setAttribute('stroke','#e6e6e6'); holeBorder.setAttribute('stroke-width','3'); svg.appendChild(holeBorder);
-        const centerText = document.createElementNS('http://www.w3.org/2000/svg','text');
-        centerText.setAttribute('x',cx); centerText.setAttribute('y',cy+6); centerText.setAttribute('text-anchor','middle'); centerText.setAttribute('fill','#002855'); centerText.setAttribute('font-size','18'); centerText.setAttribute('font-weight','700'); centerText.textContent = 'TOTAL'; svg.appendChild(centerText);
-
-        // add small percent labels near each slice midpoint
-        let angleAcc = -Math.PI/2; // start at top
-        items.forEach(it=>{
-          const angle = (it.percent/100) * Math.PI * 2;
-          const mid = angleAcc + angle/2;
-          const labelR = r + stroke/2 + 12; // place slightly outside the stroke
-          const lx = cx + Math.cos(mid) * labelR;
-          const ly = cy + Math.sin(mid) * labelR;
-          const pct = document.createElementNS('http://www.w3.org/2000/svg','text');
-          pct.setAttribute('x', lx);
-          pct.setAttribute('y', ly + 4);
-          pct.setAttribute('text-anchor','middle');
-          pct.setAttribute('fill','#002855');
-          pct.setAttribute('font-size','12');
-          pct.setAttribute('font-weight','700');
-          pct.textContent = it.percent + '%';
-          svg.appendChild(pct);
-          angleAcc += angle;
-        });
-      }
-
-      function populateLegendAndTable(legendContainerId, tableBodyId, totalId, items){
-        // Populate the right-side legend (brief category lines) and the detailed cost table below
-        const legend = document.getElementById(legendContainerId);
-        const tbody = document.getElementById(tableBodyId);
-        const totalEl = document.getElementById(totalId);
-        if(legend){ while(legend.firstChild) legend.removeChild(legend.firstChild); }
-        if(tbody){ while(tbody.firstChild) tbody.removeChild(tbody.firstChild); }
-        let total = 0;
-
-        items.forEach(it=>{
-          total += Number(it.cost || 0);
-
-          // Legend item (brief, positioned to the side of the donut)
-          if(legend){
-            const itemWrap = document.createElement('div'); itemWrap.className = 'legend-item';
-            const sw = document.createElement('div'); sw.className = 'legend-swatch'; sw.style.background = it.color; itemWrap.appendChild(sw);
-            const txt = document.createElement('div'); txt.style.display = 'flex'; txt.style.flexDirection = 'column';
-            const title = document.createElement('div'); title.className = 'legend-text'; title.textContent = it.category;
-            const sub = document.createElement('div'); sub.className = 'legend-details'; sub.textContent = `${it.percent}% • ₹ ${Number(it.cost).toLocaleString()}`;
-            txt.appendChild(title); txt.appendChild(sub);
-            itemWrap.appendChild(txt);
-            legend.appendChild(itemWrap);
+        const vbars = document.querySelectorAll('.v-chart .v-bar');
+        vbars.forEach(vb => {
+          const key = vb.getAttribute('data-key');
+          const pct = mapping[key] || 0;
+          const fill = vb.querySelector('.bar-fill');
+          const pctEl = vb.querySelector('.bar-pct');
+          if(pctEl) pctEl.textContent = pct + '%';
+          if(fill) {
+            // compute pixel height as percent of current wrap height
+            const wrap = vb.querySelector('.bar-wrap');
+            const wrapH = (wrap && wrap.clientHeight) ? wrap.clientHeight : 160;
+            const hpx = Math.round((pct/100) * wrapH);
+            fill.style.height = hpx + 'px';
           }
+        });
 
-          // Detailed table row (kept in the big table below for printing / details)
-          if(tbody){
+        // overall marker: compute average of six core metrics
+        const avgSix = Math.round((Number(mapping.novelty||0) + Number(mapping.feasibility||0) + Number(mapping.cost||0) + Number(mapping.ai_score||0) + Number(mapping.plagiarism||0) + Number(mapping.time||0)) / 6) || 0;
+        const overallScore = (typeof api.overall_score === 'number' ? api.overall_score : avgSix);
+        const overallLine = document.querySelector('.v-chart .overall-line');
+        if(overallLine) {
+          const firstWrap = document.querySelector('.v-chart .v-bar .bar-wrap');
+          if(firstWrap) {
+            const H = firstWrap.clientHeight;
+            const top = firstWrap.offsetTop + Math.round((1 - overallScore/100) * H);
+            overallLine.style.top = top + 'px';
+            const marker = overallLine.querySelector('.overall-marker');
+            if(marker) marker.textContent = overallScore;
+          }
+        }
+        // Update the top-left stat card (Overall Score) to reflect the six-metric average
+        try {
+          const statVals2 = document.querySelectorAll('.stats-grid .stat-card .value');
+          if(statVals2 && statVals2.length >= 1) {
+            statVals2[0].textContent = overallScore + '%';
+          }
+        } catch(e){ console.warn('failed updating overall stat card', e); }
+
+        // Highlight the appropriate grade badge (A+, A, B, C) based on thresholds
+        try {
+          const yLabels = document.querySelectorAll('.y-axis .y-label');
+          yLabels.forEach(l => l.classList.remove('active'));
+          // Grade thresholds: >=85 A+, >=60 A, >=30 B, else C
+          if(!isNaN(overallScore)) {
+            if(overallScore >= 85) {
+              const el = document.querySelector('.y-axis .y-ap'); if(el) el.classList.add('active');
+            } else if(overallScore >= 60) {
+              const el = document.querySelector('.y-axis .y-a'); if(el) el.classList.add('active');
+            } else if(overallScore >= 30) {
+              const el = document.querySelector('.y-axis .y-b'); if(el) el.classList.add('active');
+            } else {
+              const el = document.querySelector('.y-axis .y-c'); if(el) el.classList.add('active');
+            }
+          }
+        } catch(e) { console.warn('grade highlight failed', e); }
+      } catch(e){ console.warn(e); }
+
+      // ---------- Page 2: Render capability cards with structured content ----------
+      try {
+        function getScore(o, keys) {
+          if(!o || typeof o !== 'object') return null;
+          for(const k of keys) {
+            if(Object.prototype.hasOwnProperty.call(o,k) && o[k] !== undefined && o[k] !== null) return o[k];
+          }
+          return null;
+        }
+
+        function ensureArray(val) {
+          if(!val) return [];
+          if(Array.isArray(val)) return val;
+          if(typeof val === 'string') {
+            // split on newlines that start with dash or bullet
+            const lines = val.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+            const items = lines.filter(l => /^[\-\u2022\*]/.test(l)).map(l => l.replace(/^[\-\u2022\*]+\s*/,''));
+            if(items.length) return items;
+            // fallback: take sentences after 'Recommended actions:'
+            const recIdx = val.toLowerCase().indexOf('recommended actions');
+            if(recIdx !== -1) {
+              const tail = val.slice(recIdx).replace(/recommended actions\:?/i,'');
+              return tail.split(/[\n\-\u2022\*]+/).map(s=>s.trim()).filter(Boolean);
+            }
+            return [];
+          }
+          return [];
+        }
+
+        function formatCapability(output, title) {
+          const score = getScore(output, ['score','novelty_percentage','model_score_pct','confidence_score','percentage']);
+          const changeable = getScore(output, ['changeable_percentage','changeable_percent','changeable','changeable_percentage']);
+          const comment = output?.comments || output?.comment || output?.output?.comments || output?.output?.comment || '';
+          const recs = output?.recommended_actions || output?.recommendations || output?.recommendation || ensureArray(comment);
+          // if no recs from fields, try parsing from comment text
+          const recItems = (Array.isArray(recs) && recs.length) ? recs : ensureArray(comment);
+
+          let html = '';
+          if(score !== null || changeable !== null) {
+            html += '<div style="font-weight:700;margin-bottom:6px;">';
+            html += 'Score: ' + (score !== null ? score : '--') + (typeof score === 'number' ? '/100' : '') ;
+            if(changeable !== null) html += ' &nbsp; Changeable: ' + changeable;
+            html += '</div>';
+          }
+          if(comment) {
+            // keep paragraph breaks
+            const para = comment.split(/\n\n/).map(p=>p.trim()).filter(Boolean).map(p=>'<p style="margin:6px 0;color:#444;">'+p.replace(/\n/g,' ')+'</p>').join('');
+            html += para;
+          }
+          if(recItems && recItems.length) {
+            html += '<ul style="margin-top:6px;color:#333;">';
+            recItems.forEach(it => { html += '<li style="margin-bottom:6px;">' + it + '</li>'; });
+            html += '';
+          }
+          if(!html) html = '<div style="color:#666;font-style:italic;">No detailed comments available.</div>';
+          return html;
+        }
+
+        const mappings = [
+          {id:'cap-novelty-text', out: novel, title:'Novelty'},
+          {id:'cap-cost-text', out: cost, title:'Cost Justification'},
+          {id:'cap-feasibility-text', out: feas, title:'Technical Feasibility'},
+          {id:'cap-deliver-text', out: deliv, title:'Deliverables'},
+          {id:'cap-ai-text', out: ai, title:'AI Detection'},
+          {id:'cap-benefit-text', out: benefit, title:'Benefit Check'}
+        ];
+
+        mappings.forEach(m => {
+          const el = document.getElementById(m.id);
+          if(!el) return;
+          // replace content with structured HTML built from API output
+          el.innerHTML = formatCapability(m.out, m.title);
+        });
+      } catch(e){ console.warn('capability render failed', e); }
+
+      // ---------- Page 3: Cost breakdown legend & table ----------
+      try {
+        const breakdown = cost.breakdown || {};
+        const legendList = document.getElementById('legend-list');
+        const tbody = document.getElementById('cost-rows');
+        if(legendList) legendList.innerHTML = '';
+        if(tbody) tbody.innerHTML = '';
+
+        // If breakdown is an object with named keys -> convert to array of {category,cost,percent}
+        const items = [];
+        for(const k in breakdown) {
+          if(Object.prototype.hasOwnProperty.call(breakdown,k)) {
+            const v = breakdown[k];
+            if(typeof v === 'number') items.push({category: k.replace(/_/g,' '), cost: v, percent: Math.round((v / (cost.government_budget_lakhs || 1)) * 100)});
+            else if(typeof v === 'object' && v !== null && (v.total || v.year1 || v.year2 || v.year3)) {
+              // attempt to derive a numeric sum
+              const sum = Number(v.total) || (Number(v.year1||0) + Number(v.year2||0) + Number(v.year3||0));
+              items.push({category: k.replace(/_/g,' '), cost: sum || 0, percent: 0});
+            }
+          }
+        }
+
+        // fallback: if cost.breakdown has named numeric keys like equipment,manpower etc.
+        if(items.length === 0 && breakdown) {
+          for(const k of ['equipment','manpower','travel_and_fieldwork','consumables','maintenance_and_operations','contingency']) {
+            if(typeof breakdown[k] === 'number') items.push({category: k.replace(/_/g,' '), cost: breakdown[k], percent: Math.round((breakdown[k] / (cost.government_budget_lakhs || 1)) * 100)});
+          }
+        }
+
+        // Provide some default categories if none found
+        if(items.length === 0) {
+          items.push({category: 'Equipment', cost: (cost.breakdown?.equipment || 0), percent: 0});
+          items.push({category: 'Manpower', cost: (cost.breakdown?.manpower || 0), percent: 0});
+          items.push({category: 'Travel & Fieldwork', cost: (cost.breakdown?.travel_and_fieldwork || 0), percent: 0});
+        }
+
+        // Fill legend and table
+        items.forEach((it, idx) => {
+          const color = ['#3a86ff','#2556a6','#0077b6','#00b4d8','#90e0ef','#48cae4','#00b894'][idx % 7];
+          if(legendList) {
+            const w = document.createElement('div'); w.className='legend-item';
+            const sw = document.createElement('div'); sw.className='legend-swatch'; sw.style.background = color;
+            const txt = document.createElement('div'); txt.style.display='flex'; txt.style.flexDirection='column';
+            const t1 = document.createElement('div'); t1.className='legend-text'; t1.textContent = it.category;
+            const t2 = document.createElement('div'); t2.className='legend-details'; t2.textContent = (it.percent? it.percent+'% • ' : '') + '₹ ' + Number(it.cost).toLocaleString();
+            txt.appendChild(t1); txt.appendChild(t2);
+            w.appendChild(sw); w.appendChild(txt);
+            legendList.appendChild(w);
+          }
+          
+          if(tbody) {
             const row = document.createElement('tr');
-            const tdDetail = document.createElement('td');
-            tdDetail.innerHTML = `<div style="font-weight:800;color:var(--gov-navy)">${it.category}</div><div style='color:#666;font-size:12px;margin-top:6px;'>${it.details.join('<br>')}</div>`;
-            const tdMiddle = document.createElement('td'); tdMiddle.innerHTML = `<span class="pill">${it.percent}%</span>`;
-            const tdCost = document.createElement('td'); tdCost.className = 'right-cost'; tdCost.textContent = '₹ ' + Number(it.cost).toLocaleString();
-            row.appendChild(tdDetail); row.appendChild(tdMiddle); row.appendChild(tdCost); tbody.appendChild(row);
+            const td1 = document.createElement('td');
+            td1.innerHTML = '<div style="font-weight:800;color:var(--gov-navy)">'+it.category+'</div><div style="color:#666;font-size:12px;margin-top:6px;">Details</div>';
+            const td2 = document.createElement('td'); td2.innerHTML = '<span class="pill">'+(it.percent||0)+'%</span>';
+            const td3 = document.createElement('td'); td3.className='right-cost'; td3.textContent = '₹ ' + Number(it.cost).toLocaleString();
+            row.appendChild(td1); row.appendChild(td2); row.appendChild(td3);
+            tbody.appendChild(row);
           }
         });
 
-        if(totalEl) totalEl.textContent = '₹ ' + Number(total).toLocaleString();
-      }
+        // Draw donut chart from items
+        try {
+          function drawDonut(svgId, data) {
+            const svg = document.getElementById(svgId);
+            if(!svg) return;
+            // clear
+            while(svg.firstChild) svg.removeChild(svg.firstChild);
+            const total = data.reduce((s,i)=>s+Number(i.cost||0),0) || 1;
+            const center = 160; const r = 90; const stroke = 36;
+            const circumference = 2 * Math.PI * r;
+            // background circle
+            const bg = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            bg.setAttribute('cx', center); bg.setAttribute('cy', center); bg.setAttribute('r', r);
+            bg.setAttribute('fill','none'); bg.setAttribute('stroke','#f2f2f2'); bg.setAttribute('stroke-width', stroke);
+            svg.appendChild(bg);
 
-      // draw dashboard
-      drawDonut('donut-svg', dashboardData.categories);
-      populateLegendAndTable('legend-list', 'cost-rows', 'dashboard-total', dashboardData.categories);
+            let offset = 0;
+            const colors = ['#3a86ff','#2556a6','#0077b6','#00b4d8','#90e0ef','#48cae4','#00b894'];
+            const gapPx = 3; // small visual gap between segments
+            // store slice mid-angles for labels
+            const midAngles = [];
+            data.forEach((d, idx) => {
+              const pct = Number(d.cost||0) / total;
+              let dash = Math.max(0.0001, pct) * circumference;
+              dash = Math.max(0.0001, dash - gapPx);
+              const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+              circle.setAttribute('cx', center); circle.setAttribute('cy', center); circle.setAttribute('r', r);
+              circle.setAttribute('fill','none');
+              circle.setAttribute('stroke', colors[idx % colors.length]);
+              circle.setAttribute('stroke-width', stroke);
+              circle.setAttribute('stroke-linecap','butt');
+              circle.setAttribute('transform','rotate(-90 '+center+' '+center+')');
+              circle.setAttribute('stroke-dasharray', dash + ' ' + (circumference - dash));
+              circle.setAttribute('stroke-dashoffset', -offset);
+              svg.appendChild(circle);
+              // compute mid-angle (in degrees) for this slice center
+              const sliceAngle = (dash / circumference) * 360;
+              const startAngle = (offset / circumference) * 360;
+              const mid = startAngle + sliceAngle/2 - 90; // account for rotation
+              midAngles.push({angle: mid, pct: pct, color: colors[idx % colors.length]});
+              offset += (dash + gapPx);
+            });
+
+            // add percentage labels around donut
+            try {
+              midAngles.forEach(ma => {
+                const radians = (ma.angle) * (Math.PI/180);
+                const labelR = r + stroke/2 + 18; // outside the donut
+                const lx = center + Math.cos(radians) * labelR;
+                const ly = center + Math.sin(radians) * labelR;
+                const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+                t.setAttribute('x', lx);
+                t.setAttribute('y', ly);
+                t.setAttribute('text-anchor', 'middle');
+                t.setAttribute('dominant-baseline', 'middle');
+                t.setAttribute('font-size', '12');
+                t.setAttribute('fill', ma.color);
+                t.setAttribute('font-weight','700');
+                t.textContent = Math.round(ma.pct * 100) + '%';
+                svg.appendChild(t);
+              });
+            } catch(e) { console.warn('donut labels failed', e); }
+
+            // inner white circle to create donut hole and central label
+            const innerR = r - stroke/2 - 6;
+            const hole = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            hole.setAttribute('cx', center); hole.setAttribute('cy', center); hole.setAttribute('r', innerR);
+            hole.setAttribute('fill', '#fff'); hole.setAttribute('stroke', '#f2f2f2'); hole.setAttribute('stroke-width', 4);
+            svg.appendChild(hole);
+
+            // center text: TOTAL and amount
+            const title = document.createElementNS('http://www.w3.org/2000/svg','text');
+            title.setAttribute('x', center); title.setAttribute('y', center - 6); title.setAttribute('text-anchor','middle'); title.setAttribute('font-size','18'); title.setAttribute('font-weight','800'); title.setAttribute('fill','var(--gov-navy)');
+            title.textContent = 'TOTAL';
+            svg.appendChild(title);
+
+            const amount = document.createElementNS('http://www.w3.org/2000/svg','text');
+            amount.setAttribute('x', center); amount.setAttribute('y', center + 18); amount.setAttribute('text-anchor','middle'); amount.setAttribute('font-size','14'); amount.setAttribute('font-weight','700'); amount.setAttribute('fill','var(--gov-navy)');
+            // prefer government_budget_lakhs display if available
+            const displayTotal = (cost && cost.government_budget_lakhs) ? ('₹ ' + Number(cost.government_budget_lakhs).toLocaleString() + ' lakhs') : ('₹ ' + Number(total).toLocaleString());
+            amount.textContent = displayTotal;
+            svg.appendChild(amount);
+            // also populate nearby DOM element for clearer visibility
+            try {
+              const totalEl = document.getElementById('donut-total');
+              if(totalEl) totalEl.textContent = displayTotal;
+            } catch(e) { /* ignore */ }
+          }
+          drawDonut('donut-svg', items);
+        } catch(e){ console.warn('drawDonut failed', e); }
+
+        // Update dashboard total
+        const totalEl = document.getElementById('dashboard-total');
+        if(totalEl) {
+          const total = cost.government_budget_lakhs || (items.reduce((s,i)=>s+Number(i.cost||0),0));
+          totalEl.textContent = '₹ ' + Number(total).toLocaleString();
+        }
+      } catch(e){ console.warn(e); }
+
+      // update status
+      const st = document.getElementById('json-status');
+      if(st) st.textContent = "Rendered successfully from JSON.";
+    }
+
+    // ---------- UI handlers: fetch or render ----------
+    document.getElementById('renderBtn').addEventListener('click', () => {
+      const txt = document.getElementById('jsonInput').value.trim();
+      const st = document.getElementById('json-status');
+      if(!txt) { if(st) st.textContent = "No JSON in textarea."; return; }
+      const parsed = safeParseJSON(txt);
+      if(!parsed) { if(st) st.textContent = "Invalid JSON — please paste the exact JSON response."; return; }
+      try {
+        populateReport(parsed);
+      } catch(e) {
+        if(st) st.textContent = "Error rendering: " + (e.message || e);
+        console.error(e);
+      }
+    });
+
+    document.getElementById('fetchBtn').addEventListener('click', async () => {
+      const url = document.getElementById('jsonUrl').value.trim();
+      const st = document.getElementById('json-status');
+      if(!url) { if(st) st.textContent = "Please enter a URL first."; return; }
+      try {
+        st.textContent = "Fetching JSON from URL...";
+        const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if(!res.ok) { st.textContent = "Failed to fetch: HTTP " + res.status; return; }
+        const json = await res.json();
+        st.textContent = "JSON fetched successfully. Rendering report...";
+        document.getElementById('jsonInput').value = JSON.stringify(json, null, 2);
+        populateReport(json);
+        st.textContent = "Report rendered successfully from URL.";
+      } catch(e) {
+        st.textContent = "Error fetching JSON: " + (e.message || e);
+        console.error(e);
+      }
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      document.getElementById('jsonInput').value = "";
+      document.getElementById('jsonUrl').value = "";
+      document.getElementById('json-status').textContent = "Cleared.";
+    });
+
+    // If user opens page with a query param ?json_url=..., try auto-fetch
+    window.addEventListener('load', async () => {
+      const params = new URLSearchParams(window.location.search);
+      const auto = params.get('json_url');
+      if(auto) {
+        document.getElementById('jsonUrl').value = auto;
+        document.getElementById('fetchBtn').click();
+      }
     });
   </script>
 
@@ -1306,89 +919,55 @@
 <div class="page">
   <div class="section-title">Detailed Findings & Recommendations</div>
 
-  <!-- Predicted actual amount (model) -->
-  <div style="display:flex;gap:12px;margin-top:8px;align-items:center;">
-    <div style="flex:1;">
-      <!-- retain the existing capability-grid header space -->
+  <div style="margin-top:12px;">
+    <div class="capability-grid" style="margin-top:0px;">
+      <div class="capability-card">
+        <div class="capability-header">Novelty</div>
+        <div class="capability-text" style="margin-top:8px;" id="cap-novelty-text"></div>
+        
+        
+        
+      </div>
+      <div class="capability-card">
+        <div class="capability-header">Cost Justification</div>
+        <div class="capability-text" style="margin-top:8px;" id="cap-cost-text"></div>
+        
+        
+          
+        
+      </div>
+      <div class="capability-card">
+        <div class="capability-header">Technical Feasibility</div>
+        <div class="capability-text" style="margin-top:8px;" id="cap-feasibility-text"></div>
+        
+        
+         
+        
+      </div>
+      <div class="capability-card">
+        <div class="capability-header">Deliverables</div>
+        <div class="capability-text" style="margin-top:8px;" id="cap-deliver-text"></div>
+        
+        
+          
+      </div>
+      <div class="capability-card">
+        <div class="capability-header">AI Detection</div>
+        <div class="capability-text" style="margin-top:8px;" id="cap-ai-text"></div>
+        
+        
+        
+      </div>
+      <div class="capability-card">
+        <div class="capability-header">Benefit Check</div>
+        <div class="capability-text" style="margin-top:8px;" id="cap-benefit-text"></div>
+        
+        
+        
     </div>
   </div>
-
-    <div style="margin-top:12px;">
-      <div class="capability-grid" style="margin-top:0px;">
-        <div class="capability-card">
-          <div class="capability-header">Novelty</div>
-          <div style="font-size:12px;color:#666;margin-top:6px;">Score: <span class="cap-score-val" data-key="novelty">--</span>/100 &nbsp;&nbsp; Changeable: <span class="cap-change-val" data-key="novelty">--</span>%</div>
-          <div class="capability-text" style="margin-top:8px;" id="cap-novelty-text">The proposal introduces an integrated coal waste-to-energy process combining gasification and carbon-capture at pilot scale. The approach appears genuinely novel and should be prioritised for further validation.</div>
-          <div style="font-weight:700;margin-top:8px;">Recommended actions:</div>
-          <ul style="margin-top:6px;font-size:12px;">
-            <li>Document prior art and clearly highlight novel integration steps versus published work.</li>
-            <li>Provide pilot test plans and small-scale validation data to substantiate claimed innovations.</li>
-            <li>Include IP or patent landscape notes where applicable to strengthen novelty claims.</li>
-          </ul>
-        </div>
-
-        <div class="capability-card">
-          <div class="capability-header">Cost Justification</div>
-          <div style="font-size:12px;color:#666;margin-top:6px;">Score: <span class="cap-score-val" data-key="cost">--</span>/100 &nbsp;&nbsp; Changeable: <span class="cap-change-val" data-key="cost">--</span>%</div>
-          <div class="capability-text" style="margin-top:8px;" id="cap-cost-text">The budget broadly aligns with pilot-scale efforts but lacks detailed line-item breakdowns for high-value equipment. Several procurement entries above ₹5M require vendor quotes or justification.</div>
-          <div style="font-weight:700;margin-top:8px;">Recommended actions:</div>
-          <ul style="margin-top:6px;font-size:12px;">
-            <li>Provide detailed quotations for specialized equipment and vendor estimates for each major line item.</li>
-            <li>Separate capital vs operational expenses and include lifecycle maintenance cost estimates.</li>
-            <li>Clarify contingencies and explain assumptions behind unit costs to reduce budget uncertainty.</li>
-          </ul>
-        </div>
-
-        <div class="capability-card">
-          <div class="capability-header">Technical Feasibility</div>
-          <div style="font-size:12px;color:#666;margin-top:6px;">Score: <span class="cap-score-val" data-key="feasibility">--</span>/100 &nbsp;&nbsp; Changeable: <span class="cap-change-val" data-key="feasibility">--</span>%</div>
-          <div class="capability-text" style="margin-top:8px;" id="cap-feasibility-text">Engineering plans and team experience indicate feasibility at pilot scale. Critical items include feedstock logistics, emissions control testing, and availability of pilot facilities for commissioning.</div>
-          <div style="font-weight:700;margin-top:8px;">Recommended actions:</div>
-          <ul style="margin-top:6px;font-size:12px;">
-            <li>Supply detailed feedstock supply agreements and contingency plans for variable feedstock quality.</li>
-            <li>Include third‑party testing schedules for emissions and demonstrate access to pilot facilities.</li>
-            <li>Provide a commissioning plan with acceptance criteria and responsible parties for each milestone.</li>
-          </ul>
-        </div>
-
-        <div class="capability-card">
-          <div class="capability-header">Deliverables</div>
-          <div style="font-size:12px;color:#666;margin-top:6px;">Score: <span class="cap-score-val" data-key="time">--</span>/100 &nbsp;&nbsp; Changeable: <span class="cap-change-val" data-key="time">--</span>%</div>
-          <div class="capability-text" style="margin-top:8px;" id="cap-deliver-text">Proposed milestones are defined but need clearer acceptance criteria and measurable outputs for each tranche. Strengthening deliverable descriptions will help tie disbursements to verified progress.</div>
-          <div style="font-weight:700;margin-top:8px;">Recommended actions:</div>
-          <ul style="margin-top:6px;font-size:12px;">
-            <li>Attach a Gantt with milestone dates and specific, testable acceptance criteria for each deliverable.</li>
-            <li>Define measurable KPIs (e.g., pilot throughput, emissions targets, energy recovery rates) per milestone.</li>
-            <li>Propose verification methods and third‑party sign‑off procedures to enable tranche-based funding.</li>
-          </ul>
-        </div>
-
-        <div class="capability-card">
-          <div class="capability-header">AI Detection</div>
-          <div style="font-size:12px;color:#666;margin-top:6px;">Score: <span class="cap-score-val" data-key="time">--</span>/100 &nbsp;&nbsp; Changeable: <span class="cap-change-val" data-key="time">--</span>%</div>
-          <div class="capability-text" style="margin-top:8px;" id="cap-deliver-text">Proposed milestones are defined but need clearer acceptance criteria and measurable outputs for each tranche. Strengthening deliverable descriptions will help tie disbursements to verified progress.</div>
-          <div style="font-weight:700;margin-top:8px;">Recommended actions:</div>
-          <ul style="margin-top:6px;font-size:12px;">
-            <li>Attach a Gantt with milestone dates and specific, testable acceptance criteria for each deliverable.</li>
-            <li>Define measurable KPIs (e.g., pilot throughput, emissions targets, energy recovery rates) per milestone.</li>
-            <li>Propose verification methods and third‑party sign‑off procedures to enable tranche-based funding.</li>
-          </ul>
-        </div>
-
-        <div class="capability-card">
-          <div class="capability-header">plagiarism</div>
-          <div style="font-size:12px;color:#666;margin-top:6px;">Score: <span class="cap-score-val" data-key="time">--</span>/100 &nbsp;&nbsp; Changeable: <span class="cap-change-val" data-key="time">--</span>%</div>
-          <div class="capability-text" style="margin-top:8px;" id="cap-deliver-text">Proposed milestones are defined but need clearer acceptance criteria and measurable outputs for each tranche. Strengthening deliverable descriptions will help tie disbursements to verified progress.</div>
-          <div style="font-weight:700;margin-top:8px;">Recommended actions:</div>
-          <ul style="margin-top:6px;font-size:12px;">
-            <li>Attach a Gantt with milestone dates and specific, testable acceptance criteria for each deliverable.</li>
-            <li>Define measurable KPIs (e.g., pilot throughput, emissions targets, energy recovery rates) per milestone.</li>
-            <li>Propose verification methods and third‑party sign‑off procedures to enable tranche-based funding.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    <div class="footer">
+</div>
+  <div class="footer">
     <div class="footer-left">
       <strong>Ministry of Coal, Government of India</strong> · Confidential · For internal evaluation purposes only.<br />
       Generated: 20 Nov 2025
@@ -1397,14 +976,12 @@
       <div class="page-number">Page 2 of 3</div>
     </div>
   </div>
-  </div>
 </div>
-
+</div>
 <!-- ================= PAGE 3 (SUMMARY DASHBOARD) ================= -->
 <div class="page">
   <div class="dashboard-dark">
     <div class="dash-header" style="display:flex;align-items:center;gap:12px;">
-      <img src="./assets/moc.jpg" alt="MoC" style="height:36px;object-fit:contain;border-radius:3px;box-shadow:0 1px 2px rgba(0,0,0,0.06);" />
       <div style="flex:1;">Financial Summary</div>
     </div>
     <div class="dash-body" style="margin-top:12px;">
@@ -1420,7 +997,8 @@
           <div class="donut-svg">
             <svg id="donut-svg" width="320" height="320" viewBox="0 0 320 320"></svg>
           </div>
-          <div style="margin-top:8px;color:var(--gov-navy);font-weight:700;text-align:center;">This graph/chart is linked to data and updates automatically</div>
+            <div style="margin-top:8px;color:var(--gov-navy);font-weight:700;text-align:center;">This graph/chart is linked to data and updates automatically</div>
+            <div id="donut-total" style="margin-top:8px;text-align:center;font-weight:800;color:var(--gov-navy);font-size:15px;"> </div>
         </div>
       </div>
 

@@ -502,6 +502,17 @@ async def check_plagiarism_final(file: UploadFile = File(...)):
             "copied_sections": summary.get("copied_sections"),
             "paraphrased_sections": summary.get("paraphrased_sections"),
             "suggestions": suggestions,
+            # Structured comments block for UI/reporting
+            "comments": (
+                ("Plagiarism\n" +
+                 f"Score: {int(summary.get('plagiarism_percentage',0))}/100    Changeable: {int(max(0, min(100, round((100 - (summary.get('plagiarism_percentage') or 0)) * 0.6))))}%\n" +
+                 ("High similarity detected. Review copied or paraphrased sections and add citations.\n" ) +
+                 "\nRecommended actions:\n" +
+                 "- Properly cite all matched sources and provide references.\n" +
+                 "- Paraphrase or rework sections with high overlap; add original analysis.\n" +
+                 "- Where verbatim text is required, include quotation marks and attribution."
+                )
+            ),
             "json_report_name": json_name
         }
         return JSONResponse(response)
