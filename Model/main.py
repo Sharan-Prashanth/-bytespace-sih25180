@@ -5,8 +5,8 @@ from Common.Cost_validation import cost_estimator
 from Common.Benefit_to_coal_industry import benefit
 from Common.Deliverables import deliverable as deliverables
 from RAG import plag
-from RAG import rag_chat_guidlines
-from RAG import rag_chat_specialist
+# from RAG import rag_chat_guidlines
+# from RAG import rag_chat_specialist
 from RAG import timeline
 from Common.Technical_fesability import fesability
 try:
@@ -43,8 +43,8 @@ app.include_router(deliverables.router)
 app.include_router(non_ocr.router)
 # app.include_router(similarity_checker.router)
 app.include_router(validation.router)
-app.include_router(rag_chat_guidlines.router)
-app.include_router(rag_chat_specialist.router)
+# app.include_router(rag_chat_guidlines.router)
+# app.include_router(rag_chat_specialist.router)
 app.include_router(extractor.router)
 app.include_router(ocr_extraction.router)
 app.include_router(novelty.router)

@@ -35,3 +35,4 @@ regex
 paddlepaddle 
 paddleocr 
 torch-geometric
+pdfplumber

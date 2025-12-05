@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import json
 import tempfile
 from fastapi import APIRouter, UploadFile, File, Form

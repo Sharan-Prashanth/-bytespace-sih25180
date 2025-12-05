@@ -1,8 +1,12 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import re
 from io import BytesIO
 from datetime import datetime
 from typing import List, Tuple, Dict, Optional, Any
-import os
 import json
 
 import chardet
