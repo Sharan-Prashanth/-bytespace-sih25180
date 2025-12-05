@@ -162,6 +162,59 @@ def flatten_project_text(project: Dict[str, Any]) -> str:
     return '\n'.join(parts)
 
 
+def extract_sections_from_project(project: Dict[str, Any], section_keys: List[str]) -> Dict[str, str]:
+    """Try to extract specific named sections from a project's `project_details` or top-level keys.
+    Returns a dict mapping normalized section keys to text (empty string if not found).
+    Matching is case-insensitive and uses a list of common aliases.
+    """
+    aliases = {
+        'methodology': ['methodology', 'method', 'approach', 'technique'],
+        'benefit_to_coal': ['benefit_to_coal', 'benefit', 'impact', 'benefits', 'benefit_to_industry', 'benefit_to_coal_industry'],
+        'definition_of_issues': ['definition_of_issues', 'problem', 'issues', 'problem_statement', 'need', 'challenge'],
+        'objective': ['objective', 'objectives', 'aim', 'goals'],
+        'justification': ['justification', 'rationale', 'justification_of_subject_area', 'why'],
+        'work_plan': ['work_plan', 'workplan', 'plan', 'timeline', 'activities']
+    }
+
+    # Prepare search source: prefer project_details dict, else use top-level
+    src = {}
+    if isinstance(project.get('data'), dict):
+        jd = project.get('data')
+    else:
+        jd = project.get('data', {}) if isinstance(project.get('data'), dict) else project.get('data') or {}
+
+    if isinstance(jd, dict) and 'project_details' in jd and isinstance(jd['project_details'], dict):
+        src = {k.lower(): v for k, v in jd['project_details'].items()}
+    elif isinstance(jd, dict):
+        src = {k.lower(): v for k, v in jd.items()}
+    elif isinstance(project, dict):
+        # try top-level
+        src = {k.lower(): v for k, v in project.items()}
+
+    results = {k: '' for k in section_keys}
+    for sk in section_keys:
+        found_texts = []
+        for alias in aliases.get(sk, [sk]):
+            for key, val in src.items():
+                if alias in key:
+                    if isinstance(val, str) and val.strip():
+                        found_texts.append(val.strip())
+                    elif isinstance(val, (list, dict)):
+                        try:
+                            found_texts.append(json.dumps(val))
+                        except Exception:
+                            found_texts.append(str(val))
+        # fallback: if nothing found, try to see long strings in src values
+        if not found_texts:
+            for key, val in src.items():
+                if isinstance(val, str) and len(val) > 80 and sk.split('_')[0] in key:
+                    found_texts.append(val.strip())
+
+        results[sk] = '\n'.join(found_texts).strip()
+
+    return results
+
+
 def compute_embeddings(texts: List[str]):
     embedder = get_embedder()
     return embedder.encode(texts, convert_to_numpy=True, show_progress_bar=False)
@@ -188,6 +241,17 @@ async def analyze_novelty(request: Request, file: UploadFile = File(None), extra
 
         # Read input
         input_text = ""
+        parsed_input_json = None
+        # read uploaded file early (if present) so we can prefer uploaded JSON over form field
+        file_bytes = None
+        file_name = None
+        file_processed = False
+        if file is not None:
+            file_name = (file.filename or '').lower()
+            try:
+                file_bytes = await file.read()
+            except Exception:
+                file_bytes = None
         # Treat empty strings as not provided
         if isinstance(extracted_json, str) and extracted_json.strip() == "":
             extracted_json = None
@@ -215,29 +279,50 @@ async def analyze_novelty(request: Request, file: UploadFile = File(None), extra
                     # ignore JSON parse errors here; will be caught below when attempting to use extracted_json
                     extracted_json = None
 
-        if extracted_json is not None:
+        # Decide input source: prefer uploaded JSON file, else use extracted_json, else uploaded PDF
+        input_source_used = None
+        # 1) Uploaded JSON file (prefer this)
+        if file_bytes and file_name and file_name.endswith('.json'):
             try:
-                j = json.loads(extracted_json) if not isinstance(extracted_json, dict) else extracted_json
-                # prefer project_details if available
+                try:
+                    j = json.loads(file_bytes.decode('utf-8'))
+                except Exception:
+                    j = json.loads(file_bytes.decode('latin-1'))
+                parsed_input_json = j if isinstance(j, dict) else None
                 if isinstance(j, dict) and 'project_details' in j and isinstance(j['project_details'], dict):
                     input_text = '\n'.join([str(x) for x in j['project_details'].values() if x])
                 else:
-                    # If it's a dict, stringify in readable form; else use the raw string
                     input_text = json.dumps(j) if isinstance(j, (dict, list)) else str(j)
+                input_source_used = 'uploaded_json'
+                file_processed = True
+            except Exception:
+                # fall back to other sources
+                input_source_used = None
+
+        # 2) If no uploaded JSON, try extracted_json/form body
+        if not input_source_used and extracted_json is not None:
+            try:
+                j = json.loads(extracted_json) if not isinstance(extracted_json, dict) else extracted_json
+                parsed_input_json = j if isinstance(j, dict) else None
+                if isinstance(j, dict) and 'project_details' in j and isinstance(j['project_details'], dict):
+                    input_text = '\n'.join([str(x) for x in j['project_details'].values() if x])
+                else:
+                    input_text = json.dumps(j) if isinstance(j, (dict, list)) else str(j)
+                input_source_used = 'extracted_json'
             except Exception as e:
-                # If parsing as JSON fails, accept the provided string as raw extracted text
-                # This supports callers which send plain text instead of JSON (e.g., 'string').
                 logger.warning(f"extracted_json is not valid JSON, treating as raw text: {e}")
                 input_text = str(extracted_json)
-        elif file is not None:
-            # Support uploading either a PDF (to extract text) OR a JSON file
-            # (processed/extracted JSON) so clients can upload the result file directly.
+                input_source_used = 'extracted_raw'
+
+        # 3) If still no usable input, and an uploaded file exists, handle it (PDF or JSON)
+        if not input_source_used and file is not None:
+            # fb is file_bytes if available
             fname = (file.filename or '').lower()
-            fb = await file.read()
+            fb = file_bytes if file_bytes is not None else await file.read()
             if fname.endswith('.pdf'):
                 input_text = extract_text_from_pdf_bytes(fb)
+                input_source_used = 'uploaded_pdf'
             elif fname.endswith('.json'):
-                # try utf-8 then latin-1 decoding
                 try:
                     j = json.loads(fb.decode('utf-8'))
                 except Exception:
@@ -246,22 +331,70 @@ async def analyze_novelty(request: Request, file: UploadFile = File(None), extra
                     except Exception as e:
                         logger.warning(f"Uploaded JSON file could not be parsed: {e}")
                         raise HTTPException(status_code=400, detail='Uploaded JSON file could not be parsed')
-
-                # reuse extracted_json handling logic: prefer project_details
+                parsed_input_json = j if isinstance(j, dict) else None
                 if isinstance(j, dict) and 'project_details' in j and isinstance(j['project_details'], dict):
                     input_text = '\n'.join([str(x) for x in j['project_details'].values() if x])
                 else:
                     input_text = json.dumps(j) if isinstance(j, (dict, list)) else str(j)
+                input_source_used = 'uploaded_json'
             else:
                 raise HTTPException(status_code=400, detail='Please upload a PDF, JSON file, or provide extracted_json')
-        else:
+
+        # 4) nothing provided
+        if not input_text:
             raise HTTPException(status_code=400, detail='No input provided')
 
         if not input_text.strip():
             raise HTTPException(status_code=400, detail='No text could be extracted from the input')
+        # Section-aware processing: try to extract structured sections if JSON was provided
+        section_keys = ['methodology', 'benefit_to_coal', 'definition_of_issues', 'objective', 'justification', 'work_plan']
 
-        # Prepare embedding texts
-        all_texts = [input_text] + past_texts
+        input_sections = {k: '' for k in section_keys}
+        if parsed_input_json:
+            try:
+                input_sections = extract_sections_from_project({'data': parsed_input_json}, section_keys)
+            except Exception:
+                input_sections = {k: '' for k in section_keys}
+
+        # Build combined texts for embedding: prefer combined sections if available
+        input_combined = None
+        if parsed_input_json and any(v for v in input_sections.values()):
+            # create a deterministic combined representation (table-like)
+            rows = []
+            for k in section_keys:
+                rows.append(f"{k}: {input_sections.get(k, '')}")
+            input_combined = '\n'.join(rows)
+            # also keep a simple table structure for the response
+            response_table = [{"column": k, "value": input_sections.get(k, '')} for k in section_keys]
+        else:
+            input_combined = input_text
+            response_table = [{"column": "full_text", "value": input_text}]
+
+        # Prepare past project combined texts (prefer same sections when available)
+        past_combined_texts = []
+        past_filenames = []
+        past_sections_list = []
+        for p in past_projects:
+            try:
+                secs = extract_sections_from_project(p, section_keys)
+                past_sections_list.append(secs)
+                # combine
+                combined = '\n'.join([f"{k}: {secs.get(k, '')}" for k in section_keys if secs.get(k, '')])
+                if not combined.strip():
+                    combined = flatten_project_text(p)
+                past_combined_texts.append(combined)
+                past_filenames.append(p.get('filename', 'unknown'))
+            except Exception:
+                past_sections_list.append({k: '' for k in section_keys})
+                past_combined_texts.append(flatten_project_text(p))
+                past_filenames.append(p.get('filename', 'unknown'))
+
+        # If no past texts were found, fall back to earlier behavior
+        if not past_combined_texts:
+            past_combined_texts = past_texts
+
+        # Prepare embedding texts for combined similarity
+        all_texts = [input_combined] + past_combined_texts
         try:
             embeddings = compute_embeddings(all_texts)
         except Exception as e:
@@ -322,12 +455,52 @@ async def analyze_novelty(request: Request, file: UploadFile = File(None), extra
         # limit flagged
         flagged = sorted(flagged, key=lambda x: x['similarity_score'], reverse=True)[:TOP_FLAGGED]
 
+        # Compute per-section best similarities (compare input section -> each past project's section)
+        section_scores = {}
+        try:
+            # for each section that has content in the input, compute similarity vs past projects' same section
+            for sk in section_keys:
+                sk_text = input_sections.get(sk, '')
+                if not sk_text:
+                    section_scores[sk] = {'best_similarity': None, 'best_source': None}
+                    continue
+                # prepare list of past section texts (use empty string when missing)
+                past_section_texts = [ps.get(sk, '') or '' for ps in past_sections_list]
+                # if all past section texts are empty, skip computing for this section
+                if not any(past_section_texts):
+                    section_scores[sk] = {'best_similarity': None, 'best_source': None}
+                    continue
+                # compute embeddings: first input section then past section texts
+                try:
+                    sec_embs = compute_embeddings([sk_text] + past_section_texts)
+                except Exception:
+                    section_scores[sk] = {'best_similarity': None, 'best_source': None}
+                    continue
+                inp_sec_emb = sec_embs[0]
+                past_sec_embs = sec_embs[1:]
+                best_sim = 0.0
+                best_src = None
+                for pi, pe in enumerate(past_sec_embs):
+                    if pe is None or (isinstance(pe, (str,)) and not pe):
+                        continue
+                    num = float(np.dot(inp_sec_emb, pe))
+                    denom = float((np.linalg.norm(inp_sec_emb) * np.linalg.norm(pe)) + 1e-12)
+                    sim = num / denom if denom != 0 else 0.0
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_src = past_filenames[pi] if pi < len(past_filenames) else f'proj_{pi}'
+                section_scores[sk] = {'best_similarity': round(best_sim, 4), 'best_source': best_src}
+        except Exception:
+            section_scores = {k: {'best_similarity': None, 'best_source': None} for k in section_keys}
+
         result = {
             'novelty_percentage': novelty_pct,
             'comment': comment,
             'flagged_lines': flagged,
             'max_similarity': round(max_sim, 4),
-            'checked_at': datetime.now().isoformat()
+            'checked_at': datetime.now().isoformat(),
+            'table': response_table,
+            'section_scores': section_scores
         }
 
         return JSONResponse(content=result)
