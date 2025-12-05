@@ -1,584 +1,490 @@
-/**
- * Ministry of Coal Report - Dynamic Data Integration
- * This script populates the HTML template with data from API routes
- */
+import { Chart } from "@/components/ui/chart"
+// Configuration
+const API_BASE_URL = "http://localhost:8000" // Update with your backend URL
 
-// Global data store for report information
-let reportData = {
-  project: {},
-  assessment: {},
-  routes: {}
-};
-
-/**
- * Initialize the report with dynamic data
- * This function should be called with data from the Python backend
- */
-function initializeReport(data) {
-  console.log('Initializing report with data:', data);
-  reportData = data;
-  
-  populateBasicInfo();
-  populateOverallAssessment();
-  populateCapabilityGrid();
-  populateDetailedAnalysis();
-  populateDashboard();
-  
-  // Update all report ID references
-  updateReportIds();
-  
-  console.log('Report initialization complete');
+// Metric colors
+const metricColors = {
+  novelty: "#1f77b4",
+  feasibility: "#2ca02c",
+  cost: "#ff7f0e",
+  aiScore: "#d62728",
+  benefitToCoal: "#9467bd",
+  deliverables: "#c5b0d5",
 }
 
-/**
- * Populate basic project information
- */
-function populateBasicInfo() {
-  const currentDate = new Date().toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  
-  // Set dynamic values with fallbacks
-  setElementText('report-date', currentDate);
-  setElementText('project-title', reportData.project?.title || 'Advanced Coal Mining Technology Research');
-  setElementText('principal-investigator', reportData.project?.pi || 'Dr. Rajesh Kumar');
-  setElementText('institute', reportData.project?.institute || 'Indian Institute of Technology, Delhi');
-  setElementText('budget', reportData.project?.budget || '₹15.5 Lakhs');
-  setElementText('duration', reportData.project?.duration || '36 months');
-  setElementText('priority', reportData.project?.priority || 'High Priority');
-  
-  // Generate unique report ID
-  const reportId = `MOC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`;
-  setElementText('report-id', reportId);
-}
+// Initialize on page load
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    // Fetch data from backend
+    const data = await fetchReportData()
 
-/**
- * Populate overall assessment section
- */
-function populateOverallAssessment() {
-  const overallScore = reportData.assessment?.overall_score || 75;
-  const recommendation = getRecommendation(overallScore);
-  
-  // Update overall score
-  setElementText('overall-score', overallScore);
-  setElementText('overall-recommendation', recommendation.text);
-  
-  // Update progress circle
-  updateProgressCircle('overall-progress-circle', overallScore);
-  
-  // Populate strengths and concerns
-  populateStrengthsConcerns();
-}
+    // Populate page 1
+    populatePage1(data)
 
-/**
- * Populate capability assessment grid with route data
- */
-function populateCapabilityGrid() {
-  const capabilityContainer = document.getElementById('capability-grid');
-  if (!capabilityContainer) return;
-  
-  // Define capability categories with route mapping
-  const capabilities = [
-    {
-      title: 'Technical Feasibility',
-      score: reportData.routes?.technical_feasibility?.score || 78,
-      description: reportData.routes?.technical_feasibility?.comment || 'Strong technical approach with proven methodologies. Implementation plan is well-structured and realistic.',
-      route: 'technical_feasibility'
-    },
-    {
-      title: 'Timeline Realism',
-      score: reportData.routes?.timeline_realism?.score || 65,
-      description: reportData.routes?.timeline_realism?.comment || 'Proposed timeline is ambitious but achievable with proper resource allocation and milestone management.',
-      route: 'timeline_realism'
-    },
-    {
-      title: 'Novelty & Innovation',
-      score: reportData.routes?.novelty?.score || 82,
-      description: reportData.routes?.novelty?.comment || 'Highly innovative approach with significant potential for breakthrough discoveries in coal technology.',
-      route: 'novelty'
-    },
-    {
-      title: 'Cost Validation',
-      score: reportData.routes?.cost_validation?.score || 70,
-      description: reportData.routes?.cost_validation?.comment || 'Budget allocation is reasonable. Some cost items need additional justification for optimal resource utilization.',
-      route: 'cost_validation'
-    },
-    {
-      title: 'Benefit to Coal Industry',
-      score: reportData.routes?.coal_industry_benefit?.score || 85,
-      description: reportData.routes?.coal_industry_benefit?.comment || 'Exceptional potential impact on coal mining efficiency, safety, and environmental sustainability.',
-      route: 'coal_industry_benefit'
-    },
-    {
-      title: 'Deliverables Quality',
-      score: reportData.routes?.deliverables?.score || 73,
-      description: reportData.routes?.deliverables?.comment || 'Clear and measurable deliverables aligned with industry requirements and research objectives.',
-      route: 'deliverables'
-    }
-  ];
-  
-  // Clear existing content
-  capabilityContainer.innerHTML = '';
-  
-  // Create capability cards
-  capabilities.forEach(capability => {
-    const card = createCapabilityCard(capability);
-    capabilityContainer.appendChild(card);
-  });
-}
+    // Populate page 2
+    populatePage2(data)
 
-/**
- * Create a capability card element
- */
-function createCapabilityCard(capability) {
-  const card = document.createElement('div');
-  card.className = 'capability-card';
-  
-  const scoreClass = getScoreClass(capability.score);
-  
-  card.innerHTML = `
-    <div class="capability-header">
-      <div class="capability-title">${capability.title}</div>
-      <div class="capability-score ${scoreClass}">${capability.score}</div>
-    </div>
-    <div class="capability-description">${capability.description}</div>
-  `;
-  
-  return card;
-}
+    // Populate page 3
+    populatePage3(data)
 
-/**
- * Populate detailed analysis section
- */
-function populateDetailedAnalysis() {
-  const analysisContainer = document.getElementById('detailed-analysis');
-  if (!analysisContainer) return;
-  
-  // Analysis categories based on route data
-  const analysisCategories = [
-    {
-      title: 'Technical Assessment',
-      points: extractAnalysisPoints('technical_feasibility')
-    },
-    {
-      title: 'Innovation & Novelty Analysis',
-      points: extractAnalysisPoints('novelty')
-    },
-    {
-      title: 'Cost-Benefit Evaluation',
-      points: extractAnalysisPoints('cost_validation')
-    },
-    {
-      title: 'Industry Impact Assessment',
-      points: extractAnalysisPoints('coal_industry_benefit')
-    },
-    {
-      title: 'Timeline & Deliverables Review',
-      points: extractAnalysisPoints('timeline_realism', 'deliverables')
-    }
-  ];
-  
-  analysisContainer.innerHTML = '';
-  
-  analysisCategories.forEach(category => {
-    const section = createAnalysisSection(category);
-    analysisContainer.appendChild(section);
-  });
-}
-
-/**
- * Create analysis section element
- */
-function createAnalysisSection(category) {
-  const section = document.createElement('div');
-  section.className = 'analysis-category';
-  
-  const pointsList = category.points.map(point => `<li>${point}</li>`).join('');
-  
-  section.innerHTML = `
-    <h3>${category.title}</h3>
-    <ul class="analysis-points">
-      ${pointsList}
-    </ul>
-  `;
-  
-  return section;
-}
-
-/**
- * Extract analysis points from route data
- */
-function extractAnalysisPoints(...routes) {
-  const points = [];
-  
-  routes.forEach(route => {
-    if (reportData.routes?.[route]) {
-      const routeData = reportData.routes[route];
-      
-      if (routeData.comment) {
-        points.push(routeData.comment);
-      }
-      
-      if (routeData.detailed_analysis) {
-        points.push(...routeData.detailed_analysis);
-      }
-      
-      if (routeData.recommendations) {
-        points.push(...routeData.recommendations);
-      }
-    }
-  });
-  
-  // Add default points if no route data
-  if (points.length === 0) {
-    points.push(
-      'Comprehensive evaluation based on established assessment criteria.',
-      'Analysis considers both technical and practical implementation factors.',
-      'Recommendations align with Ministry of Coal strategic objectives.'
-    );
+    // Create charts
+    createMetricsChart(data)
+    createCostBreakdownChart(data)
+  } catch (error) {
+    console.error("Error loading report:", error)
+    showErrorMessage(error.message)
   }
-  
-  return points;
-}
+})
 
-/**
- * Populate dashboard section
- */
-function populateDashboard() {
-  populateRiskMatrix();
-  populateCostBreakdown();
-  populateTimeline();
-  populateFinalRecommendations();
-}
-
-/**
- * Populate risk assessment matrix
- */
-function populateRiskMatrix() {
-  const riskContainer = document.getElementById('risk-matrix');
-  if (!riskContainer) return;
-  
-  const riskFactors = [
-    { name: 'Technical', level: calculateRiskLevel('technical_feasibility') },
-    { name: 'Financial', level: calculateRiskLevel('cost_validation') },
-    { name: 'Timeline', level: calculateRiskLevel('timeline_realism') },
-    { name: 'Innovation', level: 'Low' },
-    { name: 'Regulatory', level: 'Medium' },
-    { name: 'Market', level: 'Low' }
-  ];
-  
-  riskContainer.innerHTML = '';
-  
-  riskFactors.forEach(risk => {
-    const riskItem = document.createElement('div');
-    riskItem.className = `risk-item risk-${risk.level.toLowerCase()}`;
-    riskItem.innerHTML = `<div>${risk.name}</div><div>${risk.level}</div>`;
-    riskContainer.appendChild(riskItem);
-  });
-}
-
-/**
- * Populate cost breakdown chart
- */
-function populateCostBreakdown() {
-  const costContainer = document.getElementById('cost-breakdown');
-  if (!costContainer) return;
-  
-  const costData = reportData.routes?.cost_validation?.breakdown || {
-    personnel: 40,
-    equipment: 30,
-    materials: 20,
-    overhead: 10
-  };
-  
-  const chartSvg = createCostChart(costData);
-  costContainer.innerHTML = '';
-  costContainer.appendChild(chartSvg);
-}
-
-/**
- * Create cost breakdown donut chart
- */
-function createCostChart(costData) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'cost-chart');
-  svg.setAttribute('width', '150');
-  svg.setAttribute('height', '150');
-  svg.setAttribute('viewBox', '0 0 150 150');
-  
-  const colors = ['#ff9933', '#138808', '#002855', '#6b6f71'];
-  const total = Object.values(costData).reduce((sum, val) => sum + val, 0);
-  
-  let startAngle = 0;
-  Object.entries(costData).forEach(([key, value], index) => {
-    const percentage = value / total;
-    const endAngle = startAngle + (percentage * 360);
-    
-    const path = createArcPath(75, 75, 60, 30, startAngle, endAngle);
-    const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    pathElement.setAttribute('d', path);
-    pathElement.setAttribute('fill', colors[index % colors.length]);
-    
-    svg.appendChild(pathElement);
-    startAngle = endAngle;
-  });
-  
-  return svg;
-}
-
-/**
- * Populate timeline view
- */
-function populateTimeline() {
-  const timelineContainer = document.getElementById('timeline-view');
-  if (!timelineContainer) return;
-  
-  const milestones = [
-    'Project Start',
-    'Phase 1 Complete',
-    'Mid-term Review',
-    'Phase 2 Complete',
-    'Final Delivery'
-  ];
-  
-  timelineContainer.innerHTML = '';
-  
-  milestones.forEach(milestone => {
-    const milestoneDiv = document.createElement('div');
-    milestoneDiv.className = 'timeline-milestone';
-    milestoneDiv.innerHTML = `<div class="timeline-label">${milestone}</div>`;
-    timelineContainer.appendChild(milestoneDiv);
-  });
-}
-
-/**
- * Populate final recommendations
- */
-function populateFinalRecommendations() {
-  const recommendationsContainer = document.getElementById('final-recommendations');
-  if (!recommendationsContainer) return;
-  
-  const overallScore = reportData.assessment?.overall_score || 75;
-  const recommendation = getRecommendation(overallScore);
-  
-  recommendationsContainer.innerHTML = `
-    <div class="recommendation-status">${recommendation.status}</div>
-    <div class="recommendation-text">${recommendation.detailed}</div>
-  `;
-}
-
-/**
- * Utility function to set element text content safely
- */
-function setElementText(elementId, text) {
-  const element = document.getElementById(elementId);
-  if (element) {
-    element.textContent = text;
-  }
-}
-
-/**
- * Update progress circle stroke-dashoffset based on score
- */
-function updateProgressCircle(elementId, score) {
-  const circle = document.getElementById(elementId);
-  if (circle) {
-    const circumference = 220; // 2 * PI * radius (35)
-    const offset = circumference - (score / 100) * circumference;
-    circle.style.strokeDashoffset = offset;
-  }
-}
-
-/**
- * Get CSS class for score styling
- */
-function getScoreClass(score) {
-  if (score >= 80) return 'score-excellent';
-  if (score >= 70) return 'score-good';
-  if (score >= 60) return 'score-average';
-  return 'score-poor';
-}
-
-/**
- * Get recommendation based on overall score
- */
-function getRecommendation(score) {
-  if (score >= 80) {
-    return {
-      text: 'Strongly Recommended for Funding',
-      status: 'APPROVED',
-      detailed: 'This project demonstrates exceptional merit across all evaluation criteria. The proposal shows strong technical foundation, innovative approach, and significant potential for advancing coal industry capabilities. Immediate funding approval is recommended.'
-    };
-  } else if (score >= 70) {
-    return {
-      text: 'Recommended for Funding',
-      status: 'APPROVED',
-      detailed: 'This project meets funding criteria with good scores across most evaluation areas. While some aspects may need minor improvements, the overall proposal demonstrates sufficient merit for funding approval.'
-    };
-  } else if (score >= 60) {
-    return {
-      text: 'Conditional Approval',
-      status: 'CONDITIONAL',
-      detailed: 'This project shows promise but requires addressing identified concerns before full approval. Recommend conditional funding with specific milestones and review requirements.'
-    };
-  } else {
-    return {
-      text: 'Not Recommended',
-      status: 'REJECTED',
-      detailed: 'This project does not meet minimum funding criteria. Significant improvements in technical approach, budget justification, or deliverables are required before reconsideration.'
-    };
-  }
-}
-
-/**
- * Calculate risk level based on route score
- */
-function calculateRiskLevel(routeKey) {
-  const score = reportData.routes?.[routeKey]?.score || 50;
-  if (score >= 75) return 'Low';
-  if (score >= 60) return 'Medium';
-  return 'High';
-}
-
-/**
- * Populate strengths and concerns
- */
-function populateStrengthsConcerns() {
-  const strengths = [];
-  const concerns = [];
-  
-  // Extract from route data
-  Object.entries(reportData.routes || {}).forEach(([route, data]) => {
-    if (data.score >= 75) {
-      strengths.push(data.comment || `Strong performance in ${route.replace('_', ' ')}`);
-    } else if (data.score < 60) {
-      concerns.push(data.comment || `Improvement needed in ${route.replace('_', ' ')}`);
-    }
-  });
-  
-  // Default strengths and concerns if no route data
-  if (strengths.length === 0) {
-    strengths.push(
-      'Strong technical approach with innovative methodology',
-      'Well-qualified research team with relevant expertise',
-      'Clear deliverables aligned with coal industry needs'
-    );
-  }
-  
-  if (concerns.length === 0) {
-    concerns.push(
-      'Timeline appears ambitious for proposed scope',
-      'Budget justification requires additional detail'
-    );
-  }
-  
-  // Update DOM
-  const strengthsList = document.getElementById('key-strengths');
-  const concernsList = document.getElementById('areas-concerns');
-  
-  if (strengthsList) {
-    strengthsList.innerHTML = strengths.map(s => `<li>${s}</li>`).join('');
-  }
-  
-  if (concernsList) {
-    concernsList.innerHTML = concerns.map(c => `<li>${c}</li>`).join('');
-  }
-}
-
-/**
- * Update all report ID references
- */
-function updateReportIds() {
-  const reportId = document.getElementById('report-id')?.textContent;
-  if (reportId) {
-    document.querySelectorAll('.report-id-ref').forEach(element => {
-      element.textContent = reportId;
-    });
-  }
-}
-
-/**
- * Create arc path for donut chart
- */
-function createArcPath(centerX, centerY, outerRadius, innerRadius, startAngle, endAngle) {
-  const startAngleRad = (startAngle - 90) * Math.PI / 180;
-  const endAngleRad = (endAngle - 90) * Math.PI / 180;
-  
-  const x1 = centerX + outerRadius * Math.cos(startAngleRad);
-  const y1 = centerY + outerRadius * Math.sin(startAngleRad);
-  const x2 = centerX + outerRadius * Math.cos(endAngleRad);
-  const y2 = centerY + outerRadius * Math.sin(endAngleRad);
-  
-  const x3 = centerX + innerRadius * Math.cos(endAngleRad);
-  const y3 = centerY + innerRadius * Math.sin(endAngleRad);
-  const x4 = centerX + innerRadius * Math.cos(startAngleRad);
-  const y4 = centerY + innerRadius * Math.sin(startAngleRad);
-  
-  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-  
-  return `M ${x1} ${y1} 
-          A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x2} ${y2}
-          L ${x3} ${y3} 
-          A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x4} ${y4} 
-          Z`;
-}
-
-/**
- * Initialize report when DOM is loaded
- */
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('DOM loaded, initializing report...');
-  
-  // Check if data is passed from Python backend
-  if (typeof window.reportData !== 'undefined') {
-    initializeReport(window.reportData);
-  } else {
-    // Initialize with sample data for testing
-    initializeReport({
-      project: {
-        title: 'Advanced Coal Mining Automation Research',
-        pi: 'Dr. Rajesh Kumar Sharma',
-        institute: 'Indian Institute of Technology, Delhi',
-        budget: '₹18.5 Lakhs',
-        duration: '42 months',
-        priority: 'High Priority'
+// Fetch report data from backend
+async function fetchReportData() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/full-analysis`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-      assessment: {
-        overall_score: 76
-      },
-      routes: {
-        technical_feasibility: {
-          score: 78,
-          comment: 'Strong technical foundation with proven methodologies and realistic implementation approach.'
-        },
-        timeline_realism: {
-          score: 65,
-          comment: 'Timeline is ambitious but achievable with proper resource management and milestone tracking.'
-        },
-        novelty: {
-          score: 82,
-          comment: 'Highly innovative approach with significant potential for breakthrough discoveries in automation.'
-        },
-        cost_validation: {
-          score: 70,
-          comment: 'Budget allocation is reasonable with minor adjustments needed for equipment costs.'
-        },
-        coal_industry_benefit: {
-          score: 85,
-          comment: 'Exceptional potential for improving mining efficiency, safety protocols, and operational sustainability.'
-        },
-        deliverables: {
-          score: 73,
-          comment: 'Well-defined deliverables with clear success metrics and industry-relevant outcomes.'
-        }
-      }
-    });
-  }
-});
+    })
 
-/**
- * Export initializeReport function for external use
- */
-window.initializeReport = initializeReport;
+    if (response.ok) {
+      const fullData = await response.json()
+      return parseBackendResponse(fullData)
+    }
+  } catch (error) {
+    console.warn("[v0] Backend not available, using mock data:", error.message)
+  }
+
+  return getMockData()
+}
+
+function parseBackendResponse(fullData) {
+  if (!fullData.results || !Array.isArray(fullData.results)) {
+    return getMockData()
+  }
+
+  // Extract data from each endpoint response
+  const responses = {}
+  fullData.results.forEach((result) => {
+    if (result.output) {
+      const endpoint = result.endpoint.replace("/", "")
+      responses[endpoint] = result.output
+    }
+  })
+
+  // Map backend responses to report data structure
+  const costData = responses["processandesimate"] || {}
+  const noveltyData = responses["analyzenovelty"] || {}
+  const feasibilityData = responses["technicalfeasibility"] || {}
+  const benefitData = responses["benefitcheck"] || {}
+  const deliverableData = responses["deliverablecheck"] || {}
+  const aiData = responses["detectaiandvalidate"] || {}
+
+  const costBreakdown = costData.breakdown || {}
+  const projectInfo = costData.extracted_json?.basic_information || {}
+
+  return {
+    projectTitle: projectInfo.project_title || "Project Title Placeholder",
+    principalInvestigator: projectInfo.project_leader_name || "Principal Investigator",
+    institute: projectInfo.principal_implementing_agency || "Institute Name",
+    submissionDate: projectInfo.submission_date || "Date Unknown",
+    budget: `₹ ${costData.cost_estimation?.government_budget_lakhs || "0"} Lakhs` || "Budget Unknown",
+    duration: projectInfo.project_duration || "Duration Unknown",
+    proposalId: "MOC-PROP-2025-0047",
+    overallScore: Math.round(
+      (noveltyData.novelty_percentage +
+        feasibilityData.score +
+        (100 - Math.abs(100 - deliverableData.score)) +
+        benefitData.benefit_score) /
+        4,
+    ),
+    riskIndex: 32,
+    metrics: {
+      novelty: noveltyData.novelty_percentage || 0,
+      feasibility: feasibilityData.score || 0,
+      cost: 100 - Math.abs(deliverableData.score - 50),
+      aiScore: aiData.model_score_pct || 0,
+      benefitToCoal: benefitData.benefit_score || 0,
+      deliverables: deliverableData.score || 0,
+    },
+    findings: [
+      {
+        title: "Novelty",
+        score: noveltyData.novelty_percentage || 0,
+        changeable: 15,
+        comment: noveltyData.comment || "Assessment of proposal originality and innovation.",
+        recommendations: [
+          "Document prior art and clearly highlight novel integration steps.",
+          "Provide pilot test plans and validation data.",
+          "Include IP or patent landscape notes.",
+        ],
+      },
+      {
+        title: "Technical Feasibility",
+        score: feasibilityData.score || 0,
+        changeable: feasibilityData.changeable_percent || 10,
+        comment: feasibilityData.comment || "Assessment of technical feasibility and resource availability.",
+        recommendations: feasibilityData.recommended_actions || [
+          "Define measurable KPIs per milestone.",
+          "Supply detailed feedstock supply agreements.",
+          "Include third-party testing schedules.",
+        ],
+      },
+      {
+        title: "Cost Justification",
+        score: costData.cost_estimation?.confidence_score || 0,
+        changeable: 20,
+        comment: costData.comment || "The budget aligns with project scope and includes contingencies.",
+        recommendations: costData.recommendations || [
+          "Maintain detailed financial records.",
+          "Ensure all procurements follow government guidelines.",
+          "Consider leveraging existing infrastructure.",
+        ],
+      },
+      {
+        title: "Deliverables",
+        score: deliverableData.score || 0,
+        changeable: deliverableData.changeable_percentage || 6,
+        comment: deliverableData.comment || "Assessment of project deliverables and milestones.",
+        recommendations: [
+          "Add Gantt chart with phase durations.",
+          "List staffing and equipment per phase.",
+          "Specify acceptance criteria and KPIs.",
+        ],
+      },
+      {
+        title: "MOC Benefit",
+        score: benefitData.benefit_score || 0,
+        changeable: 10,
+        comment: benefitData.comments || "Assessment of benefit alignment with Ministry of Coal objectives.",
+        recommendations: [
+          "Address advanced mining technology gaps.",
+          "Include waste-to-wealth concepts.",
+          "Highlight practical benefits to operations.",
+        ],
+      },
+    ],
+    costBreakdown: [
+      {
+        label: "Equipment",
+        percentage:
+          Math.round((costBreakdown.equipment / costData.cost_estimation?.government_budget_lakhs) * 100) || 15,
+        amount: costBreakdown.equipment || 5000,
+      },
+      {
+        label: "Manpower",
+        percentage:
+          Math.round((costBreakdown.manpower / costData.cost_estimation?.government_budget_lakhs) * 100) || 31,
+        amount: costBreakdown.manpower || 10000,
+      },
+      {
+        label: "Travel & Fieldwork",
+        percentage:
+          Math.round((costBreakdown.travel_and_fieldwork / costData.cost_estimation?.government_budget_lakhs) * 100) ||
+          21,
+        amount: costBreakdown.travel_and_fieldwork || 7000,
+      },
+      {
+        label: "Consumables",
+        percentage:
+          Math.round((costBreakdown.consumables / costData.cost_estimation?.government_budget_lakhs) * 100) || 6,
+        amount: costBreakdown.consumables || 2000,
+      },
+      {
+        label: "Maintenance & Operations",
+        percentage:
+          Math.round(
+            (costBreakdown.maintenance_and_operations / costData.cost_estimation?.government_budget_lakhs) * 100,
+          ) || 5,
+        amount: costBreakdown.maintenance_and_operations || 1500,
+      },
+      {
+        label: "Contingency",
+        percentage:
+          Math.round((costBreakdown.contingency / costData.cost_estimation?.government_budget_lakhs) * 100) || 14,
+        amount: costBreakdown.contingency || 4500,
+      },
+      {
+        label: "Other",
+        percentage: 8,
+        amount: 2500,
+      },
+    ],
+  }
+}
+
+// Mock data for demonstration
+function getMockData() {
+  return {
+    projectTitle: "Integrated Coal Waste-to-Energy Demonstration Project",
+    principalInvestigator: "Dr. A. K. Sharma",
+    institute: "National Institute of Coal Research",
+    submissionDate: "15 Oct 2025",
+    budget: "₹ 18,500,000",
+    duration: "30 months",
+    proposalId: "MOC-PROP-2025-0047",
+    overallScore: 78,
+    riskIndex: 32,
+    metrics: {
+      novelty: 80,
+      feasibility: 74,
+      cost: 40,
+      aiScore: 100,
+      benefitToCoal: 97,
+      deliverables: 60,
+    },
+    findings: [
+      {
+        title: "Novelty",
+        score: 80,
+        changeable: 15,
+        comment:
+          "The proposal introduces an integrated coal waste-to-energy process combining gasification and carbon-capture at pilot scale.",
+        recommendations: [
+          "Document prior art and clearly highlight novel integration steps.",
+          "Provide pilot test plans and validation data.",
+          "Include IP or patent landscape notes.",
+        ],
+      },
+      {
+        title: "Technical Feasibility",
+        score: 74,
+        changeable: 10,
+        comment: "Engineering plans and team experience indicate feasibility at pilot scale.",
+        recommendations: [
+          "Supply detailed feedstock supply agreements.",
+          "Include third-party testing schedules.",
+          "Provide commissioning plan with acceptance criteria.",
+        ],
+      },
+      {
+        title: "Cost Justification",
+        score: 40,
+        changeable: 20,
+        comment: "The budget broadly aligns but lacks detailed line-item breakdowns.",
+        recommendations: [
+          "Provide detailed quotations for equipment.",
+          "Separate capital vs operational expenses.",
+          "Clarify contingencies and cost assumptions.",
+        ],
+      },
+      {
+        title: "Deliverables",
+        score: 92,
+        changeable: 6,
+        comment: "Project deliverables are well-defined with clear milestones.",
+        recommendations: [
+          "Add Gantt chart with phase durations.",
+          "List staffing and equipment per phase.",
+          "Specify acceptance criteria and KPIs.",
+        ],
+      },
+      {
+        title: "MOC Benefit",
+        score: 30,
+        changeable: 15,
+        comment: "Document has limited alignment to MOC benefit areas; revisions needed.",
+        recommendations: [
+          "Address advanced mining technology gaps.",
+          "Include waste-to-wealth concepts.",
+          "Highlight practical operational benefits.",
+        ],
+      },
+    ],
+    costBreakdown: [
+      { label: "Equipment", percentage: 59, amount: 104000 },
+      { label: "Manpower", percentage: 10, amount: 17000 },
+      { label: "Travel & Fieldwork", percentage: 12, amount: 22000 },
+      { label: "Data Collection", percentage: 3, amount: 5000 },
+      { label: "Consumables", percentage: 3, amount: 5000 },
+      { label: "Maintenance", percentage: 4, amount: 7000 },
+      { label: "Contingency", percentage: 9, amount: 17000 },
+    ],
+  }
+}
+
+// Populate Page 1
+function populatePage1(data) {
+  document.getElementById("projectTitle").textContent = data.projectTitle
+  document.getElementById("principalInvestigator").textContent = data.principalInvestigator
+  document.getElementById("institute").textContent = data.institute
+  document.getElementById("submissionDate").textContent = data.submissionDate
+  document.getElementById("budget").textContent = data.budget
+  document.getElementById("duration").textContent = data.duration
+  document.getElementById("proposalId").textContent = data.proposalId
+  document.getElementById("overallScore").textContent = data.overallScore + "%"
+  document.getElementById("riskIndex").textContent = data.riskIndex
+  document.getElementById("fundDisplay").textContent = data.budget
+  document.getElementById("durationDisplay").textContent = data.duration
+}
+
+// Populate Page 2
+function populatePage2(data) {
+  const container = document.getElementById("findingsContainer")
+  container.innerHTML = ""
+
+  data.findings.forEach((finding) => {
+    const findingHTML = `
+            <div class="finding-item">
+                <h3>${finding.title}</h3>
+                <div>
+                    <span class="score">Score: ${finding.score}/100</span>
+                    <span style="margin-left: 20px;">Changeable: ${finding.changeable}%</span>
+                </div>
+                <div class="comment">${finding.comment}</div>
+                <div style="margin-top: 10px;"><strong>Recommended actions:</strong></div>
+                <ul class="recommendation-list">
+                    ${finding.recommendations.map((rec) => `<li>${rec}</li>`).join("")}
+                </ul>
+            </div>
+        `
+    container.innerHTML += findingHTML
+  })
+}
+
+// Populate Page 3
+function populatePage3(data) {
+  const tbody = document.getElementById("costTableBody")
+  tbody.innerHTML = ""
+
+  let total = 0
+  data.costBreakdown.forEach((item) => {
+    total += item.amount
+    const row = `
+            <tr>
+                <td>${item.label}</td>
+                <td>${item.percentage}%</td>
+                <td>₹ ${item.amount.toLocaleString()}</td>
+            </tr>
+        `
+    tbody.innerHTML += row
+  })
+
+  // Add total row
+  const totalRow = `
+        <tr style="font-weight: bold; background-color: #f0f0f0;">
+            <td>TOTAL</td>
+            <td>100%</td>
+            <td>₹ ${total.toLocaleString()}</td>
+        </tr>
+    `
+  tbody.innerHTML += totalRow
+}
+
+// Create Metrics Bar Chart (Page 1)
+function createMetricsChart(data) {
+  const ctx = document.getElementById("metricsChart").getContext("2d")
+
+  const chartData = {
+    labels: ["Novelty", "Feasibility", "Cost", "AI Score", "Benefit to coal", "Deliverables"],
+    datasets: [
+      {
+        label: "Score (%)",
+        data: [
+          data.metrics.novelty,
+          data.metrics.feasibility,
+          data.metrics.cost,
+          data.metrics.aiScore,
+          data.metrics.benefitToCoal,
+          data.metrics.deliverables,
+        ],
+        backgroundColor: [
+          metricColors.novelty,
+          metricColors.feasibility,
+          metricColors.cost,
+          metricColors.aiScore,
+          metricColors.benefitToCoal,
+          metricColors.deliverables,
+        ],
+        borderRadius: 4,
+        borderSkipped: false,
+      },
+    ],
+  }
+
+  new Chart(ctx, {
+    type: "bar",
+    data: chartData,
+    options: {
+      indexAxis: "x",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false,
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            callback: (value) => value + "%",
+            font: {
+              size: 11,
+            },
+          },
+        },
+        x: {
+          ticks: {
+            font: {
+              size: 11,
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+// Create Cost Breakdown Pie Chart (Page 3)
+function createCostBreakdownChart(data) {
+  const ctx = document.getElementById("costBreakdownChart").getContext("2d")
+
+  const labels = data.costBreakdown.map((item) => item.label)
+  const percentages = data.costBreakdown.map((item) => item.percentage)
+  const colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40", "#FF6384"]
+
+  new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          data: percentages,
+          backgroundColor: colors,
+          borderColor: "#fff",
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            font: {
+              size: 11,
+            },
+            padding: 15,
+          },
+        },
+      },
+    },
+  })
+}
+
+// Show error message
+function showErrorMessage(message) {
+  const container = document.querySelector(".container")
+  container.innerHTML = `
+        <div style="padding: 40px; text-align: center; background: #fff; border-radius: 8px;">
+            <h2 style="color: #d9534f;">Error Loading Report</h2>
+            <p>${message}</p>
+            <p style="font-size: 12px; color: #999; margin-top: 20px;">
+                Please ensure the backend is running at: ${API_BASE_URL}
+            </p>
+        </div>
+    `
+}

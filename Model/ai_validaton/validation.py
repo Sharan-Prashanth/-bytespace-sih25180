@@ -1,1009 +1,777 @@
+# validation_with_embedded_extractor.py
 import os
-import io
 import json
-import pdfplumber
-import uvicorn
-import tempfile
-import shutil
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import List, Dict
+import uuid
+import re
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+import traceback
 
-# ========= ENVIRONMENT ==========
+from io import BytesIO
 from dotenv import load_dotenv
+
 load_dotenv()
 
+# ========== ORIGINAL EXTRACTION BLOCK (UNCHANGED) ==========
+import PyPDF2
+import docx
+import chardet
+import google.generativeai as genai
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Body
+from fastapi.responses import JSONResponse
+from supabase import create_client, Client
+
+# Environment variables
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY4")
 
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_ENV = os.getenv("PINECONE_ENV")
-PINECONE_INDEX = os.getenv("PINECONE_INDEX")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise Exception("Missing SUPABASE_URL or SUPABASE_KEY in environment variables")
 
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY3")
+if not GEMINI_API_KEY:
+    raise Exception("Missing GEMINI_API_KEY in environment variables")
 
-PDF_BUCKET = os.getenv("PDF_BUCKET", "documents")
-GUIDELINES_PDF = os.getenv("GUIDELINES_PDF", "guidelines.pdf")
-THRUST_PDF = os.getenv("THRUST_PDF", "thrust_areas.pdf")
+# Initialize Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ========= CLIENTS ==========
-from supabase import create_client
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-from pinecone import Pinecone, ServerlessSpec
-
-# Create Pinecone client
-pc = Pinecone(api_key=PINECONE_API_KEY)
-
-# Check if index exists
-existing_indexes = pc.list_indexes().names()
-
-if PINECONE_INDEX not in existing_indexes:
-    pc.create_index(
-        name=PINECONE_INDEX,
-        dimension=384,
-        metric="cosine",
-        spec=ServerlessSpec(
-            cloud="aws",
-            region=PINECONE_ENV
-        )
-    )
-
-# Connect to the index
-index = pc.Index(PINECONE_INDEX)
-
-
-# ========= EMBEDDING ==========
-from sentence_transformers import SentenceTransformer
-embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-
-def embed(text):
-    return embedder.encode(text).tolist()
-
-# ========= CHUNKING ==========
-def chunk_text(text, size=350, overlap=40):
-    words = text.split()
-    chunks, i = [], 0
-    while i < len(words):
-        part = words[i:i+size]
-        chunks.append(" ".join(part))
-        i += size - overlap
-    return chunks
-
-# ========= PDF LOADING ==========
-def load_pdf_from_supabase(path):
-    """
-    Load PDF from Supabase storage bucket
-    """
-    try:
-        print(f"Downloading {path} from Supabase...")
-        data = supabase.storage.from_(PDF_BUCKET).download(path)
-        if data:
-            return pdfplumber.open(io.BytesIO(data))
-        else:
-            raise Exception(f"Failed to download {path}")
-    except Exception as e:
-        print(f"Error loading PDF {path}: {e}")
-        return None
-
-# ========= INGEST ==========
-def ingest_pdf(pdf_name, source):
-    """
-    Ingest a single PDF from Supabase storage
-    """
-    print(f"Starting ingestion of {pdf_name} as {source}...")
-    
-    pdf = load_pdf_from_supabase(pdf_name)
-    if not pdf:
-        print(f"Failed to load PDF: {pdf_name}")
-        return False
-    
-    total_chunks = 0
-    try:
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            if text.strip():  # Only process pages with content
-                chunks = chunk_text(text)
-                
-                for chunk_idx, chunk in enumerate(chunks):
-                    if chunk.strip():  # Only process non-empty chunks
-                        try:
-                            # Store chunk in database
-                            row = supabase.table("chunks").insert({
-                                "source": source,
-                                "pdf_name": pdf_name,
-                                "page_number": page.page_number,
-                                "chunk_text": chunk
-                            }).execute().data[0]
-
-                            # Generate embedding
-                            vec = embed(chunk)
-                            
-                            # Store in vector database
-                            index.upsert([(
-                                str(row["id"]), 
-                                vec, 
-                                {
-                                    "source": source, 
-                                    "page": page.page_number,
-                                    "chunk_id": chunk_idx
-                                }
-                            )])
-                            total_chunks += 1
-                            
-                        except Exception as e:
-                            print(f"Error processing chunk {chunk_idx} on page {page.page_number}: {e}")
-                            continue
-        
-        pdf.close()
-        print(f"✓ Ingested {source}: {total_chunks} chunks from {len(pdf.pages)} pages")
-        return True
-        
-    except Exception as e:
-        print(f"Error during PDF ingestion for {source}: {e}")
-        pdf.close()
-        return False
-
-def run_ingestion():
-    """
-    Ingest both S&T Guidelines and Thrust Areas from Supabase storage
-    """
-    print("🚀 Starting ingestion from Supabase storage...")
-    
-    # Use actual filenames from your Supabase storage
-    guidelines_files = [
-        "Modified_S&T_Guidelines.pdf",  # Adjust if filename is different
-        "guidelines.pdf",  # Fallback
-        GUIDELINES_PDF  # Environment variable
-    ]
-    
-    thrust_files = [
-        "Thrust_Areas_2020.pdf",
-        "thrust_areas.pdf",  # Fallback 
-        THRUST_PDF  # Environment variable
-    ]
-    
-    guidelines_success = False
-    thrust_success = False
-    
-    # Try ingesting guidelines
-    for filename in guidelines_files:
-        if ingest_pdf(filename, "guidelines"):
-            guidelines_success = True
-            break
-    
-    # Try ingesting thrust areas
-    for filename in thrust_files:
-        if ingest_pdf(filename, "thrust"):
-            thrust_success = True
-            break
-    
-    if guidelines_success and thrust_success:
-        print("✅ ALL DOCUMENTS SUCCESSFULLY INGESTED")
-        return {"status": "success", "message": "Both guidelines and thrust areas ingested"}
-    elif guidelines_success:
-        print("⚠️ Only guidelines ingested, thrust areas failed")
-        return {"status": "partial", "message": "Guidelines ingested, thrust areas failed"}
-    elif thrust_success:
-        print("⚠️ Only thrust areas ingested, guidelines failed")
-        return {"status": "partial", "message": "Thrust areas ingested, guidelines failed"}
-    else:
-        print("❌ INGESTION FAILED FOR ALL DOCUMENTS")
-        return {"status": "error", "message": "Failed to ingest any documents"}
-
-# ========= LOCAL PDF INGESTION ==========
-def ingest_local_guidelines(guidelines_dir="guidelines"):
-    """
-    Ingest PDF files from local guidelines directory
-    """
-    if not os.path.exists(guidelines_dir):
-        print(f"Guidelines directory '{guidelines_dir}' not found")
-        return {"status": "error", "message": f"Directory '{guidelines_dir}' not found"}
-    
-    ingested_docs = []
-    total_chunks = 0
-    
-    try:
-        # Process all PDF files in directory
-        for filename in os.listdir(guidelines_dir):
-            if filename.lower().endswith('.pdf'):
-                pdf_path = os.path.join(guidelines_dir, filename)
-                print(f"Processing {filename}...")
-                
-                # Extract and process PDF
-                with pdfplumber.open(pdf_path) as pdf:
-                    for page_num, page in enumerate(pdf.pages, 1):
-                        text = page.extract_text() or ""
-                        if text.strip():  # Only process non-empty pages
-                            chunks = chunk_text(text)
-                            
-                            for chunk_idx, chunk in enumerate(chunks):
-                                if chunk.strip():  # Only process non-empty chunks
-                                    # Store in database
-                                    try:
-                                        row = supabase.table("chunks").insert({
-                                            "source": filename,
-                                            "pdf_name": filename,
-                                            "page_number": page_num,
-                                            "chunk_text": chunk
-                                        }).execute().data[0]
-                                        
-                                        # Generate embedding and store in vector DB
-                                        vec = embed(chunk)
-                                        index.upsert([(
-                                            str(row["id"]), 
-                                            vec, 
-                                            {
-                                                "source": filename,
-                                                "page": page_num,
-                                                "chunk_id": chunk_idx
-                                            }
-                                        )])
-                                        total_chunks += 1
-                                        
-                                    except Exception as e:
-                                        print(f"Error processing chunk: {e}")
-                                        continue
-                
-                ingested_docs.append({
-                    'filename': filename,
-                    'pages': len(pdf.pages),
-                    'processed': True
-                })
-                print(f"✓ Processed {filename}")
-        
-        return {
-            "status": "success",
-            "message": f"Ingested {len(ingested_docs)} documents with {total_chunks} total chunks",
-            "documents": ingested_docs
-        }
-        
-    except Exception as e:
-        print(f"Error during ingestion: {e}")
-        return {"status": "error", "message": str(e)}
-
-# ========= RETRIEVAL ==========
-def retrieve(query, k=8):
-    qvec = embed(query)
-    results = index.query(vector=qvec, top_k=k, include_metadata=True)
-    items = []
-
-    for m in results["matches"]:
-        cid = m["id"]
-        row = supabase.table("chunks").select("*").eq("id", cid).single().execute().data
-        items.append({
-            "chunk_id": cid,
-            "score": m["score"],
-            "page": m["metadata"]["page"],
-            "source": m["metadata"]["source"],
-            "chunk": row["chunk_text"]
-        })
-    return items
-
-# ========= GEMINI CALL ==========
-import google.generativeai as genai
-genai.configure(api_key=GOOGLE_API_KEY)
+# Initialize Gemini AI for extraction
+genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
-def call_gemini(prompt):
+# Storage buckets
+UPLOAD_BUCKET = "Coal-research-files"
+JSON_BUCKET = "proposal-json"
+
+def extract_text_from_file(filename: str, file_bytes: bytes) -> str:
+    """Extract text from various file formats."""
     try:
-        response = model.generate_content(prompt)
-        if response and response.text:
-            return response.text.strip()
-        else:
-            raise ValueError("Empty response from Gemini model")
-    except Exception as e:
-        print(f"Gemini API Error: {e}")
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {str(e)}")
-
-# ========= FORM-I FIELD EXTRACTION ==========
-def extract_form1_fields(pdf_path: str):
-    pdf = pdfplumber.open(pdf_path)
-    
-    # Extract text and tables from all pages
-    all_text = ""
-    all_tables = []
-    
-    for page_num, page in enumerate(pdf.pages, 1):
-        # Extract text
-        page_text = page.extract_text() or ""
-        all_text += f"\n--- PAGE {page_num} ---\n{page_text}\n"
+        ext = filename.lower().split(".")[-1]
         
-        # Extract tables
-        tables = page.extract_tables()
-        if tables:
-            for table_idx, table in enumerate(tables):
-                all_tables.append({
-                    'page': page_num,
-                    'table_index': table_idx,
-                    'data': table
-                })
-    
-    pdf.close()
+        if ext == "pdf":
+            reader = PyPDF2.PdfReader(BytesIO(file_bytes))
+            text = ""
+            for page in reader.pages:
+                page_text = page.extract_text() or ""
+                text += page_text + "\n"
+            return text.strip()
+            
+        elif ext == "docx":
+            doc = docx.Document(BytesIO(file_bytes))
+            text_parts = []
+            for paragraph in doc.paragraphs:
+                text_parts.append(paragraph.text)
+            return "\n".join(text_parts)
+            
+        elif ext in ["txt", "csv"]:
+            encoding = chardet.detect(file_bytes)["encoding"] or "utf-8"
+            return file_bytes.decode(encoding, errors="ignore")
+            
+        else:
+            raise ValueError(f"Unsupported file format: {ext}")
+            
+    except Exception as e:
+        raise Exception(f"Error extracting text from {filename}: {str(e)}")
 
-    # Enhanced field extraction with table processing
-    def extract_field_value(text, patterns):
-        """Extract field value using multiple pattern attempts"""
-        for pattern in patterns:
-            if ":" in pattern:
-                try:
-                    start_key = pattern
-                    start_pos = text.find(start_key)
-                    if start_pos != -1:
-                        remaining_text = text[start_pos + len(start_key):]
-                        stop_patterns = ['\n1.', '\n2.', '\n3.', '\n4.', '\n5.', '\n6.', '\n7.', '\n8.', '\n9.', 
-                                       '\nName', '\nObjectives', '\nJustification', '\nMethodology', '\nBenefits']
-                        
-                        end_pos = len(remaining_text)
-                        for stop_pattern in stop_patterns:
-                            pos = remaining_text.find(stop_pattern)
-                            if pos != -1 and pos < end_pos:
-                                end_pos = pos
-                        
-                        return remaining_text[:end_pos].strip()
-                except Exception:
-                    continue
-            else:
-                if pattern in text:
-                    return pattern
+def clean_text_field(text: str) -> str:
+    """Clean and format text field."""
+    if not text or text.strip() == "":
         return ""
+    
+    # Clean up the text by removing extra whitespace and normalizing
+    cleaned = ' '.join(text.split())
+    return cleaned
 
-    # Process tables into structured data
-    def process_tables(tables):
-        """Convert tables to structured text for analysis"""
-        table_content = {}
-        
-        for table_info in tables:
-            page = table_info['page']
-            table_data = table_info['data']
-            
-            if table_data and len(table_data) > 1:  # Has headers and data
-                # Create table description
-                table_text = f"Table on Page {page}:\n"
-                
-                for row_idx, row in enumerate(table_data):
-                    if row and any(cell for cell in row if cell):  # Skip empty rows
-                        row_text = " | ".join([str(cell or "") for cell in row])
-                        table_text += f"Row {row_idx + 1}: {row_text}\n"
-                
-                # Try to identify table type based on content
-                table_lower = table_text.lower()
-                if any(keyword in table_lower for keyword in ['cost', 'budget', 'expense', 'amount']):
-                    table_content['cost_table'] = table_text
-                elif any(keyword in table_lower for keyword in ['timeline', 'schedule', 'duration', 'month', 'year']):
-                    table_content['timeline_table'] = table_text
-                elif any(keyword in table_lower for keyword in ['deliverable', 'output', 'milestone']):
-                    table_content['deliverables_table'] = table_text
-                elif any(keyword in table_lower for keyword in ['personnel', 'staff', 'investigator', 'team']):
-                    table_content['personnel_table'] = table_text
-                else:
-                    table_content[f'table_page_{page}'] = table_text
-        
-        return table_content
-
-    # Extract structured fields
-    extracted_fields = {
-        "proposal_id": "PDF-" + os.urandom(4).hex(),
-        "title": extract_field_value(all_text, [
-            "1. PROJECT TITLE:",
-            "1 PROJECT TITLE:",
-            "PROJECT TITLE:",
-            "Title:"
-        ]),
-        "pi_name": extract_field_value(all_text, [
-            "2. Name of Principal Investigator:",
-            "2 Name of Principal Investigator:",
-            "Principal Investigator:",
-            "PI Name:"
-        ]),
-        "organization": extract_field_value(all_text, [
-            "3. Name of the Organization:",
-            "3 Name of the Organization:",
-            "Organization:",
-            "Institute:"
-        ]),
-        "definition": extract_field_value(all_text, [
-            "4. Definition of the issue:",
-            "4 Definition of the issue:",
-            "Definition of the issue:",
-            "Problem Definition:"
-        ]),
-        "objectives": extract_field_value(all_text, [
-            "5. Objectives:",
-            "5 Objectives:",
-            "Objectives:",
-            "Project Objectives:"
-        ]),
-        "justification": extract_field_value(all_text, [
-            "6. Justification:",
-            "6 Justification:",
-            "Justification:",
-            "Project Justification:"
-        ]),
-        "benefits": extract_field_value(all_text, [
-            "7. How the project is beneficial:",
-            "7 How the project is beneficial:",
-            "Benefits to Coal Industry:",
-            "Benefits:"
-        ]),
-        "methodology": extract_field_value(all_text, [
-            "8.1 Methodology:",
-            "8.1. Methodology:",
-            "Methodology:",
-            "Approach:"
-        ]),
-        "work_plan": extract_field_value(all_text, [
-            "8.2 Organization of work:",
-            "8.2. Organization of work:",
-            "Work Plan:",
-            "Project Plan:"
-        ]),
-        "deliverables": extract_field_value(all_text, [
-            "Deliverables:",
-            "Expected Deliverables:",
-            "Project Deliverables:",
-            "Outputs:"
-        ]),
-        "thrust_area_claimed": extract_field_value(all_text, [
-            "Thrust Area:",
-            "Research Area:",
-            "Focus Area:",
-            "Domain:"
-        ])
-    }
-
-    # Process tables and add to fields
-    table_content = process_tables(all_tables)
-    extracted_fields.update(table_content)
+def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
+    """Extract structured data from FORM-I content using Gemini AI."""
     
-    # Add full document text for comprehensive search
-    extracted_fields["full_document_text"] = all_text
-
-    return extracted_fields
-
-# ========= VALIDATION ==========
-def validate_proposal(fields):
-    """
-    🔍 STEP 1: Extract Key Fields & Table Data from FORM-I - COMPLETED in extract_form1_fields
+    extraction_prompt = """
+    You are an expert at extracting information from FORM-I S&T grant proposals for the Ministry of Coal.
     
-    🔎 STEP 2: Convert Extracted FORM-I Data into Targeted Search Queries for S&T Guidelines
-    """
+    Extract the following information from the provided content and return it as a JSON object with these exact keys:
     
-    # Generate specific search queries based on the form content from the images
-    search_queries = []
-    
-    # Query 1: Project title and objectives validation
-    title = fields.get('title', 'Project title comes here')
-    objectives = fields.get('objectives', 'Objectives section')
-    if title or objectives:
-        search_queries.append({
-            'query': f"project title requirements objectives criteria validation {title} {objectives}",
-            'purpose': 'title_objectives_validation',
-            'field_name': 'Project Title & Objectives'
-        })
-    
-    # Query 2: Principal investigator qualifications
-    pi_name = fields.get('pi_name', 'principal')
-    search_queries.append({
-        'query': f"principal investigator qualifications eligibility criteria requirements {pi_name}",
-        'purpose': 'pi_eligibility',
-        'field_name': 'Principal Investigator Eligibility'
-    })
-    
-    # Query 3: Sub-agency and implementing agency requirements
-    organization = fields.get('organization', 'Sub-agency')
-    search_queries.append({
-        'query': f"sub-agency implementing agency organization requirements criteria {organization}",
-        'purpose': 'agency_requirements',
-        'field_name': 'Agency Requirements'
-    })
-    
-    # Query 4: Issue definition and problem statement criteria
-    issue_definition = fields.get('definition', 'Issue will come here')
-    search_queries.append({
-        'query': f"issue definition problem statement research criteria validation {issue_definition}",
-        'purpose': 'issue_validation',
-        'field_name': 'Issue Definition'
-    })
-    
-    # Query 5: Justification and benefits criteria
-    justification = fields.get('justification', 'Justify')
-    benefits = fields.get('benefits', 'Very very beneficial')
-    search_queries.append({
-        'query': f"justification benefits coal industry research validation criteria {justification} {benefits}",
-        'purpose': 'benefits_validation',
-        'field_name': 'Justification & Benefits'
-    })
-    
-    # Query 6: Work plan and methodology requirements
-    work_plan = fields.get('work_plan', 'Work plan will come here')
-    methodology = fields.get('methodology', 'Methodology will come here')
-    search_queries.append({
-        'query': f"work plan methodology research approach requirements validation {work_plan} {methodology}",
-        'purpose': 'methodology_validation',
-        'field_name': 'Work Plan & Methodology'
-    })
-    
-    # Query 7: Budget and cost validation (specific to cost table)
-    cost_table = fields.get('cost_table', '')
-    if cost_table or 'Grand Total' in str(fields.get('full_document_text', '')):
-        search_queries.append({
-            'query': f"budget cost expenditure capital revenue foreign exchange limits maximum allowed {cost_table}",
-            'purpose': 'budget_validation',
-            'field_name': 'Budget & Cost Structure'
-        })
-    
-    # Query 8: Timeline and project duration criteria
-    timeline_table = fields.get('timeline_table', '')
-    if timeline_table or 'Bar Chart' in str(fields.get('full_document_text', '')):
-        search_queries.append({
-            'query': f"timeline project duration schedule milestones maximum allowed duration {timeline_table}",
-            'purpose': 'timeline_validation',
-            'field_name': 'Project Timeline'
-        })
-
-    """
-    📚 STEP 3: Retrieve Relevant S&T Guideline Conditions (RAG)
-    """
-    
-    validation_results = []
-    print(f"🔍 Searching S&T Guidelines for {len(search_queries)} specific criteria...")
-    
-    for search in search_queries:
-        try:
-            print(f"  🔎 Searching: {search['field_name']}")
-            chunks = retrieve(search['query'], k=3)  # Get top 3 most relevant guidelines
-            
-            if chunks:
-                # Prepare evidence for this specific field
-                evidence_text = ""
-                for i, chunk in enumerate(chunks, 1):
-                    evidence_text += f"""
-[GUIDELINE {i}]
-Source: {chunk['source']} | Page: {chunk['page']} | Relevance: {chunk['score']:.3f}
-Content: {chunk['chunk'][:400]}
----
-"""
-                
-                # Get field value from extracted data
-                field_value = ""
-                if search['purpose'] == 'title_objectives_validation':
-                    field_value = f"Title: {title}\nObjectives: {objectives}"
-                elif search['purpose'] == 'pi_eligibility':
-                    field_value = f"Principal Investigator: {pi_name}"
-                elif search['purpose'] == 'agency_requirements':
-                    field_value = f"Organization: {organization}"
-                elif search['purpose'] == 'issue_validation':
-                    field_value = f"Issue Definition: {issue_definition}"
-                elif search['purpose'] == 'benefits_validation':
-                    field_value = f"Justification: {justification}\nBenefits: {benefits}"
-                elif search['purpose'] == 'methodology_validation':
-                    field_value = f"Work Plan: {work_plan}\nMethodology: {methodology}"
-                elif search['purpose'] == 'budget_validation':
-                    field_value = f"Cost Information: {cost_table[:300]}"
-                elif search['purpose'] == 'timeline_validation':
-                    field_value = f"Timeline Information: {timeline_table[:300]}"
-                
-                """
-                🤖 STEP 4: LLM Validation for Each Field
-                """
-                
-                prompt = f"""You are validating a FORM-I proposal field against S&T Guidelines from Coal India Limited.
-
-FIELD BEING VALIDATED: {search['field_name']}
-
-PROPOSAL FIELD VALUE:
-{field_value}
-
-RETRIEVED S&T GUIDELINE CONDITIONS:
-{evidence_text}
-
-VALIDATION TASK:
-Using ONLY the provided guideline conditions above, determine if the proposal field value satisfies the requirements.
-
-CRITICAL INSTRUCTIONS:
-- Use ONLY conditions explicitly mentioned in the retrieved guidelines
-- Do NOT create or assume requirements not stated in the guidelines
-- If guidelines are unclear or insufficient, default to FALSE
-- Look for specific criteria like limits, requirements, eligibility, format, etc.
-- Provide exact text from guidelines as justification
-
-Return ONLY this JSON structure:
-{{
-    "field_name": "{search['field_name']}",
-    "validation_result": true/false,
-    "condition_found": "Exact condition text from guidelines (if any)",
-    "reason": "Brief explanation of why the field passes/fails the condition",
-    "guideline_source": "Source document and page number",
-    "confidence": "high/medium/low"
-}}
-"""
-                
-                try:
-                    response = model.generate_content(prompt)
-                    response_text = response.text.strip()
-                    
-                    # Parse JSON response
-                    if "```json" in response_text:
-                        start = response_text.find("```json") + 7
-                        end = response_text.find("```", start)
-                        json_str = response_text[start:end].strip()
-                    else:
-                        json_str = response_text
-                    
-                    field_result = json.loads(json_str)
-                    validation_results.append(field_result)
-                    
-                    # Print individual result
-                    status = "✅ PASS" if field_result.get('validation_result', False) else "❌ FAIL"
-                    print(f"    {status} {search['field_name']}: {field_result.get('reason', 'No reason provided')}")
-                    
-                except json.JSONDecodeError as e:
-                    print(f"    ⚠️ JSON parsing error for {search['field_name']}: {e}")
-                    validation_results.append({
-                        "field_name": search['field_name'],
-                        "validation_result": False,
-                        "reason": f"Parsing error: {str(e)}",
-                        "error": True
-                    })
-                except Exception as e:
-                    print(f"    ❌ Validation error for {search['field_name']}: {e}")
-                    validation_results.append({
-                        "field_name": search['field_name'],
-                        "validation_result": False,
-                        "reason": f"Validation error: {str(e)}",
-                        "error": True
-                    })
-            else:
-                print(f"    ⚠️ No guidelines found for {search['field_name']}")
-                validation_results.append({
-                    "field_name": search['field_name'],
-                    "validation_result": False,
-                    "reason": "No relevant guidelines found in database",
-                    "no_guidelines": True
-                })
-                
-        except Exception as e:
-            print(f"❌ Error processing {search['field_name']}: {e}")
-            validation_results.append({
-                "field_name": search['field_name'],
-                "validation_result": False,
-                "reason": f"Processing error: {str(e)}",
-                "error": True
-            })
-
-    """
-    🧾 STEP 5: Compile Overall Results
-    """
-    
-    # Calculate overall results
-    total_fields = len(validation_results)
-    passed_fields = sum(1 for result in validation_results if result.get('validation_result', False))
-    overall_pass = passed_fields == total_fields and total_fields > 0
-    
-    final_result = {
-        "overall_validation": overall_pass,
-        "summary": f"Passed {passed_fields}/{total_fields} validation criteria",
-        "individual_validations": validation_results,
-        "title": fields.get('title', 'Unknown Title'),
-        "total_criteria_checked": total_fields,
-        "criteria_passed": passed_fields,
-        "criteria_failed": total_fields - passed_fields
+    {
+        "project_title": "",
+        "principal_implementing_agency": "",
+        "project_leader_name": "",
+        "sub_implementing_agency": "",
+        "co_investigator_name": "",
+        "definition_of_issue": "",
+        "objectives": "",
+        "justification_subject_area": "",
+        "project_benefits": "",
+        "work_plan": "",
+        "methodology": "",
+        "organization_of_work": "",
+        "time_schedule": "",
+        "foreign_exchange_details": "",
+        "land_building_cost_total": "",
+        "land_building_cost_year1": "",
+        "land_building_cost_year2": "",
+        "land_building_cost_year3": "",
+        "land_building_justification": "",
+        "equipment_cost_total": "",
+        "equipment_cost_year1": "",
+        "equipment_cost_year2": "",
+        "equipment_cost_year3": "",
+        "equipment_justification": "",
+        "salaries_cost_total": "",
+        "salaries_cost_year1": "",
+        "salaries_cost_year2": "",
+        "salaries_cost_year3": "",
+        "consumables_cost_total": "",
+        "consumables_cost_year1": "",
+        "consumables_cost_year2": "",
+        "consumables_cost_year3": "",
+        "consumables_outlay_notes": "",
+        "travel_cost_total": "",
+        "travel_cost_year1": "",
+        "travel_cost_year2": "",
+        "travel_cost_year3": "",
+        "workshop_cost_total": "",
+        "workshop_cost_year1": "",
+        "workshop_cost_year2": "",
+        "workshop_cost_year3": "",
+        "total_cost_total": "",
+        "total_cost_year1": "",
+        "total_cost_year2": "",
+        "total_cost_year3": "",
+        "fund_phasing": "",
+        "cv_details": "",
+        "past_experience": "",
+        "other_details": "",
+        "submission_date": "",
+        "project_duration": "",
+        "contact_email": "",
+        "contact_phone": ""
     }
     
-    print(f"\n📋 VALIDATION SUMMARY:")
-    print(f"Title: {final_result['title']}")
-    print(f"Overall Result: {'✅ APPROVED' if overall_pass else '❌ REJECTED'}")
-    print(f"Score: {passed_fields}/{total_fields} criteria met")
+    Instructions:
+    1. Extract exact text as it appears in the document
+    2. For cost fields, extract only numerical values (without "Rs." or "lakhs")
+    3. If information is not found, use empty string ""
+    4. For long text fields, preserve the original formatting and content
+    5. Return ONLY the JSON object, no additional text
     
-    return final_result
+    Content to extract from:
+    """ + content
+    
+    try:
+        response = model.generate_content(extraction_prompt)
+        extracted_json = response.text.strip()
+        
+        # Clean the response to ensure it's valid JSON
+        if extracted_json.startswith('```json'):
+            extracted_json = extracted_json[7:]
+        if extracted_json.endswith('```'):
+            extracted_json = extracted_json[:-3]
+        
+        extracted_data = json.loads(extracted_json)
+        return extracted_data
+        
+    except Exception as e:
+        print(f"Error in AI extraction: {str(e)}")
+        # Return empty structure if AI fails
+        return {
+            "project_title": "",
+            "principal_implementing_agency": "",
+            "project_leader_name": "",
+            "sub_implementing_agency": "",
+            "co_investigator_name": "",
+            "definition_of_issue": "",
+            "objectives": "",
+            "justification_subject_area": "",
+            "project_benefits": "",
+            "work_plan": "",
+            "methodology": "",
+            "organization_of_work": "",
+            "time_schedule": "",
+            "foreign_exchange_details": "",
+            "land_building_cost_total": "",
+            "land_building_cost_year1": "",
+            "land_building_cost_year2": "",
+            "land_building_cost_year3": "",
+            "land_building_justification": "",
+            "equipment_cost_total": "",
+            "equipment_cost_year1": "",
+            "equipment_cost_year2": "",
+            "equipment_cost_year3": "",
+            "equipment_justification": "",
+            "salaries_cost_total": "",
+            "salaries_cost_year1": "",
+            "salaries_cost_year2": "",
+            "salaries_cost_year3": "",
+            "consumables_cost_total": "",
+            "consumables_cost_year1": "",
+            "consumables_cost_year2": "",
+            "consumables_cost_year3": "",
+            "consumables_outlay_notes": "",
+            "travel_cost_total": "",
+            "travel_cost_year1": "",
+            "travel_cost_year2": "",
+            "travel_cost_year3": "",
+            "workshop_cost_total": "",
+            "workshop_cost_year1": "",
+            "workshop_cost_year2": "",
+            "workshop_cost_year3": "",
+            "total_cost_total": "",
+            "total_cost_year1": "",
+            "total_cost_year2": "",
+            "total_cost_year3": "",
+            "fund_phasing": "",
+            "cv_details": "",
+            "past_experience": "",
+            "other_details": "",
+            "submission_date": "",
+            "project_duration": "",
+            "contact_email": "",
+            "contact_phone": ""
+        }
 
-# ========= FASTAPI ROUTER ==========
-router = APIRouter(
-    prefix="/validation",
-    tags=["validation"],
-    responses={404: {"description": "Not found"}}
-)
-
-# Middleware will be handled by main FastAPI app
-
-@router.get("/")
-async def root():
-    """
-    Health check endpoint
-    """
+def construct_simple_json_structure(extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Construct a simple JSON structure from extracted data."""
+    
+    # Clean all text fields
+    cleaned_data = {}
+    for key, value in extracted_data.items():
+        if isinstance(value, str):
+            cleaned_data[key] = clean_text_field(value)
+        else:
+            cleaned_data[key] = value
+    
     return {
-        "message": "AI Proposal Validator API",
-        "status": "active",
-        "version": "1.0.0",
-        "endpoints": {
-            "validate": "POST /validation",
-            "ingest": "POST /ingest-guidelines", 
-            "search": "GET /search-guidelines"
+        "form_type": "FORM-I S&T Grant Proposal",
+        "basic_information": {
+            "project_title": cleaned_data.get("project_title", ""),
+            "principal_implementing_agency": cleaned_data.get("principal_implementing_agency", ""),
+            "project_leader_name": cleaned_data.get("project_leader_name", ""),
+            "sub_implementing_agency": cleaned_data.get("sub_implementing_agency", ""),
+            "co_investigator_name": cleaned_data.get("co_investigator_name", ""),
+            "contact_email": cleaned_data.get("contact_email", ""),
+            "contact_phone": cleaned_data.get("contact_phone", ""),
+            "submission_date": cleaned_data.get("submission_date", ""),
+            "project_duration": cleaned_data.get("project_duration", "")
+        },
+        "project_details": {
+            "definition_of_issue": cleaned_data.get("definition_of_issue", ""),
+            "objectives": cleaned_data.get("objectives", ""),
+            "justification_subject_area": cleaned_data.get("justification_subject_area", ""),
+            "project_benefits": cleaned_data.get("project_benefits", ""),
+            "work_plan": cleaned_data.get("work_plan", ""),
+            "methodology": cleaned_data.get("methodology", ""),
+            "organization_of_work": cleaned_data.get("organization_of_work", ""),
+            "time_schedule": cleaned_data.get("time_schedule", ""),
+            "foreign_exchange_details": cleaned_data.get("foreign_exchange_details", "")
+        },
+        "cost_breakdown": {
+            "capital_expenditure": {
+                "land_building": {
+                    "total": cleaned_data.get("land_building_cost_total", ""),
+                    "year1": cleaned_data.get("land_building_cost_year1", ""),
+                    "year2": cleaned_data.get("land_building_cost_year2", ""),
+                    "year3": cleaned_data.get("land_building_cost_year3", ""),
+                    "justification": cleaned_data.get("land_building_justification", "")
+                },
+                "equipment": {
+                    "total": cleaned_data.get("equipment_cost_total", ""),
+                    "year1": cleaned_data.get("equipment_cost_year1", ""),
+                    "year2": cleaned_data.get("equipment_cost_year2", ""),
+                    "year3": cleaned_data.get("equipment_cost_year3", ""),
+                    "justification": cleaned_data.get("equipment_justification", "")
+                }
+            },
+            "revenue_expenditure": {
+                "salaries": {
+                    "total": cleaned_data.get("salaries_cost_total", ""),
+                    "year1": cleaned_data.get("salaries_cost_year1", ""),
+                    "year2": cleaned_data.get("salaries_cost_year2", ""),
+                    "year3": cleaned_data.get("salaries_cost_year3", "")
+                },
+                "consumables": {
+                    "total": cleaned_data.get("consumables_cost_total", ""),
+                    "year1": cleaned_data.get("consumables_cost_year1", ""),
+                    "year2": cleaned_data.get("consumables_cost_year2", ""),
+                    "year3": cleaned_data.get("consumables_cost_year3", ""),
+                    "notes": cleaned_data.get("consumables_outlay_notes", "")
+                },
+                "travel": {
+                    "total": cleaned_data.get("travel_cost_total", ""),
+                    "year1": cleaned_data.get("travel_cost_year1", ""),
+                    "year2": cleaned_data.get("travel_cost_year2", ""),
+                    "year3": cleaned_data.get("travel_cost_year3", "")
+                },
+                "workshop_seminar": {
+                    "total": cleaned_data.get("workshop_cost_total", ""),
+                    "year1": cleaned_data.get("workshop_cost_year1", ""),
+                    "year2": cleaned_data.get("workshop_cost_year2", ""),
+                    "year3": cleaned_data.get("workshop_cost_year3", "")
+                }
+            },
+            "total_project_cost": {
+                "total": cleaned_data.get("total_cost_total", ""),
+                "year1": cleaned_data.get("total_cost_year1", ""),
+                "year2": cleaned_data.get("total_cost_year2", ""),
+                "year3": cleaned_data.get("total_cost_year3", "")
+            },
+            "fund_phasing": cleaned_data.get("fund_phasing", "")
+        },
+        "additional_information": {
+            "cv_details": cleaned_data.get("cv_details", ""),
+            "past_experience": cleaned_data.get("past_experience", ""),
+            "other_details": cleaned_data.get("other_details", "")
         }
     }
 
-@router.post("/ingest-guidelines")
-async def ingest_guidelines():
-    """
-    One-time ingestion of guideline documents.
-    Processes PDFs from Supabase storage and stores in vector database.
-    """
+def store_in_supabase(proposal_data: Dict[str, Any], file_info: Dict[str, str]) -> Dict[str, Any]:
+    """Store extracted proposal data in Supabase database."""
     try:
-        # Primary: Ingest from Supabase storage
-        print("Attempting Supabase ingestion...")
-        result = run_ingestion()
+        # Prepare data for database storage
+        db_data = {
+            "id": str(uuid.uuid4()),
+            "original_filename": file_info.get("filename", ""),
+            "file_url": file_info.get("public_url", ""),
+            "project_title": proposal_data.get("project_title", ""),
+            "principal_implementing_agency": proposal_data.get("principal_implementing_agency", ""),
+            "project_leader_name": proposal_data.get("project_leader_name", ""),
+            "sub_implementing_agency": proposal_data.get("sub_implementing_agency", ""),
+            "co_investigator_name": proposal_data.get("co_investigator_name", ""),
+            "definition_of_issue": proposal_data.get("definition_of_issue", ""),
+            "objectives": proposal_data.get("objectives", ""),
+            "justification_subject_area": proposal_data.get("justification_subject_area", ""),
+            "project_benefits": proposal_data.get("project_benefits", ""),
+            "work_plan": proposal_data.get("work_plan", ""),
+            "methodology": proposal_data.get("methodology", ""),
+            "organization_of_work": proposal_data.get("organization_of_work", ""),
+            "time_schedule": proposal_data.get("time_schedule", ""),
+            "total_cost_total": proposal_data.get("total_cost_total", ""),
+            "total_cost_year1": proposal_data.get("total_cost_year1", ""),
+            "total_cost_year2": proposal_data.get("total_cost_year2", ""),
+            "total_cost_year3": proposal_data.get("total_cost_year3", ""),
+            "land_building_cost_total": proposal_data.get("land_building_cost_total", ""),
+            "equipment_cost_total": proposal_data.get("equipment_cost_total", ""),
+            "salaries_cost_total": proposal_data.get("salaries_cost_total", ""),
+            "consumables_cost_total": proposal_data.get("consumables_cost_total", ""),
+            "travel_cost_total": proposal_data.get("travel_cost_total", ""),
+            "workshop_cost_total": proposal_data.get("workshop_cost_total", ""),
+            "cv_details": proposal_data.get("cv_details", ""),
+            "past_experience": proposal_data.get("past_experience", ""),
+            "other_details": proposal_data.get("other_details", ""),
+            "submission_date": proposal_data.get("submission_date", ""),
+            "project_duration": proposal_data.get("project_duration", ""),
+            "contact_email": proposal_data.get("contact_email", ""),
+            "contact_phone": proposal_data.get("contact_phone", ""),
+            "extraction_date": datetime.now().isoformat(),
+            "status": "extracted"
+        }
         
-        if result["status"] in ["success", "partial"]:
-            return JSONResponse(
-                status_code=200 if result["status"] == "success" else 207,
-                content={
-                    **result,
-                    "source": "supabase_storage",
-                    "files_processed": [
-                        "Modified_S&T_Guidelines.pdf",
-                        "Thrust_Areas_2020.pdf"
-                    ]
-                }
-            )
+        # Insert into proposals table
+        response = supabase.table("proposals").insert(db_data).execute()
+        
+        if response.data:
+            return {
+                "success": True,
+                "proposal_id": db_data["id"],
+                "database_response": response.data[0]
+            }
         else:
-            # Fallback to local directory if Supabase fails
-            print("Supabase ingestion failed, trying local directory...")
-            local_result = ingest_local_guidelines()
-            
-            if local_result["status"] == "success":
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        **local_result,
-                        "source": "local_directory",
-                        "fallback": True
-                    }
-                )
-            else:
-                return JSONResponse(
-                    status_code=500,
-                    content={
-                        "status": "error",
-                        "message": "Both Supabase and local ingestion failed",
-                        "supabase_error": result["message"],
-                        "local_error": local_result["message"]
-                    }
-                )
+            return {
+                "success": False,
+                "error": "Failed to insert into database"
+            }
             
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"Ingestion process failed: {str(e)}"
-            }
-        )
+        return {
+            "success": False,
+            "error": f"Database storage error: {str(e)}"
+        }
 
-@router.post("/validate-form1")
-async def validate_form1(file: UploadFile = File(...)):
+# keep the original extract route so it's available if you still want to call it separately
+extract_router = APIRouter()
+
+@extract_router.post("/extract-form1")
+async def extract_form1_proposal(file: UploadFile = File(...)):
     """
-    Main validation endpoint:
-    1. Accepts FORM-I PDF upload
-    2. Extracts fields and tables
-    3. Searches relevant guidelines using RAG
-    4. Evaluates using LLM
-    5. Returns validation results
+    Extract content from FORM-I proposal document and store in Supabase.
+    Returns structured JSON in Slate.js format.
     """
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(
-            status_code=400, 
-            detail="Only PDF files are accepted"
-        )
-    
-    temp_pdf_path = None
     try:
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            shutil.copyfileobj(file.file, tmp)
-            temp_pdf_path = tmp.name
+        # Validate file type
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+            
+        ext = file.filename.lower().split(".")[-1]
+        if ext not in ["pdf", "docx", "txt"]:
+            raise HTTPException(status_code=400, detail="Unsupported file format. Only PDF, DOCX, and TXT files are allowed.")
         
-        # Step 1: Extract fields from FORM-I PDF
-        print("Extracting fields from FORM-I...")
-        fields = extract_form1_fields(temp_pdf_path)
+        # Read file content
+        file_bytes = await file.read()
         
-        if not fields:
-            raise HTTPException(
-                status_code=400,
-                detail="Failed to extract data from PDF"
-            )
+        # Upload original file to Supabase storage
+        unique_filename = f"{uuid.uuid4()}.{ext}"
+        upload_response = supabase.storage.from_(UPLOAD_BUCKET).upload(
+            unique_filename,
+            file_bytes,
+            {"content-type": file.content_type}
+        )
         
-        # Step 2-5: Validate using RAG and LLM
-        print("Validating proposal...")
-        validation_result = validate_proposal(fields)
+        file_url = supabase.storage.from_(UPLOAD_BUCKET).get_public_url(unique_filename)
         
-        # Add extracted fields summary to response
-        response = {
-            "validation_result": validation_result,
-            "extracted_fields": {
-                "title": fields.get('title', 'Not found'),
-                "pi_name": fields.get('pi_name', 'Not found'),
-                "organization": fields.get('organization', 'Not found'),
-                "thrust_area_claimed": fields.get('thrust_area_claimed', 'Not specified'),
-                "has_cost_table": bool(fields.get('cost_table')),
-                "has_timeline_table": bool(fields.get('timeline_table')),
-                "proposal_id": fields.get('proposal_id')
-            },
-            "processing_info": {
-                "timestamp": "2024-11-29T00:00:00Z",
-                "model_version": "1.0.0",
-                "filename": file.filename
+        file_info = {
+            "filename": file.filename,
+            "stored_as": unique_filename,
+            "public_url": file_url
+        }
+        
+        # Extract text from file
+        extracted_text = extract_text_from_file(file.filename, file_bytes)
+        
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="No text content could be extracted from the file")
+        
+        # Extract structured data using AI
+        proposal_data = extract_form_data_with_ai(extracted_text)
+        
+        # Construct simple JSON structure
+        json_structure = construct_simple_json_structure(proposal_data)
+        
+        # Store in Supabase database
+        db_result = store_in_supabase(proposal_data, file_info)
+        
+        # Prepare response
+        response_data = {
+            "success": True,
+            "message": "FORM-I proposal extracted successfully",
+            "extraction_id": db_result.get("proposal_id"),
+            "file_info": file_info,
+            "database_stored": db_result.get("success", False),
+            "extracted_data": json_structure,
+            "raw_data": proposal_data,
+            "statistics": {
+                "text_length": len(extracted_text),
+                "fields_extracted": len([v for v in proposal_data.values() if v]),
+                "total_fields": len(proposal_data)
             }
         }
         
-        return JSONResponse(
-            status_code=200,
-            content=response
+        # Store JSON structure in storage bucket
+        json_filename = f"{uuid.uuid4()}_structure.json"
+        json_bytes = json.dumps(json_structure, indent=2).encode('utf-8')
+        supabase.storage.from_(JSON_BUCKET).upload(
+            json_filename,
+            json_bytes,
+            {"content-type": "application/json"}
         )
+        
+        json_url = supabase.storage.from_(JSON_BUCKET).get_public_url(json_filename)
+        response_data["json_structure_url"] = json_url
+        
+        return JSONResponse(content=response_data)
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Validation error: {e}")
+        print(f"Extraction error: {traceback.format_exc()}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Validation failed: {str(e)}"
-        )
-        
-    finally:
-        # Clean up temporary file
-        if temp_pdf_path and os.path.exists(temp_pdf_path):
-            try:
-                os.unlink(temp_pdf_path)
-            except Exception as e:
-                print(f"Failed to delete temp file: {e}")
-
-@router.get("/search-guidelines")
-async def search_guidelines(query: str, k: int = 5):
-    """
-    Search guidelines database for testing RAG functionality
-    """
-    if not query.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Query parameter cannot be empty"
-        )
-    
-    try:
-        results = retrieve(query, k=k)
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "query": query,
-                "results_count": len(results),
-                "results": results
-            }
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Search failed: {str(e)}"
+            status_code=500, 
+            detail=f"Error processing FORM-I proposal: {str(e)}"
         )
 
-@router.get("/status")
-async def get_status():
-    """
-    Get system status and database information
-    """
-    try:
-        # Check database connection
-        chunks_count = supabase.table("chunks").select("id", count="exact").execute().count
-        
-        # Check Pinecone index
-        index_stats = index.describe_index_stats()
-        
-        # Check Supabase storage files
-        try:
-            files = supabase.storage.from_(PDF_BUCKET).list()
-            storage_files = [f["name"] for f in files if f["name"].endswith('.pdf')]
-        except Exception as e:
-            storage_files = [f"Error accessing storage: {str(e)}"]
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "healthy",
-                "database": {
-                    "chunks_stored": chunks_count,
-                    "vector_count": index_stats.get("total_vector_count", 0)
-                },
-                "storage": {
-                    "bucket": PDF_BUCKET,
-                    "available_files": storage_files
-                },
-                "models": {
-                    "embedding": "sentence-transformers/all-MiniLM-L6-v2",
-                    "llm": "gemini-2.5-flash-lite"
-                }
-            }
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error", 
-                "message": str(e)
-            }
-        )
 
-@router.get("/test-storage")
-async def test_storage():
-    """
-    Test accessing files from Supabase storage
-    """
-    try:
-        files = supabase.storage.from_(PDF_BUCKET).list()
-        pdf_files = [f for f in files if f["name"].endswith('.pdf')]
-        
-        test_results = []
-        for file_info in pdf_files:
-            filename = file_info["name"]
-            try:
-                # Test downloading a small portion
-                data = supabase.storage.from_(PDF_BUCKET).download(filename)
-                size = len(data) if data else 0
-                test_results.append({
-                    "filename": filename,
-                    "accessible": size > 0,
-                    "size_bytes": size,
-                    "status": "✓ Accessible" if size > 0 else "✗ Not accessible"
-                })
-            except Exception as e:
-                test_results.append({
-                    "filename": filename,
-                    "accessible": False,
-                    "error": str(e),
-                    "status": "✗ Error"
-                })
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "bucket": PDF_BUCKET,
-                "total_pdfs": len(pdf_files),
-                "files": test_results
-            }
-        )
-        
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"Storage test failed: {str(e)}"
-            }
-        )
+# ========== VALIDATION BLOCK (ADDED) ==========
 
-# Module info for import
-__all__ = [
-    "router", 
-    "validate_proposal", 
-    "extract_form1_fields", 
-    "run_ingestion", 
-    "retrieve"
+# We'll reuse the same genai client (model) for validation calls.
+# If for some reason you want a separate API key you can modify GEMINI_API_KEY4 env var.
+
+# Fields to validate (these 13 only)
+VALIDATE_FIELDS = [
+    "Project Title",
+    "Principal Investigator",
+    "Organization",
+    "Definition of the Issue",
+    "Objectives",
+    "Justification for Subject Area",
+    "Benefits to Coal Industry",
+    "Work Plan",
+    "Methodology",
+    "Organization of Work Elements",
+    "Time Schedule",
+    "Deliverables",
+    "Thrust Area"
 ]
 
-# For standalone testing only
+# Concise guideline summaries (Option B) — adjust as needed.
+GUIDELINE_SUMMARIES: Dict[str, str] = {
+    "Project Title": (
+        "Project title should be concise, specific to the technical scope of the work, "
+        "and must reflect the key objective or deliverable. Avoid placeholders, generic phrases, "
+        "or overly long descriptive titles."
+    ),
+    "Principal Investigator": (
+        "Principal Investigator must be a named, qualified person with credentials and affiliation. "
+        "The proposal should include the PI's name and evidence of competence (CV in additional info)."
+    ),
+    "Organization": (
+        "Name of the principal implementing organization / sub-implementing agency must be provided, "
+        "and should be a real institution (not placeholders)."
+    ),
+    "Definition of the Issue": (
+        "Problem definition must be precise and technical: describe the current gap, baseline, "
+        "and why the problem matters. It must be more than a one-line placeholder."
+    ),
+    "Objectives": (
+        "Objectives must be 1–5 clear, specific, measurable items directly linked to the problem definition. "
+        "They should be concise and actionable (not generic text)."
+    ),
+    "Justification for Subject Area": (
+        "Justification should explain why the proposed research is important, show state-of-the-art context, "
+        "and justify the subject area selection with evidence or references where applicable."
+    ),
+    "Benefits to Coal Industry": (
+        "Benefits section must explicitly state how the project helps the coal industry (operational gains, cost reduction, "
+        "safety improvements, environmental impact), not vague claims."
+    ),
+    "Work Plan": (
+        "Work plan must describe tasks, sequencing, milestones, responsible parties and expected outputs; "
+        "should not be a placeholder sentence."
+    ),
+    "Methodology": (
+        "Methodology must describe the technical approach, experimental or analytical methods, data collection and analysis plans. "
+        "High-level placeholders are insufficient."
+    ),
+    "Organization of Work Elements": (
+        "Breakdown of work elements (phases, team roles, responsibilities) should be present and show how tasks are organized."
+    ),
+    "Time Schedule": (
+        "A time schedule with milestones must be provided — typically a Bar Chart or PERT chart showing tasks vs time. "
+        "A textual placeholder saying 'Bar chart will come here' is not acceptable."
+    ),
+    "Deliverables": (
+        "Expected deliverables (reports, prototypes, software, datasets, patents) must be listed and described. "
+        "Empty or placeholder deliverables are not acceptable."
+    ),
+    "Thrust Area": (
+        "The proposal must clearly indicate the claimed Thrust Area / Research Area and how the project maps to it."
+    )
+}
+
+# Basic placeholder detection
+PLACEHOLDER_RE = re.compile(
+    r"(come here|placeholder|tbd|to be filled|objectives section|very very beneficial|issue will come here|work plan will come here|methodology will come here|bar chart/pert|bar chart|pert chart)",
+    re.IGNORECASE
+)
+
+def is_placeholder_text(s: Optional[str]) -> bool:
+    if not s:
+        return True
+    if PLACEHOLDER_RE.search(s):
+        return True
+    if len(s.strip()) < 4:
+        return True
+    return False
+
+def call_gemini_for_validation(field_label: str, field_value: str, guideline_summary: str) -> Dict[str, str]:
+    """
+    Prompt Gemini to validate a single field. Expect a strict JSON response:
+    {
+      "validation_result": "<filled_and_ok|not_filled|not_following_guidelines>",
+      "reason": "..."
+    }
+    """
+    # Defensive: if model not initialized, return fallback
+    if model is None:
+        return {"validation_result": "not_following_guidelines", "reason": "Gemini model not configured; fallback conservative result."}
+    
+    prompt = f"""
+You are an expert grants reviewer. Use ONLY the guideline summary below to judge whether the field value satisfies the guideline.
+
+FIELD: {field_label}
+FIELD_VALUE: \"\"\"{field_value if field_value is not None else ""}\"\"\"
+
+GUIDELINE SUMMARY:
+\"\"\"{guideline_summary}\"\"\"
+
+TASK:
+Using ONLY information from the GUIDELINE SUMMARY, decide if FIELD_VALUE:
+- is empty/missing -> return validation_result = "not_filled"
+- is present but does not meet the guideline -> "not_following_guidelines"
+- meets the guideline -> "filled_and_ok"
+
+Return EXACTLY a JSON object (no extra text) like:
+{{ "validation_result": "filled_and_ok", "reason": "Short reason citing guideline." }}
+"""
+    try:
+        resp = model.generate_content(prompt)
+        text = (resp.text or "").strip()
+        # extract JSON block
+        m = re.search(r"\{.*\}", text, flags=re.S)
+        if not m:
+            # fallback: attempt to parse raw text
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                # invalid LLM response
+                return {"validation_result": "not_following_guidelines", "reason": "LLM did not return valid JSON; conservative default."}
+        else:
+            json_str = m.group(0)
+            parsed = json.loads(json_str)
+        vr = parsed.get("validation_result", "").strip()
+        reason = parsed.get("reason", "").strip()
+        if vr not in ("filled_and_ok", "not_filled", "not_following_guidelines"):
+            # normalize common alternatives
+            low = vr.lower()
+            if low in ("yes", "pass", "true"):
+                vr = "filled_and_ok"
+            elif low in ("no", "fail", "false"):
+                vr = "not_following_guidelines"
+            else:
+                vr = "not_following_guidelines"
+        return {"validation_result": vr, "reason": reason}
+    except Exception as e:
+        # LLM error fallback
+        return {"validation_result": "not_following_guidelines", "reason": f"LLM error: {str(e)}"}
+
+def fallback_validator(field_label: str, field_value: Optional[str]) -> Dict[str, str]:
+    """
+    Deterministic fallback if LLM fails or returns invalid output.
+    Conservative defaults: missing -> not_filled; placeholders -> not_following_guidelines; otherwise filled_and_ok.
+    """
+    v = field_value or ""
+    v = v.strip()
+    if v == "":
+        return {"validation_result": "not_filled", "reason": f"{field_label} not filled in FORM-I"}
+    if is_placeholder_text(v):
+        return {"validation_result": "not_following_guidelines", "reason": f"{field_label} appears to be placeholder or generic text."}
+    # extra heuristics
+    if field_label == "Objectives":
+        items = re.split(r"\n|;|\d+\.\s*|\(\d+\)|\)\s*|-", v)
+        items = [i.strip() for i in items if i.strip()]
+        if len(items) == 0:
+            return {"validation_result": "not_following_guidelines", "reason": "Objectives not clearly listed."}
+        if len(items) > 8:
+            return {"validation_result": "not_following_guidelines", "reason": "Too many objectives; guidelines expect 1-5 concise objectives."}
+    if field_label == "Time Schedule":
+        if not re.search(r"bar chart|pert|milestone|milestones", v, re.IGNORECASE):
+            return {"validation_result": "not_following_guidelines", "reason": "Time Schedule missing a Bar Chart / PERT / milestones."}
+    return {"validation_result": "filled_and_ok", "reason": f"{field_label} appears filled (fallback pass)."}
+
+# Build FastAPI app and include original router (extract route)
+router = APIRouter()
+router.include_router(extract_router)
+
+# New validator route that uses embedded extractor logic directly
+@router.post("/validate-form1")
+async def validate_form1(file: UploadFile = File(...)):
+    """
+    Accepts a PDF, runs the embedded extraction logic (same as /extract-form1),
+    then validates the 13 fields using guideline summaries + Gemini LLM.
+    Returns final JSON in exact format requested.
+    """
+    # Validate file
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
+    temp_path = None
+    try:
+        # Read file bytes (we will use the same extraction pipeline)
+        file_bytes = await file.read()
+
+        # --- Use extraction pipeline (the exact functions above) ---
+        # Note: we avoid re-uploading to supabase here to keep validation fast,
+        # but we reuse the extraction functions exactly.
+        extracted_text = extract_text_from_file(file.filename, file_bytes)
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="No text content could be extracted from the file")
+
+        # Use the AI extractor to get raw fields
+        raw_extracted = extract_form_data_with_ai(extracted_text)  # returns flat dict of keys
+        structured = construct_simple_json_structure(raw_extracted)  # nested form used below
+
+        # Now run validation for the required 13 fields — fetch values from structured
+        def get_value_for_label(label: str) -> str:
+            # map labels to structured keys
+            bi = structured.get("basic_information", {}) or {}
+            pd = structured.get("project_details", {}) or {}
+            # mapping
+            mapping = {
+                "Project Title": bi.get("project_title", "") or raw_extracted.get("project_title", ""),
+                "Principal Investigator": bi.get("project_leader_name", "") or raw_extracted.get("project_leader_name", ""),
+                "Organization": bi.get("sub_implementing_agency", "") or raw_extracted.get("sub_implementing_agency", "") or raw_extracted.get("principal_implementing_agency", ""),
+                "Definition of the Issue": pd.get("definition_of_issue", "") or raw_extracted.get("definition_of_issue", ""),
+                "Objectives": pd.get("objectives", "") or raw_extracted.get("objectives", ""),
+                "Justification for Subject Area": pd.get("justification_subject_area", "") or raw_extracted.get("justification_subject_area", "") or raw_extracted.get("justification", ""),
+                "Benefits to Coal Industry": pd.get("project_benefits", "") or raw_extracted.get("project_benefits", "") or raw_extracted.get("project_benefits", ""),
+                "Work Plan": pd.get("work_plan", "") or raw_extracted.get("work_plan", ""),
+                "Methodology": pd.get("methodology", "") or raw_extracted.get("methodology", ""),
+                "Organization of Work Elements": pd.get("organization_of_work", "") or raw_extracted.get("organization_of_work", ""),
+                "Time Schedule": pd.get("time_schedule", "") or raw_extracted.get("time_schedule", ""),
+                "Deliverables": (raw_extracted.get("deliverables") or pd.get("deliverables", "")) if isinstance(raw_extracted, dict) else "",
+                "Thrust Area": raw_extracted.get("thrust_area_claimed", "") or raw_extracted.get("thrust_area", "") or pd.get("thrust_area_claimed", "")
+            }
+            val = mapping.get(label, "")
+            if val is None:
+                return ""
+            return val
+
+        fields_output = []
+        missing_columns = []
+        failing_columns = []
+
+        # Iterate through the 13 fields and validate using Gemini + guideline summary
+        for label in VALIDATE_FIELDS:
+            value = get_value_for_label(label) or ""
+            summary = GUIDELINE_SUMMARIES.get(label, "")
+
+            # Prepare LLM validation
+            llm_result = None
+            try:
+                llm_result = call_gemini_for_validation(label, value, summary)
+            except Exception as e:
+                # catch gemini errors and fallback
+                llm_result = {"validation_result": "not_following_guidelines", "reason": f"LLM error: {str(e)}"}
+
+            # If LLM returned something missing or invalid, fallback deterministically
+            if not llm_result or "validation_result" not in llm_result:
+                fb = fallback_validator(label, value)
+                llm_result = fb
+
+            vr = llm_result.get("validation_result", "not_following_guidelines")
+            reason = llm_result.get("reason", "")
+
+            # Append to result fields
+            fields_output.append({
+                "field_name": label,
+                "value": value or "",
+                "validation_result": vr,
+                "reason": reason
+            })
+
+            if vr == "not_filled":
+                missing_columns.append(label)
+            elif vr == "not_following_guidelines":
+                failing_columns.append({"field": label, "reason": reason})
+
+        overall = False if (missing_columns or failing_columns) else True
+
+        final_result = {
+            "overall_validation": overall,
+            "columns_missing_value": missing_columns,
+            "columns_not_following_guidelines": failing_columns,
+            "fields": fields_output
+        }
+
+        return JSONResponse(status_code=200, content=final_result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
+
+# Create FastAPI app and include main router
+app = FastAPI(title="FORM-I Extractor + Gemini Validator Service")
+app.include_router(router)
+
+# run with: python validation.py  OR uvicorn validation:app --reload --port 8001
 if __name__ == "__main__":
-    from fastapi import FastAPI
-    
-    standalone_router = FastAPI(title="AI Proposal Validator - Standalone")
-    standalone_router.include_router(router)
-    
-    print("🚀 Running validation module in standalone mode...")
-    print("📋 Available Endpoints:")
-    print("  📤 POST /validation/validate-form1")
-    print("  📚 POST /validation/ingest-guidelines")
-    print("  🔍 GET /validation/search-guidelines")
-    print("  📊 GET /validation/status")
-    
-    uvicorn.run(standalone_router, host="0.0.0.0", port=8001, reload=True)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001, reload=True)

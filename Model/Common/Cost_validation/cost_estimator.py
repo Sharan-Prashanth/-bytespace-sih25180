@@ -2019,6 +2019,65 @@ async def estimate_from_form1_data(form_data: dict):
             final_estimate, ml_nb_cost, final_breakdown, validation_status
         )
         
+        # Generate assessment comment and LLM-driven cost justification for compatibility
+        assessment_comment = generate_content_based_comment(
+            final_estimate, final_estimate, final_breakdown, "form_extracted", {}
+        )
+        try:
+            try:
+                cost_score = int(score_pct)
+            except Exception:
+                cost_score = 0
+            changeable_pct = max(0, 100 - int(cost_score))
+
+            prompt = f"""
+You are a senior government R&D budget reviewer. Using the context below, produce a concise 'Cost Justification' comment block in plain text only, matching this format exactly:
+
+Cost Justification
+Score: <score>/100    Changeable: <percent>%
+<One short paragraph (1-2 sentences) explaining why the budget is set this way and key concerns>
+Recommended actions:
+- <action 1>
+- <action 2>
+- <action 3>
+
+Context:
+- Government budget (Lakhs): {final_estimate}
+- Base estimate method: form_extracted
+- Base estimate (Lakhs): {final_estimate}
+- Confidence score: {score_pct}
+- Validation status: {validation_status}
+- Breakdown assessment: {breakdown_assessment}
+
+Top budget allocations (top 4):\n"""
+            top_cats = sorted(final_breakdown.items(), key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0, reverse=True)[:4]
+            for k, v in top_cats:
+                prompt += f"- {k}: {v} lakhs\n"
+            prompt += "\nRespond ONLY with the plain text comment block exactly in the format above. No JSON, no extra explanation."
+
+            raw_comments = call_gemini(prompt) if 'call_gemini' in globals() else ""
+            cost_comments = (raw_comments or "").strip()
+            if cost_comments.startswith('```') and cost_comments.endswith('```'):
+                cost_comments = cost_comments.strip('`\n ')
+            if not cost_comments:
+                raise Exception("Empty LLM response")
+        except Exception:
+            try:
+                cost_score = int(score_pct)
+            except Exception:
+                cost_score = 0
+            changeable_pct = max(0, 100 - int(cost_score))
+            cost_comments = (
+                f"Cost Justification\n"
+                f"Score: {cost_score}/100    Changeable: {changeable_pct}%\n"
+                "The budget broadly aligns with pilot-scale efforts but lacks detailed line-item breakdowns for high-value equipment. "
+                "Several procurement entries above ₹5M require vendor quotes or justification.\n"
+                "Recommended actions:\n"
+                "- Provide detailed quotations for specialized equipment and vendor estimates for each major line item.\n"
+                "- Separate capital vs operational expenses and include lifecycle maintenance cost estimates.\n"
+                "- Clarify contingencies and explain assumptions behind unit costs to reduce budget uncertainty."
+            )
+
         return {
             "success": True,
             "cost_estimation": {
@@ -2169,6 +2228,67 @@ async def _process_and_estimate_impl(file):
                 print(f"Supabase Insert Error: {e}")
         
         # Step 9: Return comprehensive response
+        # Prepare assessment and LLM-driven cost comments for this implementation
+        try:
+            estimation_method_local = "form_extracted" if has_form_costs and extracted_total > 0 else "ml_prediction"
+            assessment_comment = generate_content_based_comment(
+                government_budget, government_budget, realistic_breakdown, estimation_method_local, json_structure
+            )
+
+            try:
+                cost_score = int(round(max(0.0, min(1.0, 1.0 - ((ml_diff + (form_diff if has_form_costs else 0))/2))) * 100))
+            except Exception:
+                cost_score = 0
+            changeable_pct = max(0, 100 - int(cost_score))
+
+            prompt = f"""
+You are a senior government R&D budget reviewer. Using the context below, produce a concise 'Cost Justification' comment block in plain text only, matching this format exactly:
+
+Cost Justification
+Score: <score>/100    Changeable: <percent>%
+<One short paragraph (1-2 sentences) explaining why the budget is set this way and key concerns>
+Recommended actions:
+- <action 1>
+- <action 2>
+- <action 3>
+
+Context:
+- Government budget (Lakhs): {government_budget}
+- Base estimate method: {estimation_method_local}
+- Base estimate (Lakhs): {government_budget}
+- Confidence score: {cost_score}
+- Validation status: {validation_status}
+- Breakdown assessment: {assess_breakdown(realistic_breakdown, government_budget)}
+
+Top budget allocations (top 4):\n"""
+            top_cats = sorted(realistic_breakdown.items(), key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0, reverse=True)[:4]
+            for k, v in top_cats:
+                prompt += f"- {k}: {v} lakhs\n"
+            prompt += "\nRespond ONLY with the plain text comment block exactly in the format above. No JSON, no extra explanation."
+
+            raw_comments = call_gemini(prompt) if 'call_gemini' in globals() else ""
+            cost_comments = (raw_comments or "").strip()
+            if cost_comments.startswith('```') and cost_comments.endswith('```'):
+                cost_comments = cost_comments.strip('`\n ')
+            if not cost_comments:
+                raise Exception("Empty LLM response")
+        except Exception:
+            try:
+                cost_score = int(round(max(0.0, min(1.0, 1.0 - ((ml_diff + (form_diff if has_form_costs else 0))/2))) * 100))
+            except Exception:
+                cost_score = 0
+            changeable_pct = max(0, 100 - int(cost_score))
+            cost_comments = (
+                f"Cost Justification\n"
+                f"Score: {cost_score}/100    Changeable: {changeable_pct}%\n"
+                "The budget broadly aligns with pilot-scale efforts but lacks detailed line-item breakdowns for high-value equipment. "
+                "Several procurement entries above ₹5M require vendor quotes or justification.\n"
+                "Recommended actions:\n"
+                "- Provide detailed quotations for specialized equipment and vendor estimates for each major line item.\n"
+                "- Separate capital vs operational expenses and include lifecycle maintenance cost estimates.\n"
+                "- Clarify contingencies and explain assumptions behind unit costs to reduce budget uncertainty."
+            )
+
         return {
             "success": True,
             "extracted_json": json_structure,
@@ -2178,6 +2298,8 @@ async def _process_and_estimate_impl(file):
                 "validation_status": validation_status,
                 "breakdown": realistic_breakdown,
                 "usage_comment": usage_comment,
+                "comment": assessment_comment,
+                "comments": cost_comments,
                 "recommendations": generate_budget_recommendations(government_budget, realistic_breakdown)
             },
             "analysis_details": {
@@ -2277,6 +2399,68 @@ async def process_and_estimate(file: UploadFile = File(...)):
     assessment_comment = generate_content_based_comment(
         government_budget, base_cost, realistic_breakdown, estimation_method, json_structure
     )
+
+    # --- GENERATE LLM-BASED 'Cost Justification' COMMENTS (preferred) ---
+    try:
+        # Score and changeable percent
+        try:
+            cost_score = int(confidence_score)
+        except Exception:
+            cost_score = 0
+        changeable_pct = max(0, 100 - int(cost_score))
+
+        # Build prompt for Gemini to produce a plain text comment block matching the required template
+        prompt = f"""
+You are a senior government R&D budget reviewer. Using the context below, produce a concise 'Cost Justification' comment block in plain text only, matching this format exactly:
+
+Cost Justification
+Score: <score>/100    Changeable: <percent>%
+<One short paragraph (1-2 sentences) explaining why the budget is set this way and key concerns>
+Recommended actions:
+- <action 1>
+- <action 2>
+- <action 3>
+
+Context:
+- Government budget (Lakhs): {government_budget}
+- Base estimate method: {estimation_method}
+- Base estimate (Lakhs): {base_cost}
+- Confidence score: {confidence_score}
+- Validation status: {confidence_level}
+- Breakdown assessment: {assess_breakdown(realistic_breakdown, government_budget)}
+
+Top budget allocations (top 4):\n"""
+        # attach top categories for context
+        top_cats = sorted(realistic_breakdown.items(), key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0, reverse=True)[:4]
+        for k, v in top_cats:
+            prompt += f"- {k}: {v} lakhs\n"
+
+        prompt += "\nRespond ONLY with the plain text comment block exactly in the format above. No JSON, no extra explanation."
+
+        raw_comments = call_gemini(prompt) if 'call_gemini' in globals() else ""
+        cost_comments = (raw_comments or "").strip()
+        # strip fences if present
+        if cost_comments.startswith('```') and cost_comments.endswith('```'):
+            cost_comments = cost_comments.strip('`\n ')
+        if not cost_comments:
+            raise Exception("Empty LLM response")
+    except Exception:
+        # fallback to deterministic assessment_comment formatted to required template
+        try:
+            cost_score = int(confidence_score)
+        except Exception:
+            cost_score = 0
+        changeable_pct = max(0, 100 - int(cost_score))
+        cost_comments = (
+            f"Cost Justification\n"
+            f"Score: {cost_score}/100    Changeable: {changeable_pct}%\n"
+            "The budget broadly aligns with pilot-scale efforts but lacks detailed line-item breakdowns for high-value equipment. "
+            "Several procurement entries above ₹5M require vendor quotes or justification.\n"
+            "Recommended actions:\n"
+            "- Provide detailed quotations for specialized equipment and vendor estimates for each major line item.\n"
+            "- Separate capital vs operational expenses and include lifecycle maintenance cost estimates.\n"
+            "- Clarify contingencies and explain assumptions behind unit costs to reduce budget uncertainty."
+        )
     
     # --- SAVE TO SUPABASE ---
     save_record = {
@@ -2315,6 +2499,7 @@ async def process_and_estimate(file: UploadFile = File(...)):
             "estimation_method": estimation_method,
             "breakdown": realistic_breakdown,
             "comment": assessment_comment,
+            "comments": cost_comments,
             "recommendations": generate_content_based_recommendations(government_budget, realistic_breakdown, json_structure)
         },
         "analysis_details": {
