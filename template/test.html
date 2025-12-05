@@ -252,13 +252,13 @@
   <div id="json-ui">
     <textarea id="jsonInput" placeholder="Paste the JSON response from /full-analysis here (or leave empty to fetch from URL)"></textarea>
     <div class="controls">
-      <input type="text" id="jsonUrl" placeholder="Optional: URL that returns the JSON (GET)" />
-      <button id="fetchBtn" class="secondary">Fetch JSON from URL & Render</button>
+      <input type="text" id="jsonUrl" placeholder="Enter URL that returns the JSON (GET)" />
+      <button id="fetchBtn" class="secondary">Fetch & Render from URL</button>
       <button id="renderBtn">Render Pasted JSON</button>
       <button id="clearBtn" style="background:#888;">Clear</button>
       <div id="json-status">Status: waiting for JSON input.</div>
       <div style="font-size:12px;color:#666;margin-top:6px;">
-        Tip: upload the PDF to your FastAPI `/full-analysis` via Postman, copy the JSON response and paste it here.
+        Tip: Enter the API URL above and click "Fetch & Render" — it will automatically fetch and display the report.
       </div>
     </div>
   </div>
@@ -871,14 +871,16 @@
     document.getElementById('fetchBtn').addEventListener('click', async () => {
       const url = document.getElementById('jsonUrl').value.trim();
       const st = document.getElementById('json-status');
-      if(!url) { if(st) st.textContent = "Please enter URL."; return; }
+      if(!url) { if(st) st.textContent = "Please enter a URL first."; return; }
       try {
         st.textContent = "Fetching JSON from URL...";
         const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
-        if(!res.ok) { st.textContent = "Failed to fetch: " + res.status; return; }
+        if(!res.ok) { st.textContent = "Failed to fetch: HTTP " + res.status; return; }
         const json = await res.json();
+        st.textContent = "JSON fetched successfully. Rendering report...";
         document.getElementById('jsonInput').value = JSON.stringify(json, null, 2);
         populateReport(json);
+        st.textContent = "Report rendered successfully from URL.";
       } catch(e) {
         st.textContent = "Error fetching JSON: " + (e.message || e);
         console.error(e);
