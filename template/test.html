@@ -251,16 +251,15 @@
 
   <!-- ================= JSON INPUT UI ================= -->
   <div id="json-ui">
-    <textarea id="jsonInput" placeholder="Paste the JSON response from /full-analysis here (or leave empty to fetch from URL)"></textarea>
+    <textarea id="jsonInput" placeholder="JSON will be auto-fetched from /full-analysis endpoint"></textarea>
     <div class="controls">
-      <input type="text" id="jsonUrl" placeholder="Enter URL that returns the JSON (GET)" />
-      <button id="fetchBtn" class="secondary">Fetch & Render from URL</button>
-      <button id="renderBtn">Render Pasted JSON</button>
+      <input type="text" id="jsonUrl" value="/full-analysis" placeholder="API endpoint (default: /full-analysis)" />
+      <button id="fetchBtn" class="secondary">Fetch & Render Now</button>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="autoFetchToggle" checked /> Auto-fetch on data change
+      </label>
       <button id="clearBtn" style="background:#888;">Clear</button>
-      <div id="json-status">Status: waiting for JSON input.</div>
-      <div style="font-size:12px;color:#666;margin-top:6px;">
-        Tip: Enter the API URL above and click "Fetch & Render" — it will automatically fetch and display the report.
-      </div>
+      <div id="json-status">Status: Monitoring /full-analysis for updates...</div>
     </div>
   </div>
 
@@ -855,7 +854,7 @@
     }
 
     // ---------- UI handlers: fetch or render ----------
-    document.getElementById('renderBtn').addEventListener('click', () => {
+    document.getElementById('renderBtn')?.addEventListener('click', () => {
       const txt = document.getElementById('jsonInput').value.trim();
       const st = document.getElementById('json-status');
       if(!txt) { if(st) st.textContent = "No JSON in textarea."; return; }
@@ -869,39 +868,119 @@
       }
     });
 
-    document.getElementById('fetchBtn').addEventListener('click', async () => {
-      const url = document.getElementById('jsonUrl').value.trim();
+    // Store last fetched JSON hash to detect changes
+    let lastJsonHash = null;
+    let pollingInterval = null;
+
+    // Simple hash function to detect JSON changes
+    function simpleHash(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return hash;
+    }
+
+    // Fetch and render function
+    async function fetchAndRender(showStatus = true) {
+      const url = document.getElementById('jsonUrl').value.trim() || '/full-analysis';
       const st = document.getElementById('json-status');
-      if(!url) { if(st) st.textContent = "Please enter a URL first."; return; }
       try {
-        st.textContent = "Fetching JSON from URL...";
+        if(showStatus) st.textContent = "Fetching JSON from " + url + "...";
         const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
-        if(!res.ok) { st.textContent = "Failed to fetch: HTTP " + res.status; return; }
+        if(!res.ok) { 
+          if(showStatus) st.textContent = "Failed to fetch: HTTP " + res.status; 
+          return false; 
+        }
         const json = await res.json();
-        st.textContent = "JSON fetched successfully. Rendering report...";
-        document.getElementById('jsonInput').value = JSON.stringify(json, null, 2);
-        populateReport(json);
-        st.textContent = "Report rendered successfully from URL.";
+        const jsonStr = JSON.stringify(json, null, 2);
+        const currentHash = simpleHash(jsonStr);
+        
+        // Check if data has changed
+        if(currentHash !== lastJsonHash) {
+          lastJsonHash = currentHash;
+          st.textContent = "New data detected. Rendering report...";
+          document.getElementById('jsonInput').value = jsonStr;
+          populateReport(json);
+          st.textContent = "Report rendered successfully. Last update: " + new Date().toLocaleTimeString();
+          return true;
+        } else {
+          if(showStatus) st.textContent = "No new data. Last check: " + new Date().toLocaleTimeString();
+          return false;
+        }
       } catch(e) {
-        st.textContent = "Error fetching JSON: " + (e.message || e);
+        if(showStatus) st.textContent = "Error fetching: " + (e.message || e);
         console.error(e);
+        return false;
+      }
+    }
+
+    // Start auto-polling
+    function startPolling() {
+      if(pollingInterval) clearInterval(pollingInterval);
+      const st = document.getElementById('json-status');
+      st.textContent = "Monitoring /full-analysis for updates...";
+      
+      // Initial fetch
+      fetchAndRender(true);
+      
+      // Poll every 3 seconds for changes
+      pollingInterval = setInterval(() => {
+        const autoFetch = document.getElementById('autoFetchToggle');
+        if(autoFetch && autoFetch.checked) {
+          fetchAndRender(false);
+        }
+      }, 3000);
+    }
+
+    // Stop polling
+    function stopPolling() {
+      if(pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    }
+
+    // Manual fetch button
+    document.getElementById('fetchBtn').addEventListener('click', async () => {
+      lastJsonHash = null; // Force re-render even if same data
+      await fetchAndRender(true);
+    });
+
+    // Auto-fetch toggle
+    document.getElementById('autoFetchToggle')?.addEventListener('change', (e) => {
+      const st = document.getElementById('json-status');
+      if(e.target.checked) {
+        st.textContent = "Auto-fetch enabled. Monitoring for updates...";
+        startPolling();
+      } else {
+        stopPolling();
+        st.textContent = "Auto-fetch disabled. Use 'Fetch & Render Now' button.";
       }
     });
 
     document.getElementById('clearBtn').addEventListener('click', () => {
       document.getElementById('jsonInput').value = "";
-      document.getElementById('jsonUrl').value = "";
-      document.getElementById('json-status').textContent = "Cleared.";
+      document.getElementById('json-status').textContent = "Cleared. Auto-fetch still active.";
+      lastJsonHash = null;
     });
 
-    // If user opens page with a query param ?json_url=..., try auto-fetch
+    // Start auto-polling on page load
     window.addEventListener('load', async () => {
       const params = new URLSearchParams(window.location.search);
-      const auto = params.get('json_url');
-      if(auto) {
-        document.getElementById('jsonUrl').value = auto;
-        document.getElementById('fetchBtn').click();
+      const customUrl = params.get('json_url');
+      if(customUrl) {
+        document.getElementById('jsonUrl').value = customUrl;
       }
+      // Start polling automatically
+      startPolling();
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      stopPolling();
     });
   </script>
 
