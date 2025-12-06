@@ -17,6 +17,11 @@ export default function UserSettingsSection({ theme, setTheme }) {
     });
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [passwordMessage, setPasswordMessage] = useState(null);
+    const [isPageLoaded, setIsPageLoaded] = useState(false);
+
+    useEffect(() => {
+        setIsPageLoaded(true);
+    }, []);
 
     const isDark = theme === 'dark' || theme === 'darkest';
     const isDarkest = theme === 'darkest';
@@ -100,13 +105,18 @@ export default function UserSettingsSection({ theme, setTheme }) {
     return (
         <div className="max-w-4xl mx-auto space-y-4">
             {/* Header */}
-            <div>
+            <div 
+                className={`transition-all duration-500 ease-out ${isPageLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+            >
                 <h2 className={`text-xl font-bold ${textColor}`}>Settings</h2>
                 <p className={`${subTextColor} text-sm`}>Manage your preferences and account security.</p>
             </div>
 
             {/* Appearance */}
-            <div className={`${cardBg} p-5 rounded-2xl shadow-sm border`}>
+            <div 
+                className={`${cardBg} p-5 rounded-2xl shadow-sm border transition-all duration-500 ease-out ${isPageLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                style={{ transitionDelay: '100ms' }}
+            >
                 <div className="flex items-center gap-3 mb-4">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>
                         {theme === 'light' ? <Sun size={18} /> : <Moon size={18} />}
@@ -149,7 +159,10 @@ export default function UserSettingsSection({ theme, setTheme }) {
             </div>
 
             {/* Security */}
-            <div className={`${cardBg} p-5 rounded-2xl shadow-sm border`}>
+            <div 
+                className={`${cardBg} p-5 rounded-2xl shadow-sm border transition-all duration-500 ease-out ${isPageLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                style={{ transitionDelay: '200ms' }}
+            >
                 <div className="flex items-center gap-3 mb-4">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-600'}`}>
                         <Shield size={18} />
@@ -177,7 +190,7 @@ export default function UserSettingsSection({ theme, setTheme }) {
             {/* Password Change Modal */}
             {showPasswordModal && (
                 <div 
-                    className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn"
                     onClick={(e) => {
                         if (e.target === e.currentTarget) {
                             setShowPasswordModal(false);
@@ -186,7 +199,7 @@ export default function UserSettingsSection({ theme, setTheme }) {
                         }
                     }}
                 >
-                    <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full p-5 border ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+                    <div className={`${modalBg} rounded-2xl shadow-2xl max-w-md w-full p-5 border ${isDark ? 'border-slate-700' : 'border-slate-200'} animate-scaleIn`}>
                         <div className="flex items-center gap-3 mb-4">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
                                 <Lock size={18} />

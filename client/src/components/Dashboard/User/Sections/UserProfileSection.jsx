@@ -1,7 +1,7 @@
 'use client';
 
 import { Award, Building2, Camera, Check, Globe, GraduationCap, Loader2, Mail, MapPin, Phone, Save, User } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import apiClient from "../../../../utils/api";
 
 // Organisation type options (matching backend enum)
@@ -50,6 +50,11 @@ export default function UserProfileSection({ user, theme, onUserUpdate }) {
     });
     const [isSaving, setIsSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState(null);
+    const [isPageLoaded, setIsPageLoaded] = useState(false);
+
+    useEffect(() => {
+        setIsPageLoaded(true);
+    }, []);
 
     const isDark = theme === 'dark' || theme === 'darkest';
     const isDarkest = theme === 'darkest';
@@ -111,14 +116,19 @@ export default function UserProfileSection({ user, theme, onUserUpdate }) {
     return (
         <div className="max-w-4xl mx-auto space-y-4">
             {/* Header */}
-            <div>
+            <div 
+                className={`transition-all duration-500 ease-out ${isPageLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+            >
                 <h2 className={`text-xl font-bold ${textColor}`}>My Profile</h2>
                 <p className={`${subTextColor} text-sm`}>Manage your personal information and account details.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* Profile Card */}
-                <div className={`lg:col-span-1 ${cardBg} p-5 rounded-2xl shadow-sm border flex flex-col items-center text-center`}>
+                <div 
+                    className={`lg:col-span-1 ${cardBg} p-5 rounded-2xl shadow-sm border flex flex-col items-center text-center transition-all duration-500 ease-out ${isPageLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                    style={{ transitionDelay: '100ms' }}
+                >
                     <div className="relative mb-3 group cursor-pointer">
                         <div className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold overflow-hidden ${isDark ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-600'}`}>
                             {formData.fullName?.charAt(0) || 'U'}
@@ -163,7 +173,10 @@ export default function UserProfileSection({ user, theme, onUserUpdate }) {
                 </div>
 
                 {/* Edit Form */}
-                <div className={`lg:col-span-2 ${cardBg} p-5 rounded-2xl shadow-sm border`}>
+                <div 
+                    className={`lg:col-span-2 ${cardBg} p-5 rounded-2xl shadow-sm border transition-all duration-500 ease-out ${isPageLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                    style={{ transitionDelay: '200ms' }}
+                >
                     <h3 className={`text-base font-bold mb-4 ${textColor}`}>Edit Information</h3>
 
                     {/* Success/Error Message */}

@@ -1,12 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FiUpload, FiFile, FiX, FiCheck } from 'react-icons/fi';
 import { uploadDocument, deleteDocument } from '../../utils/proposalApi';
 import ConfirmationModal from '../ui/ConfirmationModal';
+import AlertModal from './AlertModal';
 
 const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove, proposalCode, theme = 'light' }) => {
   const [uploading, setUploading] = useState({});
   const [removeModal, setRemoveModal] = useState({ isOpen: false, documentType: null });
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Alert Modal State
+  const [alertModal, setAlertModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'info'
+  });
 
   const isDark = theme === 'dark' || theme === 'darkest';
   const isDarkest = theme === 'darkest';
@@ -19,21 +28,39 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove,
   const hoverBg = isDark ? 'hover:bg-white/5 hover:border-slate-500' : 'hover:bg-slate-100 hover:border-slate-400';
   const spinnerBorder = isDark ? 'border-white/30 border-t-white' : 'border-black/20 border-t-black';
 
+  // Helper to show alert modal
+  const showAlert = useCallback((title, message, variant = 'info') => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      variant
+    });
+  }, []);
+
+  // Close alert modal
+  const closeAlert = useCallback(() => {
+    setAlertModal(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
   const handleFileUpload = async (documentType, event) => {
     const file = event.target.files[0];
     if (!file) return;
 
+    // Reset the input
+    event.target.value = '';
+
     // Validate PDF format
     if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file');
+      showAlert('Invalid File Type', 'Please upload a PDF file.', 'error');
       return;
     }
 
     // Validate file size (2MB for covering letter, 10MB for CV)
     const maxSize = documentType === 'coveringLetter' ? 2 * 1024 * 1024 : 10 * 1024 * 1024;
+    const maxSizeMB = documentType === 'coveringLetter' ? 2 : 10;
     if (file.size > maxSize) {
-      const maxSizeMB = documentType === 'coveringLetter' ? 2 : 10;
-      alert(`File size must be less than ${maxSizeMB}MB`);
+      showAlert('File Too Large', `File size must be less than ${maxSizeMB}MB.`, 'error');
       return;
     }
 
@@ -52,7 +79,7 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove,
       });
     } catch (error) {
       console.error('Upload error:', error);
-      alert(`Failed to upload document: ${error.message || 'Please try again.'}`);
+      showAlert('Upload Failed', `Failed to upload document: ${error.message || 'Please try again.'}`, 'error');
     } finally {
       setUploading({ ...uploading, [documentType]: false });
     }
@@ -194,6 +221,16 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove,
         isLoading={isDeleting}
         theme={theme}
         variant="danger"
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={closeAlert}
+        title={alertModal.title}
+        message={alertModal.message}
+        variant={alertModal.variant}
+        theme={theme}
       />
     </div>
   );

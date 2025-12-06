@@ -1,7 +1,10 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { FiUpload, FiFile, FiX, FiRefreshCw } from 'react-icons/fi';
 import AdvancedProposalEditor from '../ProposalEditor/editor (our files)/AdvancedProposalEditor';
 import { uploadFormI, deleteFormI } from '../../utils/proposalApi';
+import AlertModal from './AlertModal';
+import RemoveFormModal from './RemoveFormModal';
+import { TAB_DEFAULT_CONTENT } from '../ProposalEditor/proposal-tabs';
 
 const FormIEditor = forwardRef(({ 
   editorContent,
@@ -22,6 +25,23 @@ const FormIEditor = forwardRef(({
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [extractionError, setExtractionError] = useState(null);
   const editorRef = useRef(null);
+  
+  // Key to force editor re-mount when content is replaced
+  const [editorKey, setEditorKey] = useState(0);
+
+  // Alert Modal State
+  const [alertModal, setAlertModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'info'
+  });
+
+  // Remove Modal State
+  const [removeModal, setRemoveModal] = useState({
+    isOpen: false,
+    isLoading: false
+  });
 
   const isDark = theme === 'dark' || theme === 'darkest';
   const isDarkest = theme === 'darkest';
@@ -35,6 +55,21 @@ const FormIEditor = forwardRef(({
   const spinnerBorder = isDark ? 'border-blue-400/30 border-t-blue-400' : 'border-blue-200 border-t-blue-600';
   const editorHeaderBg = isDarkest ? 'bg-neutral-800' : isDark ? 'bg-slate-700' : 'bg-slate-100';
   const borderColor = isDarkest ? 'border-neutral-700' : isDark ? 'border-slate-600' : 'border-slate-200';
+
+  // Helper to show alert modal
+  const showAlert = useCallback((title, message, variant = 'info') => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      variant
+    });
+  }, []);
+
+  // Close alert modal
+  const closeAlert = useCallback(() => {
+    setAlertModal(prev => ({ ...prev, isOpen: false }));
+  }, []);
   
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
@@ -56,21 +91,24 @@ const FormIEditor = forwardRef(({
     const file = event.target.files[0];
     if (!file) return;
 
+    // Reset the input so the same file can be re-selected
+    event.target.value = '';
+
     // Validate PDF format
     if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file');
+      showAlert('Invalid File Type', 'Please upload a PDF file.', 'error');
       return;
     }
 
     // Validate file size (20MB)
     if (file.size > 20 * 1024 * 1024) {
-      alert('File size must be less than 20MB');
+      showAlert('File Too Large', 'File size must be less than 20MB.', 'error');
       return;
     }
 
     // Validate proposalCode
     if (!proposalCode) {
-      alert('Please save the proposal first before uploading Form I');
+      showAlert('Save Required', 'Please save the proposal first before uploading Form I. Fill in the proposal information and wait for it to auto-save.', 'warning');
       return;
     }
 
@@ -122,22 +160,46 @@ const FormIEditor = forwardRef(({
         // [{type: 'h1', children: [...]}, {type: 'p', children: [...]}, ...]
         // We need to wrap it in the structure the editor expects: { formi: { content: [...] } }
         
+        let wrappedContent;
         if (Array.isArray(response.data.extractedContent)) {
-          console.log('✅ Wrapping Slate array in formi structure');
-          const wrappedContent = {
+          console.log('Wrapping Slate array in formi structure');
+          wrappedContent = {
             formi: {
               content: response.data.extractedContent
             }
           };
-          console.log('Wrapped content:', wrappedContent);
-          onContentChange(wrappedContent);
         } else if (response.data.extractedContent.formi) {
-          console.log('✅ Using formi content from extraction');
-          onContentChange(response.data.extractedContent);
+          console.log('Using formi content from extraction');
+          wrappedContent = response.data.extractedContent;
+        } else if (response.data.extractedContent.content && Array.isArray(response.data.extractedContent.content)) {
+          console.log('Using content array from extraction');
+          wrappedContent = {
+            formi: {
+              content: response.data.extractedContent.content
+            }
+          };
         } else {
-          console.log('✅ Using entire extracted structure');
-          onContentChange(response.data.extractedContent);
+          console.log('Using entire extracted structure');
+          wrappedContent = {
+            formi: {
+              content: response.data.extractedContent
+            }
+          };
         }
+        
+        console.log('Wrapped content for editor:', wrappedContent);
+        
+        // Update parent state
+        onContentChange(wrappedContent);
+        
+        // Force editor to re-mount with new content by changing the key
+        setEditorKey(prev => prev + 1);
+        
+        showAlert(
+          'Extraction Complete', 
+          'Form I content has been extracted successfully. Please review the content carefully for accuracy and make any necessary corrections. Note: Images from the PDF are not automatically extracted. To add images, use the "Insert" option in the editor toolbar.',
+          'success'
+        );
       }
 
       setTimeout(() => {
@@ -170,15 +232,21 @@ const FormIEditor = forwardRef(({
     }
   };
 
-  const handleRemoveForm = async () => {
-    if (!confirm('Are you sure you want to remove the uploaded form? This will clear the editor content and delete the file from storage.')) {
-      return;
-    }
+  // Show remove confirmation modal
+  const handleRemoveClick = () => {
+    setRemoveModal({
+      isOpen: true,
+      isLoading: false
+    });
+  };
+
+  // Handle actual removal after confirmation
+  const handleRemoveConfirm = async () => {
+    setRemoveModal(prev => ({ ...prev, isLoading: true }));
 
     try {
       // Call backend to delete the file from storage and DB
       if (proposalCode && uploadedPdf) {
-        setIsUploading(true);
         await deleteFormI(proposalCode);
         console.log('Form I PDF deleted from backend');
       }
@@ -186,17 +254,33 @@ const FormIEditor = forwardRef(({
       // Call parent remove handler to clear state
       onPdfRemove();
       
-      // Clear editor content
+      // Reset editor content to default template
       if (onContentChange) {
-        onContentChange({ formi: { content: [] } });
+        const defaultContent = TAB_DEFAULT_CONTENT['formi'] || [{ type: 'p', children: [{ text: '' }] }];
+        onContentChange({ 
+          formi: { 
+            content: defaultContent 
+          } 
+        });
+        
+        // Force editor to re-mount with default content
+        setEditorKey(prev => prev + 1);
       }
       
       setExtractionError(null);
+      setRemoveModal({ isOpen: false, isLoading: false });
+      
     } catch (error) {
       console.error('Failed to delete Form I:', error);
-      alert(`Failed to delete file: ${error.message || 'Please try again'}`);
-    } finally {
-      setIsUploading(false);
+      setRemoveModal({ isOpen: false, isLoading: false });
+      showAlert('Delete Failed', `Failed to delete file: ${error.message || 'Please try again.'}`, 'error');
+    }
+  };
+
+  // Close remove modal
+  const closeRemoveModal = () => {
+    if (!removeModal.isLoading) {
+      setRemoveModal({ isOpen: false, isLoading: false });
     }
   };
 
@@ -208,6 +292,28 @@ const FormIEditor = forwardRef(({
 
   return (
     <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={closeAlert}
+        title={alertModal.title}
+        message={alertModal.message}
+        variant={alertModal.variant}
+        theme={theme}
+      />
+
+      {/* Remove Confirmation Modal */}
+      <RemoveFormModal
+        isOpen={removeModal.isOpen}
+        onClose={closeRemoveModal}
+        onConfirm={handleRemoveConfirm}
+        title="Remove Form I PDF"
+        message="Are you sure you want to remove the uploaded Form I PDF?"
+        warningMessage="This will delete the file from storage and reset the editor content to the default template. Any changes made in the editor will be preserved until you save."
+        isLoading={removeModal.isLoading}
+        theme={theme}
+      />
+
       <div className="mb-4">
         <h2 className={`text-xl font-semibold ${textColor} mb-2`}>Form I - Project Proposal</h2>
         <p className={`${mutedText} text-sm mb-4`}>
@@ -262,8 +368,9 @@ const FormIEditor = forwardRef(({
                   />
                 </label>
                 <button
-                  onClick={handleRemoveForm}
-                  className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/10'}`}
+                  onClick={handleRemoveClick}
+                  disabled={isUploading || isExtracting}
+                  className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/10'} disabled:opacity-50`}
                   title="Remove form"
                 >
                   <FiX className={`w-4 h-4 ${textColor}`} />
@@ -350,10 +457,11 @@ const FormIEditor = forwardRef(({
 
         <div style={{ minHeight: '500px' }}>
           <AdvancedProposalEditor
+            key={editorKey}
             ref={editorRef}
             mode="create"
             initialContent={editorContent}
-            isNewProposal={isNewProposal}
+            isNewProposal={isNewProposal && !uploadedPdf}
             onContentChange={(data) => {
               if (onContentChange) {
                 onContentChange(data);

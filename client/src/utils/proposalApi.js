@@ -274,7 +274,7 @@ export const uploadFormI = async (file, proposalCode) => {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
-      timeout: 120000 // 2 minutes timeout for AI processing
+      timeout: 1200000 // 20 minutes timeout for AI processing
     });
     return response.data;
   } catch (error) {

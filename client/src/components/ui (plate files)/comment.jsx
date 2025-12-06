@@ -57,11 +57,31 @@ export function Comment(props) {
   const userInfo = usePluginOption(discussionPlugin, 'user', comment.userId);
   const currentUserId = usePluginOption(discussionPlugin, 'currentUserId');
 
-  // Trigger save when discussions change
+  // Trigger save when discussions change - use force save for immediate persistence
   const triggerSave = React.useCallback(() => {
-    if (editor._saveDiscussions) {
-      editor._saveDiscussions();
-    }
+    console.log('[Comment] triggerSave called, _forceSaveDiscussions:', !!editor._forceSaveDiscussions, '_saveDiscussions:', !!editor._saveDiscussions);
+    
+    // CRITICAL: First sync to Yjs for real-time collaboration
+    // Use queueMicrotask to ensure React state has flushed, but sync immediately
+    queueMicrotask(() => {
+      if (editor._syncDiscussionsToYjs) {
+        console.log('[Comment] Calling _syncDiscussionsToYjs for real-time sync');
+        editor._syncDiscussionsToYjs();
+      } else {
+        console.warn('[Comment] _syncDiscussionsToYjs not available');
+      }
+      
+      // Then trigger database save (force save for immediate persistence)
+      if (editor._forceSaveDiscussions) {
+        console.log('[Comment] Calling _forceSaveDiscussions');
+        editor._forceSaveDiscussions();
+      } else if (editor._saveDiscussions) {
+        console.log('[Comment] Calling _saveDiscussions');
+        editor._saveDiscussions();
+      } else {
+        console.warn('[Comment] No save function available on editor');
+      }
+    });
   }, [editor]);
 
   const resolveDiscussion = async (id) => {
@@ -274,9 +294,11 @@ function CommentMoreDropdown(props) {
 
   const selectedEditCommentRef = React.useRef(false);
 
-  // Trigger save when discussions change
+  // Trigger save when discussions change - use force save for immediate persistence
   const triggerSave = React.useCallback(() => {
-    if (editor._saveDiscussions) {
+    if (editor._forceSaveDiscussions) {
+      editor._forceSaveDiscussions();
+    } else if (editor._saveDiscussions) {
       editor._saveDiscussions();
     }
   }, [editor]);
@@ -388,11 +410,31 @@ export function CommentCreateForm({
       : '', [commentValue]);
   const commentEditor = useCommentEditor();
 
-  // Trigger save when discussions change
+  // Trigger save when discussions change - use force save for immediate persistence
   const triggerSave = React.useCallback(() => {
-    if (editor._saveDiscussions) {
-      editor._saveDiscussions();
-    }
+    console.log('[CommentCreateForm] triggerSave called, _forceSaveDiscussions:', !!editor._forceSaveDiscussions);
+    
+    // CRITICAL: First sync to Yjs for real-time collaboration
+    // Use queueMicrotask to ensure React state has flushed, but sync immediately
+    queueMicrotask(() => {
+      if (editor._syncDiscussionsToYjs) {
+        console.log('[CommentCreateForm] Calling _syncDiscussionsToYjs for real-time sync');
+        editor._syncDiscussionsToYjs();
+      } else {
+        console.warn('[CommentCreateForm] _syncDiscussionsToYjs not available');
+      }
+      
+      // Then trigger database save
+      if (editor._forceSaveDiscussions) {
+        console.log('[CommentCreateForm] Calling _forceSaveDiscussions');
+        editor._forceSaveDiscussions();
+      } else if (editor._saveDiscussions) {
+        console.log('[CommentCreateForm] Calling _saveDiscussions');
+        editor._saveDiscussions();
+      } else {
+        console.warn('[CommentCreateForm] No save function available on editor');
+      }
+    });
   }, [editor]);
 
   React.useEffect(() => {
@@ -411,6 +453,9 @@ export function CommentCreateForm({
       const discussion = discussions.find((d) => d.id === discussionId);
       if (!discussion) {
         // Creating new discussion from draft
+        const currentUserId = editor.getOption(discussionPlugin, 'currentUserId');
+        const currentUser = editor.getOption(discussionPlugin, 'user', currentUserId);
+        
         const newDiscussion = {
           id: discussionId,
           comments: [
@@ -420,12 +465,17 @@ export function CommentCreateForm({
               createdAt: new Date(),
               discussionId,
               isEdited: false,
-              userId: editor.getOption(discussionPlugin, 'currentUserId'),
+              userId: currentUserId,
+              user: currentUser || {
+                id: currentUserId,
+                name: 'Current User',
+                avatarUrl: `https://api.dicebear.com/9.x/glass/svg?seed=${currentUserId}`
+              }
             },
           ],
           createdAt: new Date(),
           isResolved: false,
-          userId: editor.getOption(discussionPlugin, 'currentUserId'),
+          userId: currentUserId,
         };
 
         editor.setOption(discussionPlugin, 'discussions', [
@@ -438,13 +488,21 @@ export function CommentCreateForm({
       }
 
       // Create reply comment
+      const currentUserId = editor.getOption(discussionPlugin, 'currentUserId');
+      const currentUser = editor.getOption(discussionPlugin, 'user', currentUserId);
+      
       const comment = {
         id: nanoid(),
         contentRich: commentValue,
         createdAt: new Date(),
         discussionId,
         isEdited: false,
-        userId: editor.getOption(discussionPlugin, 'currentUserId'),
+        userId: currentUserId,
+        user: currentUser || {
+          id: currentUserId,
+          name: 'Current User',
+          avatarUrl: `https://api.dicebear.com/9.x/glass/svg?seed=${currentUserId}`
+        }
       };
 
       // Add reply to discussion comments
@@ -476,6 +534,9 @@ export function CommentCreateForm({
       .join('');
 
     const _discussionId = nanoid();
+    const currentUserId = editor.getOption(discussionPlugin, 'currentUserId');
+    const currentUser = editor.getOption(discussionPlugin, 'user', currentUserId);
+    
     // Creating new discussion
     const newDiscussion = {
       id: _discussionId,
@@ -486,19 +547,35 @@ export function CommentCreateForm({
           createdAt: new Date(),
           discussionId: _discussionId,
           isEdited: false,
-          userId: editor.getOption(discussionPlugin, 'currentUserId'),
+          userId: currentUserId,
+          user: currentUser || {
+            id: currentUserId,
+            name: 'Current User',
+            avatarUrl: `https://api.dicebear.com/9.x/glass/svg?seed=${currentUserId}`
+          }
         },
       ],
       createdAt: new Date(),
       documentContent,
       isResolved: false,
-      userId: editor.getOption(discussionPlugin, 'currentUserId'),
+      userId: currentUserId,
     };
 
-    editor.setOption(discussionPlugin, 'discussions', [
+    console.log('[Comment] Creating new discussion:', {
+      discussionId: _discussionId,
+      userId: currentUserId,
+      userName: currentUser?.name || 'Unknown',
+      documentContent: documentContent.substring(0, 50),
+      currentDiscussionsCount: discussions.length
+    });
+
+    const updatedDiscussions = [
       ...discussions,
       newDiscussion,
-    ]);
+    ];
+    
+    console.log('[Comment] Updating editor with', updatedDiscussions.length, 'discussions (was', discussions.length, ')');
+    editor.setOption(discussionPlugin, 'discussions', updatedDiscussions);
 
     const id = newDiscussion.id;
 
@@ -509,8 +586,15 @@ export function CommentCreateForm({
       editor.tf.unsetNodes([getDraftCommentKey()], { at: path });
     });
     
+    // Verify the discussion was added to editor state
+    queueMicrotask(() => {
+      const verifyDiscussions = editor.getOption(discussionPlugin, 'discussions') || [];
+      console.log('[Comment] ✓ Verified editor state updated - now has', verifyDiscussions.length, 'discussions');
+      console.log('[Comment] New discussion in state:', verifyDiscussions.find(d => d.id === _discussionId) ? 'YES' : 'NO');
+    });
+    
     triggerSave();
-    console.log('[Comment] New discussion created with document content:', _discussionId);
+    console.log('[Comment] triggerSave called for new discussion', _discussionId);
   }, [commentValue, commentEditor.tf, discussionId, editor, discussions, triggerSave]);
 
   return (

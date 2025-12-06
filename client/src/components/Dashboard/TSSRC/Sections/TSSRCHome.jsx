@@ -75,35 +75,35 @@ export default function TSSRCHome({ theme }) {
 
     // Calculate stats
     const stats = {
-        incoming: proposals.filter(p => p.status === 'CMPDI_ACCEPTED').length,
         underReview: proposals.filter(p => p.status === 'TSSRC_REVIEW').length,
-        approved: proposals.filter(p => p.status === 'TSSRC_ACCEPTED').length,
+        forSSRC: proposals.filter(p => p.status === 'SSRC_REVIEW').length,
+        approved: proposals.filter(p => p.status === 'SSRC_ACCEPTED').length,
         rejected: proposals.filter(p => p.status === 'TSSRC_REJECTED').length
     };
 
     const statCards = [
         { 
-            label: 'Incoming', 
-            value: stats.incoming, 
-            icon: FileText, 
-            color: isDark ? 'text-blue-400 bg-blue-900/30' : 'text-blue-600 bg-blue-50',
-            trend: '+12%',
-            trendUp: true
-        },
-        { 
             label: 'Under Review', 
             value: stats.underReview, 
             icon: Clock, 
             color: isDark ? 'text-amber-400 bg-amber-900/30' : 'text-amber-600 bg-amber-50',
-            trend: '-5%',
-            trendUp: false
+            trend: '+12%',
+            trendUp: true
         },
         { 
-            label: 'Approved', 
+            label: 'For SSRC', 
+            value: stats.forSSRC, 
+            icon: FileText, 
+            color: isDark ? 'text-violet-400 bg-violet-900/30' : 'text-violet-600 bg-violet-50',
+            trend: '+8%',
+            trendUp: true
+        },
+        { 
+            label: 'Final Approved', 
             value: stats.approved, 
             icon: CheckCircle, 
             color: isDark ? 'text-green-400 bg-green-900/30' : 'text-green-600 bg-green-50',
-            trend: '+8%',
+            trend: '+5%',
             trendUp: true
         },
         { 

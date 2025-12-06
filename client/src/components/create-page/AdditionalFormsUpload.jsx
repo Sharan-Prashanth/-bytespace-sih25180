@@ -1,12 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FiUpload, FiFile, FiX, FiDownload, FiCheck } from 'react-icons/fi';
 import { uploadDocument, deleteDocument } from '../../utils/proposalApi';
 import ConfirmationModal from '../ui/ConfirmationModal';
+import AlertModal from './AlertModal';
 
 const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode, theme = 'light' }) => {
   const [uploading, setUploading] = useState({});
   const [removeModal, setRemoveModal] = useState({ isOpen: false, formId: null });
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Alert Modal State
+  const [alertModal, setAlertModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'info'
+  });
 
   const isDark = theme === 'dark' || theme === 'darkest';
   const isDarkest = theme === 'darkest';
@@ -19,6 +28,21 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
   const hoverBg = isDark ? 'hover:bg-white/5 hover:border-slate-500' : 'hover:bg-slate-100 hover:border-slate-400';
   const spinnerBorder = isDark ? 'border-white/30 border-t-white' : 'border-black/20 border-t-black';
   const downloadBtnClass = isDark ? 'border-slate-500 text-slate-300 hover:bg-white/5' : 'border-slate-300 text-black hover:bg-slate-100';
+
+  // Helper to show alert modal
+  const showAlert = useCallback((title, message, variant = 'info') => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      variant
+    });
+  }, []);
+
+  // Close alert modal
+  const closeAlert = useCallback(() => {
+    setAlertModal(prev => ({ ...prev, isOpen: false }));
+  }, []);
 
   const formConfigs = [
     {
@@ -67,15 +91,18 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
     const file = event.target.files[0];
     if (!file) return;
 
+    // Reset the input
+    event.target.value = '';
+
     // Validate PDF format
     if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file');
+      showAlert('Invalid File Type', 'Please upload a PDF file.', 'error');
       return;
     }
 
     // Validate file size (20MB)
     if (file.size > 20 * 1024 * 1024) {
-      alert('File size must be less than 20MB');
+      showAlert('File Too Large', 'File size must be less than 20MB.', 'error');
       return;
     }
 
@@ -94,7 +121,7 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
       });
     } catch (error) {
       console.error('Upload error:', error);
-      alert(`Failed to upload form: ${error.message || 'Please try again.'}`);
+      showAlert('Upload Failed', `Failed to upload form: ${error.message || 'Please try again.'}`, 'error');
     } finally {
       setUploading({ ...uploading, [formId]: false });
     }
@@ -156,6 +183,16 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
 
   return (
     <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={closeAlert}
+        title={alertModal.title}
+        message={alertModal.message}
+        variant={alertModal.variant}
+        theme={theme}
+      />
+
       <h2 className={`text-xl font-semibold ${textColor} mb-2`}>Additional Forms</h2>
       <p className={`${mutedText} text-sm mb-4`}>
         Please download the templates and upload the filled forms. Forms marked with * are mandatory.

@@ -56,15 +56,11 @@ export default function TSSRCProposalsSection({ theme }) {
     };
 
     // Categorize proposals for TSSRC view
-    // Active: CMPDI_ACCEPTED (incoming), TSSRC_REVIEW
-    const activeProposals = proposals.filter(p => 
-        ['CMPDI_ACCEPTED', 'TSSRC_REVIEW'].includes(p.status)
-    );
+    // Active: TSSRC_REVIEW (proposals that CMPDI accepted and forwarded to TSSRC)
+    const activeProposals = proposals.filter(p => p.status === 'TSSRC_REVIEW');
     
-    // Recommended for SSRC: TSSRC_ACCEPTED, SSRC_REVIEW
-    const recommendedForSSRC = proposals.filter(p => 
-        ['TSSRC_ACCEPTED', 'SSRC_REVIEW'].includes(p.status)
-    );
+    // For SSRC: SSRC_REVIEW (proposals that TSSRC accepted and forwarded to SSRC)
+    const forSSRCProposals = proposals.filter(p => p.status === 'SSRC_REVIEW');
     
     // Final Approved: SSRC_ACCEPTED
     const approvedProposals = proposals.filter(p => p.status === 'SSRC_ACCEPTED');
@@ -74,8 +70,8 @@ export default function TSSRCProposalsSection({ theme }) {
 
     const getProposalsToFilter = () => {
         switch (viewSection) {
-            case 'recommendedSSRC':
-                return recommendedForSSRC;
+            case 'forSSRC':
+                return forSSRCProposals;
             case 'approved':
                 return approvedProposals;
             case 'rejected':
@@ -99,13 +95,11 @@ export default function TSSRCProposalsSection({ theme }) {
             case 'active':
                 return [
                     { value: 'all', label: 'All Status' },
-                    { value: 'CMPDI_ACCEPTED', label: 'Incoming from CMPDI' },
                     { value: 'TSSRC_REVIEW', label: 'Under Review' }
                 ];
-            case 'recommendedSSRC':
+            case 'forSSRC':
                 return [
                     { value: 'all', label: 'All Status' },
-                    { value: 'TSSRC_ACCEPTED', label: 'TSSRC Accepted' },
                     { value: 'SSRC_REVIEW', label: 'SSRC Review' }
                 ];
             case 'rejected':
@@ -264,13 +258,13 @@ export default function TSSRCProposalsSection({ theme }) {
                         Active ({activeProposals.length})
                     </button>
                     <button
-                        onClick={() => { setViewSection('recommendedSSRC'); setFilterStatus('all'); }}
-                        className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 ${viewSection === 'recommendedSSRC'
+                        onClick={() => { setViewSection('forSSRC'); setFilterStatus('all'); }}
+                        className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 ${viewSection === 'forSSRC'
                             ? (isDark ? 'bg-violet-900/50 text-violet-400 shadow-sm' : 'bg-violet-50 text-violet-600 shadow-sm')
                             : (isDark ? 'text-slate-400 hover:text-slate-300' : 'text-black hover:text-black')}`}
                     >
                         <Send size={14} />
-                        For SSRC ({recommendedForSSRC.length})
+                        For SSRC ({forSSRCProposals.length})
                     </button>
                     <button
                         onClick={() => { setViewSection('rejected'); setFilterStatus('all'); }}

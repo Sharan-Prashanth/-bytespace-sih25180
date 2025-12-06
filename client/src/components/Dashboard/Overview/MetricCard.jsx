@@ -1,7 +1,71 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
 
-export default function MetricCard({ metric, isActive, onClick, theme }) {
+// Animated counter hook
+const useAnimatedCounter = (targetValue, duration = 1000, delay = 0) => {
+    const [count, setCount] = useState(0);
+    const countRef = useRef(0);
+    const startTimeRef = useRef(null);
+    const animationRef = useRef(null);
+
+    useEffect(() => {
+        const target = typeof targetValue === 'number' ? targetValue : 0;
+        
+        const animate = (timestamp) => {
+            if (!startTimeRef.current) {
+                startTimeRef.current = timestamp;
+            }
+            
+            const elapsed = timestamp - startTimeRef.current;
+            
+            if (elapsed < delay) {
+                animationRef.current = requestAnimationFrame(animate);
+                return;
+            }
+            
+            const progress = Math.min((elapsed - delay) / duration, 1);
+            // Easing function for smooth animation
+            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+            const currentCount = Math.floor(easeOutQuart * target);
+            
+            if (currentCount !== countRef.current) {
+                countRef.current = currentCount;
+                setCount(currentCount);
+            }
+            
+            if (progress < 1) {
+                animationRef.current = requestAnimationFrame(animate);
+            } else {
+                setCount(target);
+            }
+        };
+        
+        animationRef.current = requestAnimationFrame(animate);
+        
+        return () => {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+            }
+        };
+    }, [targetValue, duration, delay]);
+    
+    return count;
+};
+
+export default function MetricCard({ metric, isActive, onClick, theme, animationDelay = 0 }) {
     const { title, value, trend, icon: Icon, color } = metric;
+    const [isVisible, setIsVisible] = useState(false);
+    
+    const animatedValue = useAnimatedCounter(
+        typeof value === 'number' ? value : parseInt(value) || 0,
+        800,
+        animationDelay
+    );
+
+    useEffect(() => {
+        const timer = setTimeout(() => setIsVisible(true), animationDelay);
+        return () => clearTimeout(timer);
+    }, [animationDelay]);
 
     const isDark = theme === 'dark' || theme === 'darkest';
     const isDarkest = theme === 'darkest';
@@ -89,13 +153,17 @@ export default function MetricCard({ metric, isActive, onClick, theme }) {
         <button
             onClick={onClick}
             className={`
-        relative flex flex-col items-start p-3.5 rounded-xl border transition-all duration-300 ease-out text-left w-full h-[95px] group
-        ${getActiveStyle()}
-      `}
+                relative flex flex-col items-start p-4 rounded-xl border transition-all duration-500 ease-out text-left w-full h-[110px] group
+                ${getActiveStyle()}
+                ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+            `}
+            style={{
+                transitionDelay: `${animationDelay}ms`
+            }}
         >
-            <div className="flex items-center justify-between w-full mb-1.5">
-                <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDark ? (darkColorStyles[color] || 'bg-slate-800 text-slate-400') : (colorStyles[color] || 'bg-slate-50 text-black')}`}>
-                    <Icon size={16} />
+            <div className="flex items-center justify-between w-full mb-2">
+                <div className={`p-2 rounded-lg transition-colors duration-300 ${isDark ? (darkColorStyles[color] || 'bg-slate-800 text-slate-400') : (colorStyles[color] || 'bg-slate-50 text-black')}`}>
+                    <Icon size={18} />
                 </div>
                 {hasTrend && (
                     <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${trendColor}`}>
@@ -105,9 +173,11 @@ export default function MetricCard({ metric, isActive, onClick, theme }) {
                 )}
             </div>
 
-            <div className="mt-auto">
-                <p className={`text-xs font-medium mb-0.5 truncate w-full ${isDark ? 'text-slate-400' : 'text-black'}`} title={title}>{title}</p>
-                <h3 className={`text-xl font-bold tracking-tight truncate w-full ${isDark ? 'text-white' : 'text-black'}`} title={value}>{value}</h3>
+            <div className="mt-auto w-full">
+                <p className={`text-xs font-medium mb-1 truncate w-full ${isDark ? 'text-slate-400' : 'text-black'}`} title={title}>{title}</p>
+                <h3 className={`text-2xl font-bold tracking-tight truncate w-full tabular-nums ${isDark ? 'text-white' : 'text-black'}`} title={value}>
+                    {animatedValue}
+                </h3>
             </div>
         </button>
     );

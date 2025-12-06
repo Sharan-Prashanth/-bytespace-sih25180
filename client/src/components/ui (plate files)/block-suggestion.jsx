@@ -51,6 +51,16 @@ const TYPE_TEXT_MAP = {
   [KEYS.video]: () => 'Video',
 };
 
+// Helper function to get type text with fallback for unknown types
+const getTypeText = (node) => {
+  const typeFunc = TYPE_TEXT_MAP[node?.type];
+  if (typeof typeFunc === 'function') {
+    return typeFunc(node);
+  }
+  // Fallback for unknown types
+  return node?.type || 'Block';
+};
+
 
 export function BlockSuggestionCard({
   idx,
@@ -354,11 +364,11 @@ export const useResolveSuggestion = (
           if (lineBreakData.type === 'insert') {
             newText += lineBreakData.isLineBreak
               ? BLOCK_SUGGESTION
-              : BLOCK_SUGGESTION + TYPE_TEXT_MAP[node.type](node);
+              : BLOCK_SUGGESTION + getTypeText(node);
           } else if (lineBreakData.type === 'remove') {
             text += lineBreakData.isLineBreak
               ? BLOCK_SUGGESTION
-              : BLOCK_SUGGESTION + TYPE_TEXT_MAP[node.type](node);
+              : BLOCK_SUGGESTION + getTypeText(node);
           }
         }
       });

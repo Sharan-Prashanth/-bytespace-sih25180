@@ -18,7 +18,9 @@ import { useAuth } from '@/context/AuthContext';
 // Import both collaboration hooks - Yjs is preferred, Socket.io as fallback
 import { useYjsCollaboration, getUserColor } from '@/hooks/useYjsCollaboration';
 import { useSocketCollaboration, getUserColor as getSocketUserColor } from '@/hooks/useSocketCollaboration';
-import { createUsersData } from '@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit';
+import { createUsersData, discussionPlugin, avatarUrl } from '@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit';
+import { suggestionPlugin } from '@/components/ProposalEditor/editor (plate files)/plugins/suggestion-kit';
+import { YjsCursors, useYjsCursorBroadcast } from '@/components/ProposalEditor/editor (our files)/YjsCursors';
 import VersionHistory from '@/components/VersionHistory';
 import apiClient from '@/utils/api';
 import { getInlineDiscussions, saveInlineDiscussions } from '@/utils/commentApi';
@@ -187,6 +189,7 @@ const AdvancedProposalEditor = forwardRef(({
   // transforms (setDraft, etc.) can work. But we'll block text input via onKeyDown.
   // For view mode: Full read-only (no transforms at all)
   const editorReadOnly = isViewMode;
+  const canEditEditor = canEdit && !isSuggestionModeActive; // Whether user can actually edit document content
   const enableCollaboration = mode === 'collaborate' && !isViewMode;
 
   // Debug logging for editor permissions
@@ -213,24 +216,22 @@ const AdvancedProposalEditor = forwardRef(({
     return 'USER';
   }, [user?.roles, canEdit, canSuggest]);
 
-  // TEMPORARILY DISABLED: Yjs collaboration causes focus loss issues
-  // The awareness state updates trigger React re-renders that steal focus from the editor
-  // TODO: Re-enable once proper Yjs-Plate integration is implemented
-  const yjsConnected = false;
-  const yjsSynced = false;
-  const yjsUsers = [];
-  const yjsAwareness = null;
-  const yjsSendUpdate = useCallback(() => false, []);
-  const yjsSaveProposal = useCallback(async () => ({ success: false }), []);
-  const yjsError = null;
+  // Track whether content change is from remote (to avoid echo)
+  const isRemoteChangeRef = useRef(false);
+  const lastYjsContentRef = useRef(null);
+  const lastYjsDiscussionsRef = useRef(null);
   
-  /*
+  // Yjs collaboration - enabled for collaborate mode
+  // Uses YjsCursors component which avoids React state for cursor positions
   const {
     connected: yjsConnected,
     synced: yjsSynced,
     activeUsers: yjsUsers,
     awareness: yjsAwareness,
     sendUpdate: yjsSendUpdate,
+    getContent: yjsGetContent,
+    contentMap: yjsContentMap,
+    discussionsMap: yjsDiscussionsMap,
     saveProposal: yjsSaveProposal,
     error: yjsError
   } = useYjsCollaboration({
@@ -241,14 +242,8 @@ const AdvancedProposalEditor = forwardRef(({
     enabled: enableCollaboration,
     onContentUpdate: (data) => {
       console.log(`[Yjs] Received content update for form ${data.formId}`);
-      setFormDataStore(prev => ({
-        ...prev,
-        [data.formId]: {
-          content: data.editorContent,
-          wordCount: prev[data.formId]?.wordCount || 0,
-          characterCount: prev[data.formId]?.characterCount || 0
-        }
-      }));
+      // This callback is called when remote content changes
+      // We'll handle it separately via contentMap observer
     },
     onUserJoined: (data) => {
       console.log(`[Yjs] User joined:`, data);
@@ -259,7 +254,19 @@ const AdvancedProposalEditor = forwardRef(({
       onUserLeft(data);
     }
   });
-  */
+
+  // Refs for current Yjs state (to avoid stale closures in _syncDiscussionsToYjs)
+  // Must be declared AFTER useYjsCollaboration hook so variables exist
+  const yjsConnectedRef = useRef(yjsConnected);
+  const yjsDiscussionsMapRef = useRef(yjsDiscussionsMap);
+  const enableCollaborationRef = useRef(enableCollaboration);
+  
+  // Keep refs in sync with current values
+  useEffect(() => {
+    yjsConnectedRef.current = yjsConnected;
+    yjsDiscussionsMapRef.current = yjsDiscussionsMap;
+    enableCollaborationRef.current = enableCollaboration;
+  }, [yjsConnected, yjsDiscussionsMap, enableCollaboration]);
 
   // Notify parent of collaboration state changes
   // Only runs when connection state or user list changes (not on every awareness update)
@@ -326,11 +333,319 @@ const AdvancedProposalEditor = forwardRef(({
   const sendCollaborationUpdate = yjsConnected ? yjsSendUpdate : socketSendUpdate;
   const saveCollaborationProposal = yjsConnected ? yjsSaveProposal : socketSaveProposal;
 
-  // Create Plate.js editor with Form I content - only recreate on initialContent or isNewProposal changes
+  // Create Plate.js editor with Form I content - only create once on mount
+  // The initialValueRef is computed only once during the first render
+  // DO NOT include initialContent in deps - it changes on every edit and would recreate the editor
   const editor = usePlateEditor({
     plugins: EditorKit,
     value: initialValueRef.current,
-  }, [initialContent, isNewProposal]); // Don't include formDataStore to avoid infinite loops
+  }, []); // Empty deps - editor should only be created once
+
+  // Yjs cursor broadcast hook - broadcasts local cursor position to other users
+  const { broadcastCursor, clearCursor } = useYjsCursorBroadcast({
+    awareness: yjsAwareness,
+    editorRef: editorContainerRef,
+    enabled: enableCollaboration && yjsConnected
+  });
+
+  // Broadcast cursor position on selection change
+  useEffect(() => {
+    if (!enableCollaboration || !yjsConnected || !editor) return;
+    
+    // Listen for selection changes
+    const handleSelectionChange = () => {
+      if (editor.selection) {
+        broadcastCursor(editor.selection);
+      } else {
+        clearCursor();
+      }
+    };
+    
+    // Set up an interval to periodically check selection (Plate.js doesn't have direct selection events)
+    const intervalId = setInterval(handleSelectionChange, 100);
+    
+    return () => {
+      clearInterval(intervalId);
+      clearCursor();
+    };
+  }, [enableCollaboration, yjsConnected, editor, broadcastCursor, clearCursor]);
+
+  // Yjs <-> Plate.js content synchronization
+  // This effect handles bi-directional sync between Yjs document and local editor
+  useEffect(() => {
+    if (!enableCollaboration || !yjsContentMap || !editor || !yjsSynced) return;
+    
+    console.log('[Yjs-Plate] Setting up content synchronization');
+    
+    // Handle content updates from remote users (Yjs -> Plate)
+    const handleYjsContentChange = (event) => {
+      // Skip if this is our own change
+      if (event.transaction.local) {
+        return;
+      }
+      
+      const remoteContent = yjsContentMap.get('formi');
+      if (!remoteContent) return;
+      
+      try {
+        const parsed = JSON.parse(remoteContent);
+        const currentContentStr = JSON.stringify(editor.children);
+        
+        // Only update if content is actually different
+        if (remoteContent !== currentContentStr && remoteContent !== lastYjsContentRef.current) {
+          console.log('[Yjs-Plate] Applying remote content update');
+          lastYjsContentRef.current = remoteContent;
+          isRemoteChangeRef.current = true;
+          
+          // CRITICAL: Temporarily disable suggestion mode during content load
+          // This prevents committee members from marking existing content as their suggestions
+          const wasSuggesting = isSuggestionModeActive && editor.getOption(suggestionPlugin, 'isSuggesting');
+          if (wasSuggesting) {
+            editor.setOption(suggestionPlugin, 'isSuggesting', false);
+            console.log('[Yjs-Plate] Temporarily disabled suggestion tracking for remote content load');
+          }
+          
+          // Use Plate's transform API to replace all content
+          // replaceNodes with at:[] and children:true replaces entire document
+          editor.tf.replaceNodes(parsed, { at: [], children: true });
+          
+          // Reset the flag and re-enable suggestion mode after a microtask
+          Promise.resolve().then(() => {
+            isRemoteChangeRef.current = false;
+            if (wasSuggesting) {
+              editor.setOption(suggestionPlugin, 'isSuggesting', true);
+              console.log('[Yjs-Plate] Re-enabled suggestion tracking');
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[Yjs-Plate] Failed to parse remote content:', e);
+      }
+    };
+    
+    yjsContentMap.observe(handleYjsContentChange);
+    
+    // Load initial content from Yjs if available and synced
+    const initialContent = yjsContentMap.get('formi');
+    if (initialContent && initialContent !== JSON.stringify(editor.children)) {
+      try {
+        const parsed = JSON.parse(initialContent);
+        console.log('[Yjs-Plate] Loading initial Yjs content');
+        lastYjsContentRef.current = initialContent;
+        isRemoteChangeRef.current = true;
+        
+        // CRITICAL: Disable suggestion tracking during initial load
+        const wasSuggesting = isSuggestionModeActive && editor.getOption(suggestionPlugin, 'isSuggesting');
+        if (wasSuggesting) {
+          editor.setOption(suggestionPlugin, 'isSuggesting', false);
+          console.log('[Yjs-Plate] Disabled suggestion tracking for initial content load');
+        }
+        
+        editor.tf.replaceNodes(parsed, { at: [], children: true });
+        
+        Promise.resolve().then(() => {
+          isRemoteChangeRef.current = false;
+          if (wasSuggesting) {
+            editor.setOption(suggestionPlugin, 'isSuggesting', true);
+            console.log('[Yjs-Plate] Re-enabled suggestion tracking after initial load');
+          }
+        });
+      } catch (e) {
+        console.warn('[Yjs-Plate] Failed to load initial content:', e);
+      }
+    } else if (!initialContent && editor.children) {
+      // If Yjs has no content but editor does, push editor content to Yjs
+      console.log('[Yjs-Plate] Pushing initial editor content to Yjs');
+      const editorContent = JSON.stringify(editor.children);
+      lastYjsContentRef.current = editorContent;
+      yjsContentMap.set('formi', editorContent);
+    }
+    
+    return () => {
+      yjsContentMap.unobserve(handleYjsContentChange);
+    };
+  }, [enableCollaboration, yjsContentMap, editor, yjsSynced]);
+
+  // Yjs <-> Plate.js discussions synchronization
+  // This effect handles bi-directional sync of inline comments/discussions
+  useEffect(() => {
+    if (!enableCollaboration || !yjsDiscussionsMap || !editor || !yjsSynced) {
+      console.log('[Yjs-Discussions] Skipping sync setup - collab:', enableCollaboration, 'map:', !!yjsDiscussionsMap, 'editor:', !!editor, 'synced:', yjsSynced);
+      return;
+    }
+    
+    console.log('[Yjs-Discussions] ✓ Setting up discussions synchronization - User:', user?.fullName, 'Role:', displayRole);
+    
+    // Handle discussions updates from remote users (Yjs -> Plate)
+    const handleYjsDiscussionsChange = (event) => {
+      console.log('[Yjs-Discussions] Observer triggered - local:', event.transaction.local, 'origin:', event.transaction.origin);
+      
+      // Skip if this is our own change
+      if (event.transaction.local) {
+        console.log('[Yjs-Discussions] Skipping local change (our own update)');
+        return;
+      }
+      
+      console.log('[Yjs-Discussions] Received REMOTE update from another user');
+      
+      const remoteDiscussions = yjsDiscussionsMap.get('formi');
+      console.log('[Yjs-Discussions] Remote discussions value:', remoteDiscussions ? `present (${remoteDiscussions.length} chars)` : 'null');
+      if (!remoteDiscussions) {
+        console.warn('[Yjs-Discussions] Remote discussions is null, skipping');
+        return;
+      }
+      
+      try {
+        const parsed = JSON.parse(remoteDiscussions);
+        const currentDiscussions = editor.getOption(discussionPlugin, 'discussions') || [];
+        const currentDiscussionsStr = JSON.stringify(currentDiscussions);
+        
+        console.log('[Yjs-Discussions] Current discussions:', currentDiscussions.length, 'Remote discussions:', parsed.length);
+        console.log('[Yjs-Discussions] New discussions from remote:', parsed.map(d => ({ 
+          id: d.id, 
+          commentsCount: d.comments?.length,
+          userId: d.userId
+        })));
+        
+        // Only update if discussions are actually different
+        if (remoteDiscussions !== currentDiscussionsStr && remoteDiscussions !== lastYjsDiscussionsRef.current) {
+          console.log('[Yjs-Discussions] Applying remote discussions update - received', parsed.length, 'discussions');
+          lastYjsDiscussionsRef.current = remoteDiscussions;
+          
+          // Extract unique user IDs from discussions and add to users dictionary
+          const currentUsers = editor.getOption(discussionPlugin, 'users') || {};
+          const updatedUsers = { ...currentUsers };
+          
+          // Get user info from Yjs awareness for active users
+          const awarenessStates = yjsAwareness ? Array.from(yjsAwareness.getStates().values()) : [];
+          const activeUsersMap = new Map();
+          awarenessStates.forEach(state => {
+            if (state.user) {
+              activeUsersMap.set(state.user.id, state.user);
+            }
+          });
+          
+          // Process all discussions and extract user info
+          parsed.forEach(discussion => {
+            // Add discussion creator
+            if (discussion.userId && !updatedUsers[discussion.userId]) {
+              const activeUser = activeUsersMap.get(discussion.userId);
+              if (activeUser) {
+                updatedUsers[discussion.userId] = {
+                  id: activeUser.id,
+                  name: activeUser.name,
+                  avatarUrl: avatarUrl(activeUser.email || activeUser.id)
+                };
+                console.log('[Yjs-Discussions] Added user from awareness:', activeUser.name);
+              } else {
+                // Fallback for inactive users
+                updatedUsers[discussion.userId] = {
+                  id: discussion.userId,
+                  name: 'User',
+                  avatarUrl: avatarUrl(discussion.userId)
+                };
+              }
+            }
+            
+            // Add comment authors
+            if (discussion.comments) {
+              discussion.comments.forEach(comment => {
+                if (comment.userId && !updatedUsers[comment.userId]) {
+                  const activeUser = activeUsersMap.get(comment.userId);
+                  if (activeUser) {
+                    updatedUsers[comment.userId] = {
+                      id: activeUser.id,
+                      name: activeUser.name,
+                      avatarUrl: avatarUrl(activeUser.email || activeUser.id)
+                    };
+                  } else {
+                    updatedUsers[comment.userId] = {
+                      id: comment.userId,
+                      name: 'User',
+                      avatarUrl: avatarUrl(comment.userId)
+                    };
+                  }
+                }
+              });
+            }
+          });
+          
+          // Update users dictionary
+          editor.setOption(discussionPlugin, 'users', updatedUsers);
+          console.log('[Yjs-Discussions] Updated users dictionary with', Object.keys(updatedUsers).length, 'users');
+          
+          // Update editor discussions
+          editor.setOption(discussionPlugin, 'discussions', parsed);
+          console.log('[Yjs-Discussions] Editor discussions updated successfully');
+        } else {
+          console.log('[Yjs-Discussions] Skipping update - same:', remoteDiscussions === currentDiscussionsStr, 'cached:', remoteDiscussions === lastYjsDiscussionsRef.current);
+        }
+      } catch (e) {
+        console.error('[Yjs-Discussions] Failed to parse remote discussions:', e);
+      }
+    };
+    
+    yjsDiscussionsMap.observe(handleYjsDiscussionsChange);
+    
+    // Load initial discussions from Yjs if available
+    const initialDiscussions = yjsDiscussionsMap.get('formi');
+    if (initialDiscussions) {
+      try {
+        const parsed = JSON.parse(initialDiscussions);
+        console.log('[Yjs-Discussions] Loading initial Yjs discussions:', parsed.length);
+        lastYjsDiscussionsRef.current = initialDiscussions;
+        
+        // Extract user info from discussions and awareness
+        const currentUsers = editor.getOption(discussionPlugin, 'users') || {};
+        const updatedUsers = { ...currentUsers };
+        
+        const awarenessStates = yjsAwareness ? Array.from(yjsAwareness.getStates().values()) : [];
+        const activeUsersMap = new Map();
+        awarenessStates.forEach(state => {
+          if (state.user) {
+            activeUsersMap.set(state.user.id, state.user);
+          }
+        });
+        
+        parsed.forEach(discussion => {
+          if (discussion.userId && !updatedUsers[discussion.userId]) {
+            const activeUser = activeUsersMap.get(discussion.userId);
+            if (activeUser) {
+              updatedUsers[discussion.userId] = {
+                id: activeUser.id,
+                name: activeUser.name,
+                avatarUrl: avatarUrl(activeUser.email || activeUser.id)
+              };
+            }
+          }
+          if (discussion.comments) {
+            discussion.comments.forEach(comment => {
+              if (comment.userId && !updatedUsers[comment.userId]) {
+                const activeUser = activeUsersMap.get(comment.userId);
+                if (activeUser) {
+                  updatedUsers[comment.userId] = {
+                    id: activeUser.id,
+                    name: activeUser.name,
+                    avatarUrl: avatarUrl(activeUser.email || activeUser.id)
+                  };
+                }
+              }
+            });
+          }
+        });
+        
+        editor.setOption(discussionPlugin, 'users', updatedUsers);
+        editor.setOption(discussionPlugin, 'discussions', parsed);
+        console.log('[Yjs-Discussions] Loaded with', Object.keys(updatedUsers).length, 'users');
+      } catch (e) {
+        console.warn('[Yjs-Discussions] Failed to load initial discussions:', e);
+      }
+    }
+    
+    return () => {
+      yjsDiscussionsMap.unobserve(handleYjsDiscussionsChange);
+    };
+  }, [enableCollaboration, yjsDiscussionsMap, editor, yjsSynced]);
 
   // Configure discussion and suggestion plugins with current user data
   // This effect runs when the editor is ready
@@ -339,23 +654,8 @@ const AdvancedProposalEditor = forwardRef(({
     
     const setupPlugins = async () => {
       try {
-        // Import the local plugin instances that are actually used in EditorKit
-        // These must be imported synchronously at the top of the module to get the same instance
-        const { suggestionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/suggestion-kit');
-        const { discussionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit');
-        
         // Set current user ID for discussion plugin (needed for comments)
         editor.setOption(discussionPlugin, 'currentUserId', user._id);
-        
-        // Set users data for discussion plugin
-        const usersData = {
-          [user._id]: {
-            id: user._id,
-            avatarUrl: `https://api.dicebear.com/9.x/glass/svg?seed=${user.email || user._id}`,
-            name: user.fullName || 'Anonymous',
-          }
-        };
-        editor.setOption(discussionPlugin, 'users', usersData);
         
         // Set current user ID for suggestion plugin (needed for tracking who made suggestions)
         editor.setOption(suggestionPlugin, 'currentUserId', user._id);
@@ -366,22 +666,34 @@ const AdvancedProposalEditor = forwardRef(({
           console.log('[Editor] Suggestion mode enabled for reviewer/committee member');
         }
         
-        // Load discussions from backend if proposalId exists
-        if (proposalId) {
+        // Load discussions from backend ONLY in non-collaboration mode
+        // In collaboration mode, discussions are loaded from Yjs (see Yjs discussions sync effect)
+        let loadedDiscussions = [];
+        if (proposalId && !enableCollaboration) {
           try {
             const discussionsData = await getInlineDiscussions(proposalId, 'formi');
             if (discussionsData && discussionsData.discussions) {
-              editor.setOption(discussionPlugin, 'discussions', discussionsData.discussions);
-              console.log('[Editor] Loaded', discussionsData.discussions.length, 'discussions from backend');
+              loadedDiscussions = discussionsData.discussions;
+              editor.setOption(discussionPlugin, 'discussions', loadedDiscussions);
+              console.log('[Editor] Loaded', loadedDiscussions.length, 'discussions from backend (non-collab mode)');
             }
           } catch (loadError) {
             console.warn('[Editor] Could not load discussions:', loadError);
             editor.setOption(discussionPlugin, 'discussions', []);
           }
+        } else if (enableCollaboration) {
+          // In collaboration mode, start with empty and let Yjs sync load discussions
+          editor.setOption(discussionPlugin, 'discussions', []);
+          console.log('[Editor] Collaboration mode - waiting for Yjs to load discussions');
         } else {
           // Initialize empty discussions array for new proposals
           editor.setOption(discussionPlugin, 'discussions', []);
         }
+        
+        // Create users data including current user and users from loaded discussions
+        const usersData = createUsersData(user, [], loadedDiscussions);
+        editor.setOption(discussionPlugin, 'users', usersData);
+        console.log('[Editor] Users data configured with', Object.keys(usersData).length, 'users');
         
         console.log('[Editor] Discussion and suggestion plugins configured with user:', user._id);
       } catch (e) {
@@ -390,7 +702,7 @@ const AdvancedProposalEditor = forwardRef(({
     };
     
     setupPlugins();
-  }, [editor, user, isSuggestionModeActive, proposalId]);
+  }, [editor, user, isSuggestionModeActive, proposalId, enableCollaboration]);
 
   // DISABLED: Cursor broadcasting was causing maximum update depth errors
   // The useCursorBroadcast hook and related useEffect are disabled
@@ -433,11 +745,11 @@ const AdvancedProposalEditor = forwardRef(({
   // Load saved draft forms when component mounts or initialContent changes
   useEffect(() => {
     const loadDraftForms = async () => {
-      console.log('⚙️ AdvancedProposalEditor: loadDraftForms called');
-      console.log('⚙️ initialContent:', initialContent);
-      console.log('⚙️ initialContent type:', typeof initialContent);
-      console.log('⚙️ proposalId:', proposalId);
-      console.log('⚙️ mode:', mode);
+      console.log('[Setup] AdvancedProposalEditor: loadDraftForms called');
+      console.log('[Setup] initialContent:', initialContent);
+      console.log('[Setup] initialContent type:', typeof initialContent);
+      console.log('[Setup] proposalId:', proposalId);
+      console.log('[Setup] mode:', mode);
       
       // First, try to use initialContent if provided (from collaborate page)
       if (initialContent && typeof initialContent === 'object') {
@@ -455,7 +767,7 @@ const AdvancedProposalEditor = forwardRef(({
 
           // Skip if formData is null/undefined/empty
           if (!formData) {
-            console.log(`⚠️ Form ${formKey} is null or undefined`);
+            console.log(`[Warning] Form ${formKey} is null or undefined`);
             return;
           }
 
@@ -495,7 +807,7 @@ const AdvancedProposalEditor = forwardRef(({
             seal: formData.seal || formData.institutionSeal,
           };
 
-          console.log(`✅ Loaded form ${normalizedKey}:`, {
+          console.log(`[Success] Loaded form ${normalizedKey}:`, {
             contentNodes: loadedStore[normalizedKey].content.length,
             wordCount: loadedStore[normalizedKey].wordCount
           });
@@ -503,10 +815,10 @@ const AdvancedProposalEditor = forwardRef(({
 
         if (Object.keys(loadedStore).length > 0) {
           setFormDataStore(loadedStore);
-          console.log('✅ Successfully loaded', Object.keys(loadedStore).length, 'forms:', Object.keys(loadedStore));
+          console.log('[Success] Successfully loaded', Object.keys(loadedStore).length, 'forms:', Object.keys(loadedStore));
           return;
         } else {
-          console.warn('⚠️ No forms were loaded from initialContent');
+          console.warn('[Warning] No forms were loaded from initialContent');
         }
       }
 
@@ -579,7 +891,8 @@ const AdvancedProposalEditor = forwardRef(({
     };
 
     loadDraftForms();
-  }, [proposalId, initialContent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalId]); // Only run on mount or when proposalId changes, NOT when initialContent changes
 
   // Track last word/char counts to avoid unnecessary updates
   const lastStatsRef = useRef({ words: 0, chars: 0 });
@@ -590,6 +903,9 @@ const AdvancedProposalEditor = forwardRef(({
 
     const updateStats = () => {
       try {
+        // Skip if this is a remote change being applied
+        if (isRemoteChangeRef.current) return;
+        
         const currentValue = editor.children;
         if (!currentValue || !Array.isArray(currentValue)) return;
 
@@ -606,9 +922,17 @@ const AdvancedProposalEditor = forwardRef(({
           onCharacterCountChange(chars);
         }
 
-        // Send real-time update to other collaborators (debounced in hook)
-        if (enableCollaboration && collaborationConnected && sendCollaborationUpdate) {
-          sendCollaborationUpdate(currentValue, words, chars);
+        // Sync content to Yjs for other collaborators
+        // IMPORTANT: Only users who can actually edit should send content updates
+        // Reviewers/committee members in suggestion mode should NOT send their local view
+        if (enableCollaboration && yjsConnected && yjsContentMap && canEditEditor && !isSuggestionModeActive) {
+          const contentStr = JSON.stringify(currentValue);
+          // Only send if content actually changed from what we last sent/received
+          if (contentStr !== lastYjsContentRef.current) {
+            lastYjsContentRef.current = contentStr;
+            yjsContentMap.set('formi', contentStr);
+            console.log('[Yjs-Plate] Sent local content to Yjs');
+          }
         }
       } catch (error) {
         console.error('Error updating stats:', error);
@@ -620,7 +944,7 @@ const AdvancedProposalEditor = forwardRef(({
     updateStats(); // Initial update
 
     return () => clearInterval(interval);
-  }, [editor, extractPlainText, onWordCountChange, onCharacterCountChange, enableCollaboration, collaborationConnected, sendCollaborationUpdate]);
+  }, [editor, extractPlainText, onWordCountChange, onCharacterCountChange, enableCollaboration, yjsConnected, yjsContentMap]);
 
   // Auto-save functionality - calls parent's onAutoSave callback
   useEffect(() => {
@@ -661,7 +985,7 @@ const AdvancedProposalEditor = forwardRef(({
           return updatedStore;
         });
 
-        console.log('🔄 Auto-saving draft...');
+        console.log('[Auto-save] Saving draft...');
 
         // Call parent's auto-save handler with updated form data
         await onAutoSave(updatedStore);
@@ -669,9 +993,9 @@ const AdvancedProposalEditor = forwardRef(({
         // Update last saved time
         setLastSavedTime(new Date());
 
-        console.log('✅ Auto-saved:', { words, chars, time: new Date().toLocaleTimeString() });
+        console.log('[Success] Auto-saved:', { words, chars, time: new Date().toLocaleTimeString() });
       } catch (error) {
-        console.error('❌ Auto-save error:', error);
+        console.error('[Error] Auto-save error:', error);
       } finally {
         setIsAutoSaving(false);
       }
@@ -692,13 +1016,60 @@ const AdvancedProposalEditor = forwardRef(({
   // Track discussions changes and save to backend
   const lastSavedDiscussionsRef = useRef(null);
   const saveTimeoutRef = useRef(null);
+  const isSavingRef = useRef(false);
   
-  // Debounced save function for discussions
+  // Force save function for discussions - always saves regardless of cache
+  const forceSaveDiscussions = useCallback(async () => {
+    console.log('[Editor] forceSaveDiscussions called, proposalId:', proposalId, 'editor:', !!editor);
+    if (!proposalId || !editor || isSavingRef.current) {
+      console.log('[Editor] forceSaveDiscussions skipped - proposalId:', proposalId, 'editor:', !!editor, 'isSaving:', isSavingRef.current);
+      return false;
+    }
+    
+    isSavingRef.current = true;
+    try {
+      const discussions = editor.getOption(discussionPlugin, 'discussions') || [];
+      
+      console.log('[Editor] Force saving', discussions.length, 'discussions to backend for proposalId:', proposalId);
+      console.log('[Editor] Discussions data:', JSON.stringify(discussions).substring(0, 500));
+      
+      // Sync discussions to Yjs for real-time collaboration
+      if (enableCollaboration && yjsDiscussionsMap && yjsConnected) {
+        const discussionsStr = JSON.stringify(discussions);
+        if (discussionsStr !== lastYjsDiscussionsRef.current) {
+          lastYjsDiscussionsRef.current = discussionsStr;
+          yjsDiscussionsMap.set('formi', discussionsStr);
+          console.log('[Editor] Discussions synced to Yjs -', discussions.length, 'discussions sent to collaborators');
+        } else {
+          console.log('[Editor] Skipping Yjs sync - discussions unchanged');
+        }
+      } else {
+        console.log('[Editor] Cannot sync to Yjs - collab:', enableCollaboration, 'map:', !!yjsDiscussionsMap, 'connected:', yjsConnected);
+      }
+      
+      const result = await saveInlineDiscussions(proposalId, 'formi', discussions, []);
+      
+      if (result) {
+        lastSavedDiscussionsRef.current = JSON.stringify(discussions);
+        console.log('[Editor] Discussions saved successfully');
+        return true;
+      } else {
+        console.warn('[Editor] Failed to save discussions - API returned false');
+        return false;
+      }
+    } catch (error) {
+      console.error('[Editor] Failed to save discussions:', error);
+      return false;
+    } finally {
+      isSavingRef.current = false;
+    }
+  }, [proposalId, editor, enableCollaboration, yjsDiscussionsMap, yjsConnected]);
+  
+  // Debounced save function for discussions - skips if unchanged
   const debouncedSaveDiscussions = useCallback(async () => {
-    if (!proposalId || !editor) return;
+    if (!proposalId || !editor || isSavingRef.current) return;
     
     try {
-      const { discussionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit');
       const discussions = editor.getOption(discussionPlugin, 'discussions') || [];
       
       // Only save if discussions have changed
@@ -707,19 +1078,11 @@ const AdvancedProposalEditor = forwardRef(({
         return; // No changes, skip save
       }
       
-      console.log('[Editor] Saving', discussions.length, 'discussions to backend');
-      const result = await saveInlineDiscussions(proposalId, 'formi', discussions, []);
-      
-      if (result) {
-        lastSavedDiscussionsRef.current = discussionsJson;
-        console.log('[Editor] Discussions saved successfully');
-      } else {
-        console.warn('[Editor] Failed to save discussions - API returned false');
-      }
+      await forceSaveDiscussions();
     } catch (error) {
       console.error('[Editor] Failed to save discussions:', error);
     }
-  }, [proposalId, editor]);
+  }, [proposalId, editor, forceSaveDiscussions]);
   
   // Schedule a debounced save when discussions change
   const scheduleSaveDiscussions = useCallback(() => {
@@ -735,26 +1098,97 @@ const AdvancedProposalEditor = forwardRef(({
   useEffect(() => {
     if (!editor) return;
     
-    // Store the save function on the editor for comment.jsx to call
-    editor._saveDiscussions = scheduleSaveDiscussions;
+    console.log('[Editor] Setting up sync - collab:', enableCollaboration, 'connected:', yjsConnected);
+    
+    // CRITICAL: In collaboration mode, ONLY use Yjs - no database saves
+    // Database saves happen automatically when last user disconnects
+    if (enableCollaboration && yjsConnected) {
+      console.log('[Editor] Collaboration mode - Yjs sync only, database saves on disconnect');
+      console.log('[Editor] User info:', user?.fullName, 'canEdit:', canEditEditor, 'canSuggest:', isSuggestionModeActive);
+      
+      editor._syncDiscussionsToYjs = () => {
+        const currentYjsMap = yjsDiscussionsMapRef.current;
+        const currentYjsConnected = yjsConnectedRef.current;
+        const currentEnableCollab = enableCollaborationRef.current;
+        
+        console.log('[Editor] _syncDiscussionsToYjs called - map:', !!currentYjsMap, 'connected:', currentYjsConnected, 'collab:', currentEnableCollab);
+        
+        if (!currentYjsMap || !currentYjsConnected) {
+          console.warn('[Editor] Yjs not ready - map:', !!currentYjsMap, 'connected:', currentYjsConnected);
+          return;
+        }
+        
+        try {
+          const discussions = editor.getOption(discussionPlugin, 'discussions') || [];
+          const discussionsStr = JSON.stringify(discussions);
+          
+          // Ensure current user is in the users dictionary
+          const currentUsers = editor.getOption(discussionPlugin, 'users') || {};
+          if (user && user._id && !currentUsers[user._id]) {
+            currentUsers[user._id] = {
+              id: user._id,
+              name: user.fullName || user.name || 'User',
+              avatarUrl: avatarUrl(user.email || user._id)
+            };
+            editor.setOption(discussionPlugin, 'users', currentUsers);
+            console.log('[Editor] Added current user to users dictionary:', user.fullName);
+          }
+          
+          // Read current Yjs state to check for conflicts
+          const currentYjsDiscussions = currentYjsMap.get('formi');
+          console.log('[Editor] Current Yjs discussions:', currentYjsDiscussions ? `${currentYjsDiscussions.length} chars` : 'null');
+          console.log('[Editor] Local discussions to sync:', discussions.length);
+          console.log('[Editor] User:', user?.fullName, 'Role:', displayRole);
+          console.log('[Editor] Discussion IDs:', discussions.map(d => ({ id: d.id, comments: d.comments?.length })));
+          
+          lastYjsDiscussionsRef.current = discussionsStr;
+          currentYjsMap.set('formi', discussionsStr);
+          
+          console.log('[Editor] ✓ Yjs map.set() called - Hocuspocus will broadcast to all connected clients');
+          console.log('[Editor] This update should trigger observers on all other clients');
+        } catch (error) {
+          console.error('[Editor] Yjs sync error:', error);
+        }
+      };
+      
+      // Stub functions - no database saves during collaboration
+      editor._saveDiscussions = () => {};
+      editor._forceSaveDiscussions = () => {};
+      
+    } else {
+      console.log('[Editor] Non-collaboration mode - database saves enabled');
+      
+      editor._saveDiscussions = scheduleSaveDiscussions;
+      editor._forceSaveDiscussions = forceSaveDiscussions;
+      editor._syncDiscussionsToYjs = () => {};
+    }
     
     return () => {
       delete editor._saveDiscussions;
+      delete editor._forceSaveDiscussions;
+      delete editor._syncDiscussionsToYjs;
     };
-  }, [editor, scheduleSaveDiscussions]);
+  }, [editor, enableCollaboration, yjsConnected, scheduleSaveDiscussions, forceSaveDiscussions, discussionPlugin]);
   
   // Periodically save inline discussions (comments and suggestions) to backend
+  // SKIP during collaboration - Yjs handles everything, saves on disconnect
   useEffect(() => {
     if (!proposalId || !editor) return;
+    
+    // Skip all database saves if in collaboration mode
+    if (enableCollaboration && yjsConnected) {
+      console.log('[Editor] Skipping periodic saves - using Yjs collaboration');
+      return;
+    }
+    
+    console.log('[Editor] Setting up periodic database saves (non-collaboration mode)');
     
     // Save discussions every 10 seconds as backup
     const interval = setInterval(debouncedSaveDiscussions, 10000);
     
     // Save before page unload
     const handleBeforeUnload = () => {
-      // Use sendBeacon for reliable saving on page close
       try {
-        const { discussionPlugin } = require('@/components/ProposalEditor/editor (plate files)/plugins/discussion-kit');
         const discussions = editor.getOption(discussionPlugin, 'discussions') || [];
         if (discussions.length > 0) {
           const token = localStorage.getItem('token');
@@ -764,7 +1198,6 @@ const AdvancedProposalEditor = forwardRef(({
             `${apiBaseUrl}/api/proposals/${proposalId}/discussions?token=${token}`,
             new Blob([data], { type: 'application/json' })
           );
-          console.log('[Editor] Beacon sent with', discussions.length, 'discussions');
         }
       } catch (e) {
         console.error('[Editor] Beacon save failed:', e);
@@ -783,10 +1216,9 @@ const AdvancedProposalEditor = forwardRef(({
         clearTimeout(saveTimeoutRef.current);
       }
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Save one last time on cleanup
       debouncedSaveDiscussions();
     };
-  }, [proposalId, editor, debouncedSaveDiscussions]);
+  }, [proposalId, editor, enableCollaboration, yjsConnected, debouncedSaveDiscussions]);
 
   // Handle signature save (base64, will upload on submission)
   const handleSignatureSave = (signatureData) => {
@@ -1296,7 +1728,7 @@ const AdvancedProposalEditor = forwardRef(({
     }
   }, [saveCurrentFormToStore, proposalTitle, isExporting, success, info]);
 
-
+  // Component render
   return (
     <>
       <div className={`${isDarkest ? 'bg-neutral-900 border-neutral-800' : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-blue-200'} rounded-xl shadow-xl p-6 border ${className}`}>
@@ -1365,7 +1797,7 @@ const AdvancedProposalEditor = forwardRef(({
                       </svg>
                       Comment Mode
                     </span>
-                    <span className={`text-sm hidden md:inline ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                    <span className={`text-sm hidden md:inline ${isDark ? 'text-white/70' : 'text-black'}`}>
                       Select text to add comments
                     </span>
                   </div>
@@ -1401,17 +1833,15 @@ const AdvancedProposalEditor = forwardRef(({
                     }
                   } : undefined}
                 />
-                {/* DISABLED: Remote Cursors - was causing maximum update depth errors
-                    The awareness listener triggers React state updates that create infinite loops
-                    TODO: Re-enable once cursor sync is properly implemented with debouncing
+                {/* Remote Cursors - renders other users' cursor positions via DOM manipulation */}
                 {enableCollaboration && yjsAwareness && (
-                  <RemoteCursors
+                  <YjsCursors
                     awareness={yjsAwareness}
                     editorRef={editorContainerRef}
                     theme={theme}
+                    currentUserId={user?._id}
                   />
                 )}
-                */}
               </EditorContainer>
 
               {/* Floating Toolbar - Shows on text selection */}

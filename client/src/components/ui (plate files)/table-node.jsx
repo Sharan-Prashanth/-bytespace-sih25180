@@ -153,7 +153,7 @@ function TableFloatingToolbar({
         contentEditable={false}
         {...props}>
         <Toolbar
-          className="scrollbar-hide flex w-auto max-w-[80vw] flex-row overflow-x-auto rounded-md border bg-popover p-1 shadow-md print:hidden"
+          className="scrollbar-hide flex w-auto max-w-[80vw] flex-row overflow-x-auto rounded-md border bg-popover text-popover-foreground p-1 shadow-md print:hidden"
           contentEditable={false}>
           <ToolbarGroup>
             <ColorDropdownMenu tooltip="Background color">

@@ -29,6 +29,7 @@ const activitySchema = new mongoose.Schema({
       'REVIEWER_ASSIGNED',
       'COMMENT_ADDED',
       'COMMENT_RESOLVED',
+      'INLINE_COMMENT_ADDED',
       'CHAT_MESSAGE_SENT',
       'REPORT_SUBMITTED',
       'CLARIFICATION_REQUESTED',

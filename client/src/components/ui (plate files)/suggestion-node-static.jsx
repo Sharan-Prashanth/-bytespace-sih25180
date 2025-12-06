@@ -31,7 +31,7 @@ export function SuggestionLeafStatic(props) {
       className={cn(
         'border-b-2 border-b-brand/[.24] bg-brand/[.08] text-brand/80 no-underline transition-colors duration-200',
         hasRemove &&
-          'border-b-gray-300 bg-gray-300/25 text-gray-400 line-through'
+          'border-b-black/30 bg-black/10 text-black opacity-60 line-through'
       )}>
       {props.children}
     </SlateLeaf>

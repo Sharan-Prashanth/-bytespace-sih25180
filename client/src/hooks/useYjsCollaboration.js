@@ -84,6 +84,8 @@ export const useYjsCollaboration = ({
   
   // Document content map
   const [contentMap, setContentMap] = useState(null);
+  // Discussions map (for real-time comment sync)
+  const [discussionsMap, setDiscussionsMap] = useState(null);
   
   /**
    * Get the Hocuspocus server URL
@@ -214,14 +216,8 @@ export const useYjsCollaboration = ({
     // IMPORTANT: Only update React state for user join/leave events
     // Cursor/selection updates should NOT trigger React state updates to avoid focus loss
     let awarenessThrottleTimeout = null;
-    const handleAwarenessChange = ({ added, removed }) => {
-      // Only process if users were actually added or removed
-      // Ignore updates that are just cursor/selection position changes
-      if ((!added || added.length === 0) && (!removed || removed.length === 0)) {
-        return;
-      }
-      
-      // Throttle awareness updates to max once per 500ms
+    const handleAwarenessChange = () => {
+      // Throttle awareness updates to max once per 300ms for better responsiveness
       if (awarenessThrottleTimeout) return;
       
       awarenessThrottleTimeout = setTimeout(() => {
@@ -246,6 +242,7 @@ export const useYjsCollaboration = ({
         // Detect joins and leaves using ref (avoids stale closure)
         users.forEach(u => {
           if (!previousUserIds.has(u.id)) {
+            console.log('[Yjs] User joined:', u.name);
             onUserJoinedRef.current({ user: u });
           }
         });
@@ -254,6 +251,7 @@ export const useYjsCollaboration = ({
           if (!currentUserIds.has(id)) {
             const leftUser = activeUsersRef.current.find(u => u.id === id);
             if (leftUser) {
+              console.log('[Yjs] User left:', leftUser.name);
               onUserLeftRef.current({ user: leftUser });
             }
           }
@@ -266,9 +264,10 @@ export const useYjsCollaboration = ({
         activeUsersRef.current = users;
         
         if (prevUserIds !== newUserIds) {
+          console.log('[Yjs] Active users updated:', users.length);
           setActiveUsers(users);
         }
-      }, 500);
+      }, 300);
     };
     
     awareness.on('change', handleAwarenessChange);
@@ -276,6 +275,10 @@ export const useYjsCollaboration = ({
     // Set up content map for forms
     const formContent = ydoc.getMap('formContent');
     setContentMap(formContent);
+    
+    // Set up discussions map for real-time comment sync
+    const discussionsContent = ydoc.getMap('discussions');
+    setDiscussionsMap(discussionsContent);
     
     // Listen for content changes
     const handleContentChange = (event) => {
@@ -420,6 +423,8 @@ export const useYjsCollaboration = ({
     ydoc: ydocRef.current,
     provider: providerRef.current,
     awareness: awarenessRef.current,
+    contentMap,
+    discussionsMap,
     
     // Actions
     sendUpdate,
@@ -429,52 +434,6 @@ export const useYjsCollaboration = ({
     redo,
     saveProposal,
   };
-};
-
-/**
- * Hook for Yjs-aware Plate.js editor binding
- * This creates a binding between Yjs and Plate.js editor state
- */
-export const useYjsPlateBinding = ({
-  editor,
-  ydoc,
-  formId = 'formi',
-  enabled = true,
-}) => {
-  const [isRemoteChange, setIsRemoteChange] = useState(false);
-  
-  useEffect(() => {
-    if (!enabled || !editor || !ydoc) return;
-    
-    const formContent = ydoc.getMap('formContent');
-    
-    // Handle remote changes
-    const handleRemoteChange = () => {
-      const content = formContent.get(formId);
-      if (!content) return;
-      
-      try {
-        const parsed = JSON.parse(content);
-        setIsRemoteChange(true);
-        
-        // Update editor content
-        // Note: This needs to be integrated with Plate.js's API
-        // The actual implementation depends on how Plate.js handles external updates
-        
-        setTimeout(() => setIsRemoteChange(false), 0);
-      } catch (e) {
-        console.warn('[Yjs] Failed to apply remote change:', e);
-      }
-    };
-    
-    formContent.observe(handleRemoteChange);
-    
-    return () => {
-      formContent.unobserve(handleRemoteChange);
-    };
-  }, [enabled, editor, ydoc, formId]);
-  
-  return { isRemoteChange };
 };
 
 export default useYjsCollaboration;

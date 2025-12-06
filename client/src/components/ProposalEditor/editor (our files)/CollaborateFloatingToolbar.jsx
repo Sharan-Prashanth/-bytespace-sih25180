@@ -64,7 +64,12 @@ function AddCommentButton({ theme }) {
   const isDark = theme === 'dark' || theme === 'darkest';
 
   const handleClick = React.useCallback(() => {
-    editor.getTransforms(commentPlugin).comment.setDraft();
+    try {
+      const transforms = editor.getTransforms(commentPlugin);
+      transforms.comment.setDraft();
+    } catch (error) {
+      console.error('[AddCommentButton] Error calling setDraft:', error);
+    }
   }, [editor]);
 
   return (

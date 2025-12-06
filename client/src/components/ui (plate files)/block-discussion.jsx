@@ -2,9 +2,7 @@
 import * as React from 'react';
 
 import { getDraftCommentKey } from '@platejs/comment';
-import { CommentPlugin } from '@platejs/comment/react';
 import { getTransientSuggestionKey } from '@platejs/suggestion';
-import { SuggestionPlugin } from '@platejs/suggestion/react';
 import {
   MessageSquareTextIcon,
   MessagesSquareIcon,
@@ -34,7 +32,8 @@ import { Comment, CommentCreateForm } from './comment';
 export const BlockDiscussion = (props) => {
   const { editor, element } = props;
 
-  const commentsApi = editor.getApi(CommentPlugin).comment;
+  // Use our local commentPlugin consistently for both API and options
+  const commentsApi = editor.getApi(commentPlugin).comment;
   const blockPath = editor.api.findPath(element);
 
   // avoid duplicate in table or column
@@ -45,7 +44,7 @@ export const BlockDiscussion = (props) => {
   const commentNodes = [...commentsApi.nodes({ at: blockPath })];
 
   const suggestionNodes = [
-    ...editor.getApi(SuggestionPlugin).suggestion.nodes({ at: blockPath }),
+    ...editor.getApi(suggestionPlugin).suggestion.nodes({ at: blockPath }),
   ].filter(([node]) => !node[getTransientSuggestionKey()]);
 
   if (
@@ -104,16 +103,40 @@ const BlockCommentContent = ({
     resolvedDiscussions.some((d) => d.id === activeCommentId) ||
     resolvedSuggestions.some((s) => s.suggestionId === activeSuggestionId);
 
-  const [_open, setOpen] = React.useState(selected);
+  const [_open, setOpen] = React.useState(false);
 
   // in some cases, we may comment the multiple blocks
   const commentingCurrent =
     !!commentingBlock && PathApi.equals(blockPath, commentingBlock);
 
+  // Determine if popover should be open
   const open =
     _open ||
     selected ||
     (isCommenting && !!draftCommentNode && commentingCurrent);
+  
+  console.log('[BlockDiscussion] Popover state:', {
+    isCommenting,
+    hasDraftNode: !!draftCommentNode,
+    commentingCurrent,
+    _open,
+    selected,
+    finalOpen: open,
+    activeCommentId,
+    draftKey: getDraftCommentKey()
+  });
+  
+  // Auto-open popover when draft comment is created or when comment selected
+  React.useEffect(() => {
+    if (isCommenting && draftCommentNode && commentingCurrent) {
+      console.log('[BlockDiscussion] Draft comment detected - opening popover');
+      setOpen(true);
+    } else if (selected) {
+      setOpen(true);
+    } else if (!isCommenting && !selected) {
+      setOpen(false);
+    }
+  }, [isCommenting, draftCommentNode, commentingCurrent, selected]);
 
   const anchorElement = React.useMemo(() => {
     let activeNode;
@@ -121,13 +144,20 @@ const BlockCommentContent = ({
     if (activeSuggestion) {
       activeNode = suggestionNodes.find(([node]) =>
         TextApi.isText(node) &&
-        editor.getApi(SuggestionPlugin).suggestion.nodeId(node) ===
+        editor.getApi(suggestionPlugin).suggestion.nodeId(node) ===
           activeSuggestion.suggestionId);
     }
 
     if (activeCommentId) {
       if (activeCommentId === getDraftCommentKey()) {
         activeNode = draftCommentNode;
+        if (!activeNode && commentingCurrent) {
+          // If draft node not found but we're commenting, try to find any draft node in the editor
+          const draftNodes = [...editor.getApi(commentPlugin).comment.nodes({ at: [], isDraft: true })];
+          if (draftNodes.length > 0) {
+            activeNode = draftNodes[0];
+          }
+        }
       } else {
         activeNode = commentNodes.find(([node]) =>
           editor.getApi(commentPlugin).comment.nodeId(node) ===
@@ -135,9 +165,14 @@ const BlockCommentContent = ({
       }
     }
 
-    if (!activeNode) return null;
+    if (!activeNode) {
+      console.log('[BlockDiscussion] No anchor element found - activeCommentId:', activeCommentId, 'draftCommentNode:', !!draftCommentNode, 'commentingCurrent:', commentingCurrent);
+      return null;
+    }
 
-    return editor.api.toDOMNode(activeNode[0]);
+    const domNode = editor.api.toDOMNode(activeNode[0]);
+    console.log('[BlockDiscussion] Anchor element found:', !!domNode, 'for activeCommentId:', activeCommentId);
+    return domNode;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,
@@ -147,6 +182,7 @@ const BlockCommentContent = ({
     suggestionNodes,
     draftCommentNode,
     commentNodes,
+    commentingCurrent,
   ]);
 
   if (suggestionsCount + resolvedDiscussions.length === 0 && !draftCommentNode)

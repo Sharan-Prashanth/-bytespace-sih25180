@@ -57,6 +57,8 @@ export const commentPlugin = toTPlatePlugin(BaseCommentPlugin, {
   },
 }) => ({
   setDraft: () => {
+    console.log('[CommentKit] setDraft called - activating comment mode');
+    
     if (editor.api.isCollapsed()) {
       editor.tf.select(editor.api.block()[1]);
     }
@@ -64,8 +66,12 @@ export const commentPlugin = toTPlatePlugin(BaseCommentPlugin, {
     setDraft();
 
     editor.tf.collapse();
-    setOption('activeId', getDraftCommentKey());
-    setOption('commentingBlock', editor.selection.focus.path.slice(0, 1));
+    const commentingBlock = editor.selection?.focus?.path?.slice(0, 1);
+    const draftKey = getDraftCommentKey();
+    
+    console.log('[CommentKit] Setting activeId to:', draftKey, 'commentingBlock:', commentingBlock);
+    setOption('activeId', draftKey);
+    setOption('commentingBlock', commentingBlock);
   },
 }))
   .configure({
