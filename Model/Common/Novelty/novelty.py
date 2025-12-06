@@ -505,6 +505,9 @@ async def analyze_novelty(file: UploadFile = File(...)):
         past_filenames = []
         for p in past_projects:
             pdata = p.get("data") or {}
+            # Handle case where pdata is a list instead of dict
+            if isinstance(pdata, list):
+                pdata = {}
             pmeth = (pdata.get("methodology") or "") or ""
             pobj = (pdata.get("objectives") or "") or ""
             if not pmeth and not pobj:
@@ -590,10 +593,12 @@ async def analyze_novelty(file: UploadFile = File(...)):
         if GENAI_AVAILABLE and gemini_model:
             # Ask Gemini to render final reviewer comment combining numeric scores and references
             comment_prompt = f"""
-You are an expert reviewer. Produce a human-readable novelty comment in this exact format:
+You are an expert reviewer. Produce a human-readable novelty comment followed by a small JSON summary. The text should be short and may reference external items like [1], [2]. After the text, append a JSON object (on its own line) with these keys: `novelty_percentage`, `uniqueness_score`, `advantage_score`, `significance_score`, `gnn_score`, `comment`.
 
-Score: <final_novelty_integer>;
-<One or two short paragraphs describing novelty, referencing external items like [1], [2] where relevant.>
+Example output:
+<short text paragraph(s) referencing [1], [2]>
+{{"novelty_percentage": 24, "uniqueness_score": 0, "advantage_score": 40, "significance_score": 40, "gnn_score": 100, "comment": "Low novelty (24.0%)."}}
+
 Supporting prior-art references:
 {citations_block}
 
@@ -603,7 +608,6 @@ Recommended actions:
 
 Also include a short line explaining why the numeric breakdown is: Uniqueness={uniqueness}, Advantage={advantage}, Significance={significance}.
 
-Return only the assembled text (no JSON).
 Core idea:
 \"\"\"{idea}\"\"\"
 
@@ -615,6 +619,42 @@ Internal top matches summary:
                 llm_comment = resp.text.strip()
                 if llm_comment.startswith("```"):
                     llm_comment = llm_comment.strip("`")
+                # Try to extract trailing JSON object that contains validated scores
+                parsed_json = None
+                try:
+                    # find last JSON object in the text
+                    import re
+                    m = re.search(r"(\{\s*\"novelty_percentage\"[\s\S]*\})\s*$", llm_comment)
+                    if m:
+                        jtxt = m.group(1)
+                        parsed_json = json.loads(jtxt)
+                        # remove the JSON from llm_comment for readability
+                        llm_comment = llm_comment[:m.start(1)].strip()
+                except Exception:
+                    parsed_json = None
+
+                if parsed_json:
+                    # Validate and adopt LLM-provided numeric scores where reasonable
+                    try:
+                        l_novelty = float(parsed_json.get("novelty_percentage", final_novelty))
+                        l_uni = float(parsed_json.get("uniqueness_score", uniqueness))
+                        l_adv = float(parsed_json.get("advantage_score", advantage))
+                        l_sig = float(parsed_json.get("significance_score", significance))
+                        l_gnn = float(parsed_json.get("gnn_score", gnn_score))
+                        # clamp values to [0,100]
+                        def clamp(n):
+                            return max(0.0, min(100.0, n))
+                        final_novelty = clamp(l_novelty)
+                        uniqueness = clamp(l_uni)
+                        advantage = clamp(l_adv)
+                        significance = clamp(l_sig)
+                        gnn_score = clamp(l_gnn)
+                        # If LLM returned a comment field, prefer it for the compact comment
+                        parsed_comment = parsed_json.get("comment")
+                    except Exception:
+                        parsed_comment = None
+                else:
+                    parsed_comment = None
             except Exception as e:
                 logger.warning(f"Gemini comment render failed: {e}")
                 llm_comment = f"Score: {int(round(final_novelty))};\n{explanation}\n\nSupporting prior-art references:\n{citations_block}\n\nRecommended actions:\n" + ("\n".join([f"- {r}" for r in (recommended_actions or [])]) or "- Provide comparative metrics vs cited works.")
@@ -622,15 +662,20 @@ Internal top matches summary:
             # fallback comment
             llm_comment = f"Score: {int(round(final_novelty))};\n{explanation}\n\nSupporting prior-art references:\n{citations_block}\n\nRecommended actions:\n" + ("\n".join([f"- {r}" for r in (recommended_actions or [])]) or "- Provide comparative metrics vs cited works.")
 
-        # short readable comment
-        if final_novelty >= 80:
-            short_comment = f"High novelty ({round(final_novelty,2)}%)."
-        elif final_novelty >= 60:
-            short_comment = f"Moderate novelty ({round(final_novelty,2)}%)."
-        elif final_novelty >= 40:
-            short_comment = f"Low-moderate novelty ({round(final_novelty,2)}%)."
+        # compact, consistent comment (prefer parsed_comment from LLM if provided)
+        novelty_for_comment = float(final_novelty)
+        if parsed_comment:
+            compact_comment = parsed_comment
         else:
-            short_comment = f"Low novelty ({round(final_novelty,2)}%)."
+            if novelty_for_comment >= 80:
+                label = "High novelty"
+            elif novelty_for_comment >= 60:
+                label = "Moderate novelty"
+            elif novelty_for_comment >= 40:
+                label = "Low-moderate novelty"
+            else:
+                label = "Low novelty"
+            compact_comment = f"{label} ({novelty_for_comment:.1f}%)."
 
         result = {
             "novelty_percentage": round(final_novelty, 2),
@@ -638,7 +683,7 @@ Internal top matches summary:
             "advantage_score": advantage,
             "significance_score": significance,
             "gnn_score": gnn_score,
-            "comment": short_comment,
+            "comment": compact_comment,
             "llm_comment": llm_comment,
             "explanation": explanation,
             "recommended_actions": recommended_actions,
