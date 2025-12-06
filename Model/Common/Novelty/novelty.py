@@ -45,6 +45,16 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from sentence_transformers import SentenceTransformer
+# Try to import the exact extraction module provided by the user
+try:
+    from Model.Json_extraction.ocr_extraction import (
+        extract_form_data_with_ai,
+        construct_simple_json_structure,
+        extract_text_from_file as extract_text_from_file_generic,
+    )
+    HAS_EXTRACT_MODULE = True
+except Exception:
+    HAS_EXTRACT_MODULE = False
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -170,17 +180,19 @@ def summarize_idea(text: str, max_chars: int = 300) -> str:
             if idea.startswith("```"):
                 idea = idea.strip("`")
             return " ".join(idea.split())[:max_chars]
-        except Exception as e:
-            logger.warning(f"Gemini summarize failed: {e}")
-    s = text.replace("\n", " ").strip()
-    sentences = [seg.strip() for seg in s.split(".") if seg.strip()]
+        except Exception:
+            pass
+
+    # Fallback heuristic: extract first one or two sentences
+    import re
+    # split on sentence-ending punctuation followed by space and uppercase (simple heuristic)
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     if not sentences:
-        return s[:max_chars]
-    if len(sentences[0]) > 10:
+        return text.strip()[:max_chars]
+    if len(sentences) == 1:
         return sentences[0][:max_chars]
-    if len(sentences) > 1:
-        return (sentences[0] + ". " + sentences[1])[:max_chars]
-    return sentences[0][:max_chars]
+    # return first two sentences if available
+    return (sentences[0] + " " + sentences[1])[:max_chars]
 
 # ---------------------- Supabase processed-json loader ----------------------
 def list_processed_projects(bucket: str = PROCESSED_BUCKET) -> List[Dict[str, Any]]:
@@ -349,7 +361,7 @@ def academic_search_combined(idea: str, limit: int = 8) -> List[Dict[str, Any]]:
     return results
 
 # ---------------------- Gemini comparator for 3-component scoring ----------------------
-def gemini_score_components(idea: str, internal_matches: List[Dict[str, Any]], external_matches: List[Dict[str, Any]]) -> Dict[str, Any]:
+def gemini_score_components(idea: str, internal_matches: List[Dict[str, Any]], external_matches: List[Dict[str, Any]], gnn_score: float = 0.0, methodology: str = "", objectives: str = "") -> Dict[str, Any]:
     """
     Ask Gemini to rate uniqueness, advantage, significance (0-100) and produce an explanation.
     The LLM will compare the idea to the provided matches.
@@ -371,13 +383,23 @@ def gemini_score_components(idea: str, internal_matches: List[Dict[str, Any]], e
         external_text += f"[E{i}] {title}\nURL: {url}\nSnippet: {snippet}\n\n"
 
     prompt = f"""
-You are a senior research evaluator. Given the new proposal idea and examples of previous work (internal) and published papers (external), produce a JSON object with these exact keys:
+You are a senior research evaluator. Given the new proposal idea, the extracted methodology/objectives from the proposal, internal examples of previous work (internal_matches) and published papers (external_matches), produce a JSON object with these exact keys:
+
+- novelty_percentage: integer 0-100  # your assessed overall novelty for the idea, taking into account internal and external evidence and the GNN similarity score
 - uniqueness: integer 0-100
 - advantage: integer 0-100
 - significance: integer 0-100
 - explanation: string (one paragraph explaining why those numbers; mention which cited items influenced the judgement using [E1]/[I1] style)
 - recommended_actions: list of short strings (2-4 items)
-The final novelty score will be computed externally as a weighted sum: uniqueness*{UNIQUENESS_WEIGHT} + advantage*{ADVANTAGE_WEIGHT} + significance*{SIGNIFICANCE_WEIGHT}.
+
+Inputs provided:
+- GNN novelty proxy score (0-100): {gnn_score}
+- Proposal methodology (excerpt):
+\"\"\"{methodology}\"\"\"
+- Proposal objectives (excerpt):
+\"\"\"{objectives}\"\"\"
+
+When assessing, use the provided external matches (published papers) as global citations and compare them directly to the idea. If you reference items, cite them as [E1], [E2], etc.
 
 New idea:
 \"\"\"{idea}\"\"\"
@@ -385,14 +407,15 @@ New idea:
 Internal matches:
 {internal_text or 'None'}
 
-External matches (top):
+External matches (top) with snippets:
 {external_text or 'None'}
 
 Rules:
-- Compare concretely: if the new idea clearly addresses explicit weaknesses or limitations mentioned in the external matches, advantage should be high.
-- If many external matches essentially implement the same method, uniqueness should be low.
+- Consider the GNN-derived similarity (provided above) as a quantitative indicator of internal overlap; use it to calibrate uniqueness.
+- Compare concrete methodology steps: if the proposal's methodology matches or is highly similar to multiple external items, uniqueness should be low.
+- If the proposal addresses explicit limitations in high-relevance external works, advantage should be higher.
 - Significance should reflect potential impact and scale.
-- Return only JSON (no extra commentary).
+- Return only JSON (no extra commentary). Numeric fields must be integers 0-100.
 """
 
     if GENAI_AVAILABLE and gemini_model:
@@ -403,7 +426,7 @@ Rules:
                 txt = txt.split("```", 1)[-1]
             result = json.loads(txt)
             # sanitize numeric values
-            for k in ("uniqueness", "advantage", "significance"):
+            for k in ("uniqueness", "advantage", "significance", "novelty_percentage"):
                 if k in result:
                     try:
                         result[k] = max(0, min(100, int(round(float(result[k])))))
@@ -492,9 +515,21 @@ async def analyze_novelty(file: UploadFile = File(...)):
 
         # Upload extracted JSON (best-effort)
         extracted_json_url = None
+        proposal_data = None
+        json_structure = None
         try:
+            # If the exact extraction module is available, use it to produce a full extraction
+            if HAS_EXTRACT_MODULE:
+                try:
+                    proposal_data = extract_form_data_with_ai(raw_text)
+                    json_structure = construct_simple_json_structure(proposal_data)
+                except Exception as ee:
+                    logger.warning(f"Extraction module failed: {ee}")
+
+            # Fallback: at minimum store methodology/objectives
+            to_store = json_structure if json_structure else {"methodology": methodology, "objectives": objectives}
             json_name = f"{uuid.uuid4()}_extracted.json"
-            supabase.storage.from_(EXTRACT_BUCKET).upload(json_name, json.dumps({"methodology": methodology, "objectives": objectives}, indent=2).encode("utf-8"), {"content-type": "application/json"})
+            supabase.storage.from_(EXTRACT_BUCKET).upload(json_name, json.dumps(to_store, indent=2).encode("utf-8"), {"content-type": "application/json"})
             extracted_json_url = supabase.storage.from_(EXTRACT_BUCKET).get_public_url(json_name)
         except Exception as e:
             logger.warning(f"Supabase upload extracted JSON failed: {e}")
@@ -569,16 +604,26 @@ async def analyze_novelty(file: UploadFile = File(...)):
         internal_matches_for_llm = [{"source": f.get("source") if isinstance(f, dict) and f.get("source") else f.get("source", f.get("source")), "similarity_score": f.get("similarity_score"), "past_idea": f.get("past_idea")} for f in flagged_internal]  # keep as-is
         external_matches_for_llm = external_evidence
 
-        # Use Gemini to compute uniqueness/advantage/significance
-        comp_result = gemini_score_components(idea, internal_matches_for_llm, external_matches_for_llm)
+        # Use Gemini to compute uniqueness/advantage/significance and optionally a direct novelty percentage
+        comp_result = gemini_score_components(idea, internal_matches_for_llm, external_evidence, gnn_score=gnn_score, methodology=methodology, objectives=objectives)
         uniqueness = comp_result.get("uniqueness", 0)
         advantage = comp_result.get("advantage", 0)
         significance = comp_result.get("significance", 0)
         explanation = comp_result.get("explanation", "")
         recommended_actions = comp_result.get("recommended_actions", [])
 
-        # Weighted final novelty
-        final_novelty = (uniqueness * UNIQUENESS_WEIGHT) + (advantage * ADVANTAGE_WEIGHT) + (significance * SIGNIFICANCE_WEIGHT)
+        # If Gemini provided a direct novelty percentage, prefer it (validated later by LLM comment JSON if present)
+        if comp_result.get("novelty_percentage") is not None:
+            try:
+                final_novelty = float(comp_result.get("novelty_percentage"))
+            except Exception:
+                final_novelty = None
+        else:
+            final_novelty = None
+
+        # If final_novelty wasn't provided by Gemini, compute weighted final novelty
+        if final_novelty is None:
+            final_novelty = (uniqueness * UNIQUENESS_WEIGHT) + (advantage * ADVANTAGE_WEIGHT) + (significance * SIGNIFICANCE_WEIGHT)
         final_novelty = float(max(0.0, min(100.0, final_novelty)))
 
         # Build LLM reviewer-style comment (use generated explanation + citations)
@@ -591,25 +636,19 @@ async def analyze_novelty(file: UploadFile = File(...)):
         citations_block = "\n".join(citation_lines) if citation_lines else "No external references found."
 
         if GENAI_AVAILABLE and gemini_model:
-            # Ask Gemini to render final reviewer comment combining numeric scores and references
+            # Ask Gemini to render a concise (3-4 lines) reviewer comment + trailing JSON summary
             comment_prompt = f"""
-You are an expert reviewer. Produce a human-readable novelty comment followed by a small JSON summary. The text should be short and may reference external items like [1], [2]. After the text, append a JSON object (on its own line) with these keys: `novelty_percentage`, `uniqueness_score`, `advantage_score`, `significance_score`, `gnn_score`, `comment`.
+You are an expert reviewer. Produce a concise 3-4 line novelty comment that explains why the idea is low/moderate/high novelty. After the brief comment, on its own line append a single JSON object with these exact keys: `novelty_percentage`, `uniqueness_score`, `advantage_score`, `significance_score`, `gnn_score`, `comment`.
 
-Example output:
-<short text paragraph(s) referencing [1], [2]>
-{{"novelty_percentage": 24, "uniqueness_score": 0, "advantage_score": 40, "significance_score": 40, "gnn_score": 100, "comment": "Low novelty (24.0%)."}}
+Return only the comment text (3-4 lines) followed by the JSON. Example:
+<3 short lines explaining novelty and referencing [1] or [2]>
+{{"novelty_percentage": 24, "uniqueness_score": 0, "advantage_score": 40, "significance_score": 40, "gnn_score": 100, "comment": "Low novelty — methodology closely matches [E1]."}}
 
 Supporting prior-art references:
 {citations_block}
 
-Recommended actions:
-- <bullet>
-- <bullet>
-
-Also include a short line explaining why the numeric breakdown is: Uniqueness={uniqueness}, Advantage={advantage}, Significance={significance}.
-
-Core idea:
-\"\"\"{idea}\"\"\"
+Core idea (brief):
+{idea[:1200]}
 
 Internal top matches summary:
 {json.dumps(internal_matches_for_llm[:6], indent=2)}
@@ -621,38 +660,56 @@ Internal top matches summary:
                     llm_comment = llm_comment.strip("`")
                 # Try to extract trailing JSON object that contains validated scores
                 parsed_json = None
+                parsed_comment = None
                 try:
-                    # find last JSON object in the text
                     import re
-                    m = re.search(r"(\{\s*\"novelty_percentage\"[\s\S]*\})\s*$", llm_comment)
+                    # take the last {...} block in the response
+                    m = re.search(r"(\{[\s\S]*\})\s*$", llm_comment)
                     if m:
                         jtxt = m.group(1)
-                        parsed_json = json.loads(jtxt)
-                        # remove the JSON from llm_comment for readability
-                        llm_comment = llm_comment[:m.start(1)].strip()
+                        try:
+                            parsed_json = json.loads(jtxt)
+                            # remove the JSON from llm_comment for readability
+                            llm_comment = llm_comment[:m.start(1)].strip()
+                        except Exception:
+                            parsed_json = None
                 except Exception:
                     parsed_json = None
 
                 if parsed_json:
-                    # Validate and adopt LLM-provided numeric scores where reasonable
-                    try:
-                        l_novelty = float(parsed_json.get("novelty_percentage", final_novelty))
-                        l_uni = float(parsed_json.get("uniqueness_score", uniqueness))
-                        l_adv = float(parsed_json.get("advantage_score", advantage))
-                        l_sig = float(parsed_json.get("significance_score", significance))
-                        l_gnn = float(parsed_json.get("gnn_score", gnn_score))
-                        # clamp values to [0,100]
-                        def clamp(n):
-                            return max(0.0, min(100.0, n))
-                        final_novelty = clamp(l_novelty)
-                        uniqueness = clamp(l_uni)
-                        advantage = clamp(l_adv)
-                        significance = clamp(l_sig)
-                        gnn_score = clamp(l_gnn)
-                        # If LLM returned a comment field, prefer it for the compact comment
-                        parsed_comment = parsed_json.get("comment")
-                    except Exception:
-                        parsed_comment = None
+                    # Map possible key variants and sanitize numeric values
+                    def pick_num(d, *keys):
+                        for k in keys:
+                            if k in d and d[k] is not None:
+                                try:
+                                    return max(0, min(100, int(round(float(d[k])))))
+                                except Exception:
+                                    return None
+                        return None
+
+                    p_novelty = pick_num(parsed_json, "novelty_percentage", "novelty", "noveltyPercent")
+                    p_uniqueness = pick_num(parsed_json, "uniqueness_score", "uniqueness")
+                    p_advantage = pick_num(parsed_json, "advantage_score", "advantage")
+                    p_significance = pick_num(parsed_json, "significance_score", "significance")
+                    # accept a 'comment' field for the compact comment
+                    parsed_comment = parsed_json.get("comment") if isinstance(parsed_json.get("comment"), str) else None
+
+                    # If the scoring LLM produced a novelty_percentage earlier (comp_result), prefer that
+                    # (comp_result is authoritative). If not present there, accept parsed LLM novelty if available.
+                    if comp_result.get("novelty_percentage") is None and p_novelty is not None:
+                        try:
+                            final_novelty = float(p_novelty)
+                        except Exception:
+                            pass
+
+                    # If LLM-provided component scores are present and comp_result did not provide them, fill them
+                    if comp_result.get("uniqueness") in (None, 0) and p_uniqueness is not None:
+                        uniqueness = p_uniqueness
+                    if comp_result.get("advantage") in (None, 0) and p_advantage is not None:
+                        advantage = p_advantage
+                    if comp_result.get("significance") in (None, 0) and p_significance is not None:
+                        significance = p_significance
+                    # If parsed_comment present, keep it for compact display
                 else:
                     parsed_comment = None
             except Exception as e:
@@ -677,19 +734,34 @@ Internal top matches summary:
                 label = "Low novelty"
             compact_comment = f"{label} ({novelty_for_comment:.1f}%)."
 
+        # Build a clear, verifiable response focused on novelty + extraction
         result = {
             "novelty_percentage": round(final_novelty, 2),
+            "novelty_source": ("llm" if comp_result.get("novelty_percentage") is not None else "heuristic"),
             "uniqueness_score": uniqueness,
             "advantage_score": advantage,
             "significance_score": significance,
             "gnn_score": gnn_score,
-            "comment": compact_comment,
-            "llm_comment": llm_comment,
+            "comment": compact_comment,  # short 1-line or LLM-provided compact comment
+            "llm_comment": llm_comment,  # full LLM reviewer comment (3-4 lines + any explanation)
             "explanation": explanation,
             "recommended_actions": recommended_actions,
-            "flagged_internal": flagged_internal,
-            "citations_global": external_evidence,
-            "table": [{"column": "methodology", "value": methodology}, {"column": "objectives", "value": objectives}],
+
+            # Internal matches / provenance
+            "citations_internal": flagged_internal,
+
+            # Global citations (top 5) with snippets so the reviewer decision is auditable
+            "citations_global": [
+                {"title": e.get("title"), "snippet": e.get("snippet"), "url": e.get("url"), "year": e.get("year"), "similarity": e.get("similarity")} for e in external_evidence[:5]
+            ],
+
+            # Extraction outputs (from your exact extraction module)
+            "extracted_structure": json_structure,
+            "raw_extracted_data": proposal_data,
+            "extracted_text_snippet": raw_text[:1500],
+            "methodology_excerpt": methodology,
+            "objectives_excerpt": objectives,
+
             "checked_at": datetime.now().isoformat(),
             "idea": idea,
             "uploaded_pdf_url": uploaded_pdf_url,
