@@ -16,7 +16,7 @@ import {
     AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PROPOSAL_STATUS, STATUS_CONFIG, formatDate, isRejected, canModifyProposal, isSSRCAccepted } from "../../../../utils/statusConfig";
 import apiClient from "../../../../utils/api";
 
@@ -25,6 +25,14 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
     const [viewMode, setViewMode] = useState("table"); // 'table' | 'card'
     const [filterStatus, setFilterStatus] = useState('all');
     const [viewSection, setViewSection] = useState('active'); // 'active' | 'approved' | 'rejected'
+    
+    // Animation state
+    const [isLoaded, setIsLoaded] = useState(false);
+    
+    useEffect(() => {
+        const timer = setTimeout(() => setIsLoaded(true), 100);
+        return () => clearTimeout(timer);
+    }, []);
     
     // Delete confirmation modal state
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -362,7 +370,9 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
     return (
         <div className="space-y-4">
             {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div 
+                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all duration-500 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+            >
                 <div>
                     <h2 className={`text-xl font-bold ${textColor}`}>My Proposals</h2>
                     <p className={`${subTextColor} text-sm`}>Manage and track your research submissions.</p>
@@ -386,7 +396,10 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
             </div>
 
             {/* Filters & View Toggle */}
-            <div className={`${cardBg} p-3 rounded-xl shadow-sm border flex flex-col sm:flex-row items-center gap-3`}>
+            <div 
+                className={`${cardBg} p-3 rounded-xl shadow-sm border flex flex-col sm:flex-row items-center gap-3 transition-all duration-500 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                style={{ transitionDelay: '100ms' }}
+            >
                 {/* Section Toggle (Active/Approved/Rejected) */}
                 {(approvedProposals.length > 0 || rejectedProposals.length > 0) && (
                     <div className={`flex items-center p-1 rounded-xl border ${isDarkest ? 'bg-neutral-950 border-neutral-800' : isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
@@ -486,7 +499,10 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
             {filteredProposals.length > 0 ? (
                 viewMode === 'table' ? (
                     // Table View
-                    <div className={`${cardBg} rounded-xl shadow-sm border overflow-hidden`}>
+                    <div 
+                        className={`${cardBg} rounded-xl shadow-sm border overflow-hidden transition-all duration-500 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                        style={{ transitionDelay: '200ms' }}
+                    >
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -507,13 +523,19 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                     </div>
                 ) : (
                     // Card View
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div 
+                        className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 transition-all duration-500 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                        style={{ transitionDelay: '200ms' }}
+                    >
                         {filteredProposals.map((proposal) => renderProposalCard(proposal))}
                     </div>
                 )
             ) : (
                 // Empty State
-                <div className={`${cardBg} rounded-xl p-8 text-center border border-dashed ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+                <div 
+                    className={`${cardBg} rounded-xl p-8 text-center border border-dashed ${isDark ? 'border-slate-700' : 'border-slate-200'} transition-all duration-500 ease-out ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                    style={{ transitionDelay: '200ms' }}
+                >
                     <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
                         viewSection === 'rejected' 
                             ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-400')
@@ -551,10 +573,10 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
 
             {/* Delete Confirmation Modal */}
             {deleteModalOpen && proposalToDelete && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/50" onClick={handleDeleteCancel} />
+                <div className="fixed inset-0 z-50 flex items-center justify-center animate-fadeIn">
+                    <div className="absolute inset-0 bg-black/50 animate-fadeIn" onClick={handleDeleteCancel} />
                     
-                    <div className={`relative ${isDark ? 'bg-slate-800' : 'bg-white'} rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden`}>
+                    <div className={`relative ${isDark ? 'bg-slate-800' : 'bg-white'} rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-scaleIn`}>
                         {/* Header */}
                         <div className={`p-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
                             <div className="flex items-center gap-3">

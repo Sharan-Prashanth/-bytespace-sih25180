@@ -42,7 +42,7 @@ export function TocElement(props) {
             </Button>
           ))
         ) : (
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-black opacity-60">
             Create a heading to display the table of contents.
           </div>
         )}

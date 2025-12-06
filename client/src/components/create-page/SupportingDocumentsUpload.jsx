@@ -1,12 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FiUpload, FiFile, FiX, FiCheck } from 'react-icons/fi';
 import { uploadDocument, deleteDocument } from '../../utils/proposalApi';
 import ConfirmationModal from '../ui/ConfirmationModal';
+import AlertModal from './AlertModal';
 
 const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove, proposalCode, theme = 'light' }) => {
   const [uploading, setUploading] = useState({});
   const [removeModal, setRemoveModal] = useState({ isOpen: false, docId: null });
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Alert Modal State
+  const [alertModal, setAlertModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'info'
+  });
 
   const isDark = theme === 'dark' || theme === 'darkest';
   const isDarkest = theme === 'darkest';
@@ -18,6 +27,21 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
   const uploadedBg = isDarkest ? 'bg-neutral-800' : isDark ? 'bg-slate-700' : 'bg-slate-100';
   const hoverBg = isDark ? 'hover:bg-white/5 hover:border-slate-500' : 'hover:bg-slate-100 hover:border-slate-400';
   const spinnerBorder = isDark ? 'border-white/30 border-t-white' : 'border-black/20 border-t-black';
+
+  // Helper to show alert modal
+  const showAlert = useCallback((title, message, variant = 'info') => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      variant
+    });
+  }, []);
+
+  // Close alert modal
+  const closeAlert = useCallback(() => {
+    setAlertModal(prev => ({ ...prev, isOpen: false }));
+  }, []);
 
   const documentConfigs = [
     {
@@ -66,15 +90,18 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
     const file = event.target.files[0];
     if (!file) return;
 
+    // Reset the input
+    event.target.value = '';
+
     // Validate PDF format
     if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file');
+      showAlert('Invalid File Type', 'Please upload a PDF file.', 'error');
       return;
     }
 
     // Validate file size (10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB');
+      showAlert('File Too Large', 'File size must be less than 10MB.', 'error');
       return;
     }
 
@@ -93,7 +120,7 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
       });
     } catch (error) {
       console.error('Upload error:', error);
-      alert(`Failed to upload document: ${error.message || 'Please try again.'}`);
+      showAlert('Upload Failed', `Failed to upload document: ${error.message || 'Please try again.'}`, 'error');
     } finally {
       setUploading({ ...uploading, [docId]: false });
     }
@@ -145,6 +172,16 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
 
   return (
     <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={closeAlert}
+        title={alertModal.title}
+        message={alertModal.message}
+        variant={alertModal.variant}
+        theme={theme}
+      />
+
       <h2 className={`text-xl font-semibold ${textColor} mb-2`}>Supporting Documents</h2>
       <p className={`${mutedText} text-sm mb-4`}>
         Please upload the following supporting documents as mentioned in the guidelines. Documents marked with * are mandatory.

@@ -17,6 +17,46 @@ const findProposal = async (proposalId) => {
 };
 
 /**
+ * Helper: Check if user has access to proposal
+ * Committee members and experts can view and comment on proposals
+ */
+const checkProposalAccess = (proposal, user) => {
+  const createdById = proposal.createdBy?._id || proposal.createdBy;
+  const isPI = createdById.toString() === user._id.toString();
+  
+  if (proposal.status === 'DRAFT') {
+    return isPI;
+  }
+  
+  const isCI = proposal.coInvestigators?.some(ci => {
+    const ciId = ci._id || ci;
+    return ciId.toString() === user._id.toString();
+  });
+  
+  const isCollaborator = proposal.collaborators?.some(collab => {
+    const userId = collab.userId?._id || collab.userId;
+    return userId.toString() === user._id.toString();
+  });
+  
+  const isAssignedReviewer = proposal.assignedReviewers?.some(rev => {
+    const reviewerId = rev.reviewer?._id || rev.reviewer;
+    return reviewerId.toString() === user._id.toString();
+  });
+  
+  const isAdmin = user.roles?.includes('SUPER_ADMIN');
+  const isCommittee = user.roles?.some(role => ['CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER'].includes(role));
+  const isExpertReviewer = user.roles?.includes('EXPERT_REVIEWER');
+  
+  const expertCanAccess = isExpertReviewer && (
+    proposal.status === 'CMPDI_EXPERT_REVIEW' || 
+    proposal.status === 'CMPDI_ACCEPTED' ||
+    proposal.status === 'CMPDI_REJECTED'
+  );
+
+  return isPI || isCI || isCollaborator || isAssignedReviewer || isAdmin || isCommittee || expertCanAccess;
+};
+
+/**
  * @route   GET /api/proposals/:proposalId/comments
  * @desc    Get all comments for a proposal
  * @access  Private
@@ -35,7 +75,11 @@ export const getComments = asyncHandler(async (req, res) => {
     });
   }
 
-  const query = { proposalId: proposal._id, parentComment: null }; // Only top-level comments
+  const query = { 
+    proposalId: proposal._id, 
+    parentComment: null, // Only top-level comments
+    discussionId: null  // Exclude inline comments/discussions (they're handled separately)
+  };
 
   if (resolved !== undefined) {
     query.resolved = resolved === 'true';
@@ -91,12 +135,21 @@ export const addComment = asyncHandler(async (req, res) => {
   await proposal.populate('createdBy', 'fullName email');
   await proposal.populate('coInvestigators', 'fullName email');
 
+  // Prevent inline comments (those with discussionId) from being saved as regular comments
+  // Inline comments should only be created via /comments/inline endpoint
+  if (isInline || req.body.discussionId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Inline comments must be created via /comments/inline endpoint'
+    });
+  }
+  
   const comment = await Comment.create({
     proposalId: proposal._id,
     author: req.user._id,
     content,
-    isInline: isInline || false,
-    inlinePosition: inlinePosition || null,
+    isInline: false,
+    inlinePosition: null,
     formName: formName || null,
     type: type || 'COMMENT'
   });
@@ -300,5 +353,304 @@ export const markCommentAsRead = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Comment marked as read'
+  });
+});
+
+/**
+ * @route   GET /api/proposals/:proposalId/inline-comments
+ * @desc    Get all inline comments for a proposal (grouped by discussion)
+ * @access  Private
+ */
+export const getInlineComments = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { formName = 'formi' } = req.query;
+
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied to this proposal'
+    });
+  }
+
+  // Get all inline comments for this proposal and form
+  const comments = await Comment.find({
+    proposalId: proposal._id,
+    isInline: true,
+    formName: formName,
+    parentComment: null
+  })
+    .sort({ createdAt: 1 })
+    .populate('author', 'fullName email roles')
+    .populate('resolvedBy', 'fullName email')
+    .lean();
+
+  // Group comments by discussionId and get replies
+  const discussions = {};
+  
+  for (const comment of comments) {
+    const discId = comment.discussionId;
+    
+    if (!discId) continue;
+    
+    if (!discussions[discId]) {
+      discussions[discId] = {
+        id: discId,
+        documentContent: comment.documentContent || '',
+        createdAt: comment.createdAt,
+        isResolved: comment.resolved,
+        userId: comment.author._id.toString(),
+        comments: []
+      };
+    }
+    
+    // Get replies for this comment
+    const replies = await Comment.find({ parentComment: comment._id })
+      .sort({ createdAt: 1 })
+      .populate('author', 'fullName email roles')
+      .lean();
+    
+    discussions[discId].comments.push({
+      id: comment._id.toString(),
+      userId: comment.author._id.toString(),
+      contentRich: comment.contentRich || [{ type: 'p', children: [{ text: comment.content }] }],
+      createdAt: comment.createdAt,
+      isEdited: false,
+      user: {
+        id: comment.author._id.toString(),
+        name: comment.author.fullName,
+        avatarUrl: `https://api.dicebear.com/9.x/glass/svg?seed=${comment.author.email || comment.author._id}`
+      },
+      replies: replies.map(r => ({
+        id: r._id.toString(),
+        userId: r.author._id.toString(),
+        contentRich: r.contentRich || [{ type: 'p', children: [{ text: r.content }] }],
+        createdAt: r.createdAt,
+        user: {
+          id: r.author._id.toString(),
+          name: r.author.fullName,
+          avatarUrl: `https://api.dicebear.com/9.x/glass/svg?seed=${r.author.email || r.author._id}`
+        }
+      }))
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      discussions: Object.values(discussions),
+      suggestions: []
+    }
+  });
+});
+
+/**
+ * @route   POST /api/proposals/:proposalId/inline-comments
+ * @desc    Create a new inline comment/discussion
+ * @access  Private
+ */
+export const createInlineComment = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { formName = 'formi', discussionId, documentContent, contentRich, content } = req.body;
+
+  if (!discussionId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Discussion ID is required'
+    });
+  }
+
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied to this proposal'
+    });
+  }
+
+  // Check if discussion already exists
+  const existingComment = await Comment.findOne({
+    proposalId: proposal._id,
+    discussionId: discussionId,
+    isInline: true,
+    parentComment: null
+  });
+
+  if (existingComment) {
+    return res.status(409).json({
+      success: false,
+      message: 'Discussion already exists'
+    });
+  }
+
+  // Create inline comment
+  const comment = await Comment.create({
+    proposalId: proposal._id,
+    author: req.user._id,
+    content: content || 'Inline comment',
+    contentRich: contentRich,
+    discussionId: discussionId,
+    documentContent: documentContent || '',
+    isInline: true,
+    formName: formName,
+    type: 'COMMENT'
+  });
+
+  await comment.populate('author', 'fullName email roles');
+
+  // Log activity
+  await activityLogger.log({
+    user: req.user._id,
+    action: 'INLINE_COMMENT_ADDED',
+    proposalId: proposal._id,
+    details: { 
+      proposalCode: proposal.proposalCode,
+      discussionId: discussionId
+    },
+    ipAddress: req.ip
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Inline comment created successfully',
+    data: comment
+  });
+});
+
+/**
+ * @route   POST /api/proposals/:proposalId/inline-comments/:discussionId/reply
+ * @desc    Reply to an inline comment discussion
+ * @access  Private
+ */
+export const replyToInlineComment = asyncHandler(async (req, res) => {
+  const { proposalId, discussionId } = req.params;
+  const { contentRich, content } = req.body;
+
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied to this proposal'
+    });
+  }
+
+  const parentComment = await Comment.findOne({
+    proposalId: proposal._id,
+    discussionId: discussionId,
+    isInline: true,
+    parentComment: null
+  });
+
+  if (!parentComment) {
+    return res.status(404).json({
+      success: false,
+      message: 'Discussion not found'
+    });
+  }
+
+  // Create reply
+  const reply = await Comment.create({
+    proposalId: proposal._id,
+    author: req.user._id,
+    content: content || 'Reply',
+    contentRich: contentRich,
+    parentComment: parentComment._id,
+    discussionId: discussionId,
+    isInline: true,
+    formName: parentComment.formName,
+    type: parentComment.type
+  });
+
+  await reply.populate('author', 'fullName email roles');
+
+  res.status(201).json({
+    success: true,
+    message: 'Reply added successfully',
+    data: reply
+  });
+});
+
+/**
+ * @route   PUT /api/proposals/:proposalId/inline-comments/:discussionId/resolve
+ * @desc    Resolve/unresolve an inline discussion (only author can resolve)
+ * @access  Private
+ */
+export const resolveInlineComment = asyncHandler(async (req, res) => {
+  const { proposalId, discussionId } = req.params;
+  const { isResolved = true } = req.body;
+
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  if (!checkProposalAccess(proposal, req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied to this proposal'
+    });
+  }
+
+  const discussion = await Comment.findOne({
+    proposalId: proposal._id,
+    discussionId: discussionId,
+    isInline: true,
+    parentComment: null
+  });
+
+  if (!discussion) {
+    return res.status(404).json({
+      success: false,
+      message: 'Discussion not found'
+    });
+  }
+
+  if (discussion.author.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only the comment author can resolve this discussion'
+    });
+  }
+
+  discussion.resolved = isResolved;
+  discussion.resolvedBy = isResolved ? req.user._id : null;
+  discussion.resolvedAt = isResolved ? new Date() : null;
+  await discussion.save();
+
+  await discussion.populate('author', 'fullName email roles');
+  await discussion.populate('resolvedBy', 'fullName email');
+
+  res.json({
+    success: true,
+    message: isResolved ? 'Discussion marked as resolved' : 'Discussion reopened',
+    data: discussion
   });
 });

@@ -31,7 +31,19 @@ const commentSchema = new mongoose.Schema({
   },
   formName: {
     type: String,
-    enum: ['formI', 'formIA', 'formIX', 'formX', 'formXI', 'formXII', null],
+    enum: ['formi', 'formia', 'formix', 'formx', 'formxi', 'formxii', null],
+    default: null
+  },
+  discussionId: {
+    type: String,
+    default: null
+  },
+  documentContent: {
+    type: String,
+    default: null
+  },
+  contentRich: {
+    type: mongoose.Schema.Types.Mixed,
     default: null
   },
   resolved: {
@@ -70,6 +82,11 @@ const commentSchema = new mongoose.Schema({
 commentSchema.index({ proposalId: 1, resolved: 1 });
 commentSchema.index({ parentComment: 1 });
 commentSchema.index({ proposalId: 1, author: 1 });
+commentSchema.index({ proposalId: 1, discussionId: 1, isInline: 1 });
+commentSchema.index({ discussionId: 1, parentComment: 1 }, { 
+  unique: true, 
+  partialFilterExpression: { discussionId: { $ne: null }, parentComment: null }
+});
 
 const Comment = mongoose.model('Comment', commentSchema);
 

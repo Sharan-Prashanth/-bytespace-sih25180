@@ -50,16 +50,25 @@ const uploadAndInsertImage = async (editor, file) => {
     
     console.log('[transforms] Image uploaded successfully:', uploadData.url);
     
+    // Generate unique ID for the image node
+    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     // Only insert image node after successful upload
     const imageNode = {
       type: KEYS.img,
+      id: imageId,
       url: uploadData.url,
       s3Key: uploadData.s3Key || uploadData.path,
       width: '100%',
       children: [{ text: '' }],
     };
     
-    editor.tf.insertNodes([imageNode]);
+    console.log('[transforms] Inserting image node:', imageNode);
+    
+    // Insert the image node and select it
+    editor.tf.insertNodes([imageNode], { select: true });
+    
+    console.log('[transforms] Image node inserted successfully');
     
   } catch (error) {
     console.error('[transforms] Image upload failed:', error);

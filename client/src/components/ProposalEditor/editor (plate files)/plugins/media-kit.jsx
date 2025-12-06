@@ -22,18 +22,31 @@ import { VideoElement } from '@/components/ui (plate files)/media-video-node';
 import { uploadImage as uploadImageApi } from '@/utils/proposalApi';
 
 // Custom upload function that uploads to S3 via backend API
+// This is called when images are pasted or dropped into the editor
+// Returns a promise that resolves to the S3 URL
 const uploadImageToS3 = async (dataUrl) => {
   try {
-    console.log('[MediaKit] uploadImageToS3 called');
+    console.log('[MediaKit] uploadImageToS3 called with data URL length:', dataUrl?.length);
+    
+    // If it's already an S3 URL (not a data URL), return it as-is
+    if (dataUrl && !dataUrl.startsWith('data:')) {
+      console.log('[MediaKit] URL is already an S3 URL, returning as-is');
+      return dataUrl;
+    }
+    
+    if (!dataUrl || !dataUrl.startsWith('data:')) {
+      console.error('[MediaKit] Invalid data URL provided');
+      return dataUrl;
+    }
     
     // Convert data URL to File object
     const response = await fetch(dataUrl);
     const blob = await response.blob();
-    const file = new File([blob], `image-${Date.now()}.${blob.type.split('/')[1] || 'png'}`, { 
-      type: blob.type 
-    });
+    const extension = blob.type.split('/')[1] || 'png';
+    const fileName = `image-${Date.now()}.${extension}`;
+    const file = new File([blob], fileName, { type: blob.type });
     
-    console.log('[MediaKit] Uploading file to S3:', file.name, file.type, file.size);
+    console.log('[MediaKit] Uploading file to S3:', fileName, file.type, file.size);
     
     // Upload to S3 via backend API
     const uploadResponse = await uploadImageApi(file, 'editor-images');
@@ -42,11 +55,11 @@ const uploadImageToS3 = async (dataUrl) => {
     const uploadData = uploadResponse.data || uploadResponse;
     
     if (!uploadData || !uploadData.url) {
-      console.error('[MediaKit] Upload failed - no URL returned');
+      console.error('[MediaKit] Upload failed - no URL returned, falling back to data URL');
       return dataUrl; // Fallback to data URL if upload fails
     }
     
-    console.log('[MediaKit] Image uploaded successfully:', uploadData.url);
+    console.log('[MediaKit] Image uploaded successfully to S3:', uploadData.url);
     return uploadData.url;
   } catch (error) {
     console.error('[MediaKit] S3 upload error:', error);

@@ -225,10 +225,16 @@ function CollaborateContent() {
 
   const isCI = useCallback(() => {
     if (!proposal || !user) return false;
+    
     return proposal.coInvestigators?.some(ci => {
-      const ciId = ci._id || ci;
-      return ciId?.toString() === user._id?.toString();
-    });
+      // Handle various CI data structures:
+      // 1. Direct user ID string
+      // 2. Object with _id
+      // 3. Nested user object { user: { _id } }
+      const ciId = ci?.user?._id || ci?.user || ci?._id || ci;
+      const userId = user._id;
+      return ciId?.toString() === userId?.toString();
+    }) || false;
   }, [proposal, user]);
 
   const isReviewer = useCallback(() => {
@@ -248,7 +254,7 @@ function CollaborateContent() {
   // Role-based permissions
   // PI: can edit proposal info (selective fields), add up to 5 CIs, comments, edit, save/create version
   // CI: cannot edit proposal info, cannot add CIs, can comment, edit, save/create version
-  // Reviewers/Committee: cannot edit proposal info, cannot add collaborators, comments only, suggestion mode, cannot save
+  // Reviewers/Committee: cannot edit proposal info, cannot add collaborators, can add inline comments, suggestion mode, cannot save proposal
   // Super Admin: can do anything
   
   const canEditProposalInfo = isPI() || isSuperAdmin();
@@ -258,18 +264,6 @@ function CollaborateContent() {
   const canSaveChanges = isPI() || isCI() || isSuperAdmin();
   const isSuggestionMode = (isReviewer() || isCommitteeMember()) && !isSuperAdmin();
   const currentCICount = collaborators.filter(c => c.role === 'CI').length;
-
-  // Debug permissions
-  console.log('[CollaboratePage] Permissions:', {
-    userId: user?._id,
-    createdById: proposal?.createdBy?._id || proposal?.createdBy,
-    isPI: isPI(),
-    isCI: isCI(),
-    isSuperAdmin: isSuperAdmin(),
-    canEditEditor,
-    isSuggestionMode,
-    proposalLoaded: !!proposal
-  });
 
   // Initialize local storage
   useEffect(() => {

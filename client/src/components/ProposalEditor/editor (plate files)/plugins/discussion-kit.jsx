@@ -92,14 +92,14 @@ const discussionsData = [
   },
 ];
 
-const avatarUrl = (seed) =>
+export const avatarUrl = (seed) =>
   `https://api.dicebear.com/9.x/glass/svg?seed=${seed}`;
 
 /**
- * Create users data from current user and collaborators
+ * Create users data from current user, collaborators, and discussion comments
  * This function should be called with actual user data
  */
-export function createUsersData(currentUser, collaborators = []) {
+export function createUsersData(currentUser, collaborators = [], discussions = []) {
   const users = {};
   
   // Add current user
@@ -107,7 +107,7 @@ export function createUsersData(currentUser, collaborators = []) {
     users[currentUser._id] = {
       id: currentUser._id,
       avatarUrl: avatarUrl(currentUser.email || currentUser._id),
-      name: currentUser.name || 'Anonymous',
+      name: currentUser.fullName || currentUser.name || 'Anonymous',
     };
   }
   
@@ -117,8 +117,35 @@ export function createUsersData(currentUser, collaborators = []) {
       users[collab._id] = {
         id: collab._id,
         avatarUrl: avatarUrl(collab.email || collab._id),
-        name: collab.name || 'Anonymous',
+        name: collab.fullName || collab.name || 'Anonymous',
       };
+    }
+  });
+  
+  // Add users from discussions (from database)
+  discussions.forEach(discussion => {
+    if (discussion.comments) {
+      discussion.comments.forEach(comment => {
+        if (comment.user && !users[comment.user.id]) {
+          users[comment.user.id] = {
+            id: comment.user.id,
+            avatarUrl: comment.user.avatarUrl || avatarUrl(comment.user.id),
+            name: comment.user.name || 'Unknown User',
+          };
+        }
+        // Add reply users as well
+        if (comment.replies) {
+          comment.replies.forEach(reply => {
+            if (reply.user && !users[reply.user.id]) {
+              users[reply.user.id] = {
+                id: reply.user.id,
+                avatarUrl: reply.user.avatarUrl || avatarUrl(reply.user.id),
+                name: reply.user.name || 'Unknown User',
+              };
+            }
+          });
+        }
+      });
     }
   });
   

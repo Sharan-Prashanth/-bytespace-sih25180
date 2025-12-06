@@ -120,14 +120,14 @@ export const getProposals = asyncHandler(async (req, res) => {
   if (user.roles.includes('SUPER_ADMIN')) {
     // Admin sees all proposals
   } else if (user.roles.includes('CMPDI_MEMBER')) {
-    // CMPDI sees proposals in their review stages
-    query.status = { $in: ['SUBMITTED', 'AI_EVALUATION', 'AI_EVALUATION_PENDING', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED'] };
+    // CMPDI sees proposals in their review stages and can track proposals forwarded to TSSRC/SSRC
+    query.status = { $in: ['SUBMITTED', 'AI_EVALUATION', 'AI_EVALUATION_PENDING', 'AI_REJECTED', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
   } else if (user.roles.includes('TSSRC_MEMBER')) {
-    // TSSRC sees CMPDI approved proposals and their review stages
-    query.status = { $in: ['CMPDI_ACCEPTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED'] };
+    // TSSRC sees proposals in their review stages and can track proposals forwarded to SSRC
+    query.status = { $in: ['TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
   } else if (user.roles.includes('SSRC_MEMBER')) {
     // SSRC sees TSSRC approved proposals and their review stages
-    query.status = { $in: ['TSSRC_ACCEPTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
+    query.status = { $in: ['SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
   } else if (user.roles.includes('EXPERT_REVIEWER')) {
     // Expert reviewers see proposals in expert review stage or assigned to them
     query.$or = [
@@ -1231,9 +1231,12 @@ export const getInlineDiscussions = asyncHandler(async (req, res) => {
   const { proposalId } = req.params;
   const { formId = 'formi' } = req.query;
   
+  console.log('[getInlineDiscussions] Called with:', { proposalId, formId });
+  
   const proposal = await findProposal(proposalId);
   
   if (!proposal) {
+    console.log('[getInlineDiscussions] Proposal not found:', proposalId);
     return res.status(404).json({
       success: false,
       message: 'Proposal not found'
@@ -1242,6 +1245,7 @@ export const getInlineDiscussions = asyncHandler(async (req, res) => {
   
   // Check access
   if (!checkProposalAccess(proposal, req.user)) {
+    console.log('[getInlineDiscussions] Access denied for user:', req.user?._id);
     return res.status(403).json({
       success: false,
       message: 'Access denied'
@@ -1252,6 +1256,8 @@ export const getInlineDiscussions = asyncHandler(async (req, res) => {
     discussions: [],
     suggestions: []
   };
+  
+  console.log('[getInlineDiscussions] Returning', discussions.discussions?.length, 'discussions for', proposal.proposalCode, formId);
   
   res.json({
     success: true,
@@ -1268,22 +1274,31 @@ export const saveInlineDiscussions = asyncHandler(async (req, res) => {
   const { proposalId } = req.params;
   const { formId = 'formi', discussions, suggestions } = req.body;
   
+  console.log('[saveInlineDiscussions] Called with:', { proposalId, formId, discussionsCount: discussions?.length, suggestionsCount: suggestions?.length });
+  console.log('[saveInlineDiscussions] User:', req.user?._id, req.user?.roles);
+  
   const proposal = await findProposal(proposalId);
   
   if (!proposal) {
+    console.log('[saveInlineDiscussions] Proposal not found:', proposalId);
     return res.status(404).json({
       success: false,
       message: 'Proposal not found'
     });
   }
   
+  console.log('[saveInlineDiscussions] Proposal found:', proposal.proposalCode, 'status:', proposal.status);
+  
   // Check access
   if (!checkProposalAccess(proposal, req.user)) {
+    console.log('[saveInlineDiscussions] Access denied for user:', req.user?._id);
     return res.status(403).json({
       success: false,
       message: 'Access denied'
     });
   }
+  
+  console.log('[saveInlineDiscussions] Access granted, saving discussions...');
   
   // Initialize inlineDiscussions if it doesn't exist
   if (!proposal.inlineDiscussions) {
@@ -1301,6 +1316,8 @@ export const saveInlineDiscussions = asyncHandler(async (req, res) => {
   // Mark as modified since it's a Mixed type
   proposal.markModified('inlineDiscussions');
   await proposal.save({ validateModifiedOnly: true });
+  
+  console.log('[saveInlineDiscussions] Discussions saved successfully for', proposal.proposalCode, formId);
   
   // Log activity
   await activityLogger.log({

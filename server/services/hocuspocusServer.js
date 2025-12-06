@@ -83,8 +83,11 @@ export const createHocuspocusServer = () => {
         const canEdit = isCreator || isCoInvestigator || user.roles?.includes('SUPER_ADMIN');
         const canSuggest = (isExpertReviewer || isCommitteeMember) && !canEdit;
         
-        // Return user context
-        return {
+        console.log(`[Hocuspocus] User ${user.fullName} authenticated for ${documentName}, canEdit: ${canEdit}, canSuggest: ${canSuggest}`);
+        
+        // In Hocuspocus v3.x, return the context object directly
+        // This will be available as data.context in other hooks
+        data.context = {
           user: {
             id: user._id.toString(),
             name: user.fullName,
@@ -95,8 +98,10 @@ export const createHocuspocusServer = () => {
           }
         };
         
+        return data.context;
+        
       } catch (error) {
-        console.error('Hocuspocus authentication error:', error.message);
+        console.error('[Hocuspocus] Authentication error:', error.message);
         throw error;
       }
     },
@@ -140,7 +145,7 @@ export const createHocuspocusServer = () => {
     
     // When a user disconnects
     async onDisconnect(data) {
-      const { documentName, context, socketId } = data;
+      const { documentName, context, socketId, document } = data;
       
       if (context?.user) {
         console.log(`[Hocuspocus] User disconnected: ${context.user.name} from ${documentName}`);
@@ -150,9 +155,81 @@ export const createHocuspocusServer = () => {
       const docConnections = activeConnections.get(documentName);
       if (docConnections) {
         docConnections.delete(socketId);
+        console.log(`[Hocuspocus] Remaining active users in ${documentName}: ${docConnections.size}`);
         
+        // CRITICAL: Save to database only when last user disconnects
         if (docConnections.size === 0) {
+          console.log(`[Hocuspocus] Last user disconnected - saving ${documentName} to database`);
+          
+          // Save final state to database
+          if (document) {
+            try {
+              // Call onStoreDocument to persist
+              const proposalId = documentName.replace('proposal-', '');
+              const stateUpdate = Y.encodeStateAsUpdate(document);
+              
+              if (stateUpdate && stateUpdate.length > 0) {
+                const yjsState = Buffer.from(stateUpdate).toString('base64');
+                
+                // Extract content and discussions
+                const formContent = document.getMap('formContent');
+                const formiContent = formContent.get('formi');
+                let parsedContent = null;
+                
+                if (formiContent) {
+                  try {
+                    parsedContent = JSON.parse(formiContent);
+                  } catch (e) {
+                    console.warn('[Hocuspocus] Could not parse formi content');
+                  }
+                }
+                
+                const discussionsContent = document.getMap('discussions');
+                const formiDiscussions = discussionsContent.get('formi');
+                let parsedDiscussions = null;
+                
+                if (formiDiscussions) {
+                  try {
+                    parsedDiscussions = JSON.parse(formiDiscussions);
+                  } catch (e) {
+                    console.warn('[Hocuspocus] Could not parse formi discussions');
+                  }
+                }
+                
+                const updateData = {
+                  yjsState,
+                  'metadata.lastYjsSync': new Date()
+                };
+                
+                if (parsedContent && Array.isArray(parsedContent)) {
+                  updateData['formi.editorContent'] = parsedContent;
+                  updateData['forms.formI.editorContent'] = parsedContent;
+                }
+                
+                if (parsedDiscussions && Array.isArray(parsedDiscussions)) {
+                  updateData['inlineDiscussions.formi.discussions'] = parsedDiscussions;
+                  updateData['inlineDiscussions.formi.lastUpdatedAt'] = new Date();
+                }
+                
+                await Proposal.findOneAndUpdate(
+                  {
+                    $or: [
+                      { _id: proposalId.length === 24 ? proposalId : null },
+                      { proposalCode: proposalId }
+                    ]
+                  },
+                  { $set: updateData }
+                );
+                
+                console.log(`[Hocuspocus] Successfully saved ${documentName} on last user disconnect`);
+              }
+            } catch (error) {
+              console.error(`[Hocuspocus] Error saving document on disconnect:`, error);
+            }
+          }
+          
           activeConnections.delete(documentName);
+          console.log(`[Hocuspocus] Cleaned up ${documentName} - no active users`);
         }
       }
     },
@@ -188,6 +265,14 @@ export const createHocuspocusServer = () => {
             formContent.set('formi', JSON.stringify(content));
             console.log(`[Hocuspocus] Initialized document from plate.js content for ${documentName}`);
           }
+          
+          // Also load existing discussions
+          const discussions = proposal.inlineDiscussions?.formi?.discussions;
+          if (discussions && Array.isArray(discussions)) {
+            const discussionsContent = document.getMap('discussions');
+            discussionsContent.set('formi', JSON.stringify(discussions));
+            console.log(`[Hocuspocus] Loaded ${discussions.length} discussions for ${documentName}`);
+          }
         }
         
         return document;
@@ -200,14 +285,29 @@ export const createHocuspocusServer = () => {
     
     // Save document to database
     async onStoreDocument(data) {
-      const { documentName, document, state } = data;
+      const { documentName, document } = data;
       const proposalId = documentName.replace('proposal-', '');
       
       try {
-        // Save Yjs state to database
-        const yjsState = Buffer.from(state).toString('base64');
+        // CRITICAL: Skip save if there are active users - only save on disconnect
+        const docConnections = activeConnections.get(documentName);
+        if (docConnections && docConnections.size > 0) {
+          console.log(`[Hocuspocus] Skipping save for ${documentName} - ${docConnections.size} active users`);
+          return;
+        }
         
-        // Also extract the plate.js content for backwards compatibility
+        // In Hocuspocus v3.x, we need to encode the state ourselves
+        // The 'state' parameter may be undefined, so use Y.encodeStateAsUpdate
+        const stateUpdate = Y.encodeStateAsUpdate(document);
+        
+        if (!stateUpdate || stateUpdate.length === 0) {
+          console.warn(`[Hocuspocus] Empty state for document ${documentName}, skipping save`);
+          return;
+        }
+        
+        const yjsState = Buffer.from(stateUpdate).toString('base64');
+        
+        // Extract the plate.js content for backwards compatibility
         const formContent = document.getMap('formContent');
         const formiContent = formContent.get('formi');
         let parsedContent = null;
@@ -217,6 +317,19 @@ export const createHocuspocusServer = () => {
             parsedContent = JSON.parse(formiContent);
           } catch (e) {
             console.warn('[Hocuspocus] Could not parse formi content');
+          }
+        }
+        
+        // Extract discussions for persistence
+        const discussionsContent = document.getMap('discussions');
+        const formiDiscussions = discussionsContent.get('formi');
+        let parsedDiscussions = null;
+        
+        if (formiDiscussions) {
+          try {
+            parsedDiscussions = JSON.parse(formiDiscussions);
+          } catch (e) {
+            console.warn('[Hocuspocus] Could not parse formi discussions');
           }
         }
         
@@ -232,6 +345,12 @@ export const createHocuspocusServer = () => {
           updateData['forms.formI.editorContent'] = parsedContent;
         }
         
+        // Update discussions if available
+        if (parsedDiscussions && Array.isArray(parsedDiscussions)) {
+          updateData['inlineDiscussions.formi.discussions'] = parsedDiscussions;
+          updateData['inlineDiscussions.formi.lastUpdatedAt'] = new Date();
+        }
+        
         await Proposal.findOneAndUpdate(
           {
             $or: [
@@ -242,7 +361,7 @@ export const createHocuspocusServer = () => {
           { $set: updateData }
         );
         
-        console.log(`[Hocuspocus] Saved document ${documentName} to database`);
+        console.log(`[Hocuspocus] Saved document ${documentName} to database (${stateUpdate.length} bytes)`);
         
       } catch (error) {
         console.error(`[Hocuspocus] Error saving document ${documentName}:`, error);

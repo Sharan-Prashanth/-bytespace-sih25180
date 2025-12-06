@@ -53,6 +53,25 @@ div[data-plate-floating-toolbar] button:hover {
   color: #111827 !important;
 }
 
+/* Table floating toolbar - Light mode */
+[data-radix-popper-content-wrapper] [role="toolbar"] {
+  background-color: white !important;
+  color: #1f2937 !important;
+}
+
+[data-radix-popper-content-wrapper] [role="toolbar"] button {
+  color: #4b5563 !important;
+}
+
+[data-radix-popper-content-wrapper] [role="toolbar"] button:hover {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+[data-radix-popper-content-wrapper] [role="toolbar"] svg {
+  color: inherit !important;
+}
+
 /* Plate floating toolbar - Dark mode */
 .dark div[data-plate-floating-toolbar] {
   background-color: #1e293b !important;
@@ -68,6 +87,26 @@ div[data-plate-floating-toolbar] button:hover {
 .dark div[data-plate-floating-toolbar] button:hover {
   background-color: rgba(255, 255, 255, 0.1) !important;
   color: #ffffff !important;
+}
+
+/* Table floating toolbar - Dark mode */
+.dark [data-radix-popper-content-wrapper] [role="toolbar"] {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border: 1px solid #475569 !important;
+}
+
+.dark [data-radix-popper-content-wrapper] [role="toolbar"] button {
+  color: #f1f5f9 !important;
+}
+
+.dark [data-radix-popper-content-wrapper] [role="toolbar"] button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.dark [data-radix-popper-content-wrapper] [role="toolbar"] svg {
+  color: inherit !important;
 }
 
 /* Dark mode CSS variables - when .dark class is applied */

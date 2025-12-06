@@ -79,15 +79,11 @@ export default function CMPDIProposalsSection({ theme }) {
     // Expert Review: CMPDI_EXPERT_REVIEW
     const expertReviewProposals = proposals.filter(p => p.status === 'CMPDI_EXPERT_REVIEW');
     
-    // Approved by CMPDI (Recommended for TSSRC): CMPDI_ACCEPTED, TSSRC_REVIEW
-    const recommendedForTSSRC = proposals.filter(p => 
-        ['CMPDI_ACCEPTED', 'TSSRC_REVIEW'].includes(p.status)
-    );
+    // For TSSRC: TSSRC_REVIEW (proposals that CMPDI accepted and forwarded to TSSRC)
+    const forTSSRCProposals = proposals.filter(p => p.status === 'TSSRC_REVIEW');
     
-    // TSSRC Approved (Recommended for SSRC): TSSRC_ACCEPTED, SSRC_REVIEW
-    const recommendedForSSRC = proposals.filter(p => 
-        ['TSSRC_ACCEPTED', 'SSRC_REVIEW'].includes(p.status)
-    );
+    // For SSRC: SSRC_REVIEW (proposals that TSSRC accepted and forwarded to SSRC)
+    const forSSRCProposals = proposals.filter(p => p.status === 'SSRC_REVIEW');
     
     // Final Approved: SSRC_ACCEPTED
     const approvedProposals = proposals.filter(p => p.status === 'SSRC_ACCEPTED');
@@ -101,10 +97,10 @@ export default function CMPDIProposalsSection({ theme }) {
         switch (viewSection) {
             case 'expertReview':
                 return expertReviewProposals;
-            case 'recommendedTSSRC':
-                return recommendedForTSSRC;
-            case 'recommendedSSRC':
-                return recommendedForSSRC;
+            case 'forTSSRC':
+                return forTSSRCProposals;
+            case 'forSSRC':
+                return forSSRCProposals;
             case 'approved':
                 return approvedProposals;
             case 'rejected':
@@ -136,16 +132,14 @@ export default function CMPDIProposalsSection({ theme }) {
                     { value: 'all', label: 'All Status' },
                     { value: 'CMPDI_EXPERT_REVIEW', label: 'Expert Review' }
                 ];
-            case 'recommendedTSSRC':
+            case 'forTSSRC':
                 return [
                     { value: 'all', label: 'All Status' },
-                    { value: 'CMPDI_ACCEPTED', label: 'CMPDI Accepted' },
                     { value: 'TSSRC_REVIEW', label: 'TSSRC Review' }
                 ];
-            case 'recommendedSSRC':
+            case 'forSSRC':
                 return [
                     { value: 'all', label: 'All Status' },
-                    { value: 'TSSRC_ACCEPTED', label: 'TSSRC Accepted' },
                     { value: 'SSRC_REVIEW', label: 'SSRC Review' }
                 ];
             case 'rejected':
@@ -310,8 +304,8 @@ export default function CMPDIProposalsSection({ theme }) {
     const getSectionIcon = (section) => {
         switch (section) {
             case 'expertReview': return <Users size={14} />;
-            case 'recommendedTSSRC': return <Send size={14} />;
-            case 'recommendedSSRC': return <Send size={14} />;
+            case 'forTSSRC': return <Send size={14} />;
+            case 'forSSRC': return <Send size={14} />;
             case 'approved': return <Award size={14} />;
             case 'rejected': return <XCircle size={14} />;
             default: return <Clock size={14} />;
@@ -373,7 +367,7 @@ export default function CMPDIProposalsSection({ theme }) {
                         <button
                             onClick={() => setMoreMenuOpen(!moreMenuOpen)}
                             className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold flex items-center gap-1.5 ${
-                                ['recommendedTSSRC', 'recommendedSSRC', 'approved'].includes(viewSection)
+                                ['forTSSRC', 'forSSRC', 'approved'].includes(viewSection)
                                     ? (isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-black shadow-sm border')
                                     : (isDark ? 'text-slate-400 hover:text-slate-300' : 'text-black hover:text-black')
                             }`}
@@ -387,26 +381,26 @@ export default function CMPDIProposalsSection({ theme }) {
                             <div className={`absolute top-full left-0 mt-1 min-w-48 rounded-xl shadow-lg border z-50 ${cardBg}`}>
                                 <div className="p-1">
                                     <button
-                                        onClick={() => { setViewSection('recommendedTSSRC'); setFilterStatus('all'); setMoreMenuOpen(false); }}
+                                        onClick={() => { setViewSection('forTSSRC'); setFilterStatus('all'); setMoreMenuOpen(false); }}
                                         className={`w-full px-3 py-2 rounded-lg text-left text-xs font-bold flex items-center gap-2 transition-colors ${
-                                            viewSection === 'recommendedTSSRC'
+                                            viewSection === 'forTSSRC'
                                                 ? (isDark ? 'bg-cyan-900/50 text-cyan-400' : 'bg-cyan-50 text-cyan-600')
                                                 : (isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-black hover:bg-slate-50')
                                         }`}
                                     >
                                         <Send size={14} />
-                                        TSSRC Review ({recommendedForTSSRC.length})
+                                        For TSSRC ({forTSSRCProposals.length})
                                     </button>
                                     <button
-                                        onClick={() => { setViewSection('recommendedSSRC'); setFilterStatus('all'); setMoreMenuOpen(false); }}
+                                        onClick={() => { setViewSection('forSSRC'); setFilterStatus('all'); setMoreMenuOpen(false); }}
                                         className={`w-full px-3 py-2 rounded-lg text-left text-xs font-bold flex items-center gap-2 transition-colors ${
-                                            viewSection === 'recommendedSSRC'
+                                            viewSection === 'forSSRC'
                                                 ? (isDark ? 'bg-violet-900/50 text-violet-400' : 'bg-violet-50 text-violet-600')
                                                 : (isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-black hover:bg-slate-50')
                                         }`}
                                     >
                                         <Send size={14} />
-                                        SSRC Review ({recommendedForSSRC.length})
+                                        For SSRC ({forSSRCProposals.length})
                                     </button>
                                     <button
                                         onClick={() => { setViewSection('approved'); setFilterStatus('all'); setMoreMenuOpen(false); }}
