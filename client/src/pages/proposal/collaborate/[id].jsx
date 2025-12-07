@@ -30,7 +30,7 @@ const AdvancedProposalEditor = lazy(() =>
   import('../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor')
 );
 const VersionHistory = lazy(() => import('../../../components/VersionHistory'));
-const ChatWindow = lazy(() => import('../../../components/ChatWindow'));
+const ChatWindowNew = lazy(() => import('../../../components/ChatWindow'));
 const Saarthi = lazy(() => import('../../../components/Saarthi'));
 
 // Import quick actions helper
@@ -1029,7 +1029,7 @@ function CollaborateContent() {
 
       <Suspense fallback={null}>
         {showTeamChat && (
-          <ChatWindow
+          <ChatWindowNew
             showChatWindow={showTeamChat}
             setShowChatWindow={setShowTeamChat}
             messages={chatMessages}

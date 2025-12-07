@@ -6,7 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { getProposalById } from '../../../utils/proposalApi';
 import apiClient from '../../../utils/api';
-import { Edit, Users, FileText, MessageSquare, Download, ChevronUp, ChevronDown, Clock, PenLine } from 'lucide-react';
+import { Edit, Users, FileText, MessageSquare, Download, ChevronUp, ChevronDown, Clock, PenLine, Moon, Sun, MoonStar, ArrowLeft } from 'lucide-react';
 import { getUserQuickActions, getCommitteeQuickActions, getExpertQuickActions } from '../../../utils/quickActionsHelper';
 import StickyNavigation from '../../../components/common/StickyNavigation';
 
@@ -115,6 +115,8 @@ function ViewProposalContent() {
   // Check if proposal is in draft status
   const isDraft = proposal && proposal.status === 'DRAFT';
   const isSSRCAccepted = proposal && proposal.status === 'SSRC_ACCEPTED';
+  const isAIRejected = proposal && proposal.status === 'AI_EVALUATION_REJECTED';
+  const isFinallyRejected = proposal && (proposal.status === 'CMPDI_REJECTED' || proposal.status === 'TSSRC_REJECTED' || proposal.status === 'SSRC_REJECTED');
 
   // Load specific version data if version parameter is present
   useEffect(() => {
@@ -399,20 +401,16 @@ function ViewProposalContent() {
 
   return (
     <div className={`min-h-screen ${bgClass} transition-colors duration-300`}>
-      {/* Fixed Theme Toggle Button - positioned below banner when draft/version banner is shown */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed ${viewingVersion || isDraft ? 'top-16' : 'top-4'} right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg transition-all ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/5'}`}
-        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
-      >
-        {theme === 'light' ? (
-          <Moon className={`w-5 h-5 ${textColor}`} />
-        ) : theme === 'dark' ? (
-          <MoonStar className={`w-5 h-5 ${textColor}`} />
-        ) : (
-          <Sun className={`w-5 h-5 ${textColor}`} />
-        )}
-      </button>
+      {/* Sticky Navigation */}
+      <StickyNavigation
+        onBack={() => router.push(getDashboardPath())}
+        backLabel="Back to Dashboard"
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+
+      {/* Add top padding for fixed navigation */}
+      <div className="pt-16"></div>
 
       {/* Version History Panel */}
       <Suspense fallback={null}>
