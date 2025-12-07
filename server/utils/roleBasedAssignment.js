@@ -265,14 +265,17 @@ export const updateCollaboratorsForStatus = async (proposal, newStatus) => {
  * 
  * @param {Array} reviewerIds - Array of user IDs to assign as reviewers
  * @param {string} assignedById - User ID of the person assigning reviewers
+ * @param {Date} dueDate - Optional due date for the review
  * @returns {Promise<Array>} Array of assigned reviewer objects
  */
-export const buildAssignedReviewers = async (reviewerIds, assignedById) => {
+export const buildAssignedReviewers = async (reviewerIds, assignedById, dueDate = null) => {
+  const reviewDueDate = dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  
   return reviewerIds.map(reviewerId => ({
     reviewer: reviewerId,
     assignedBy: assignedById,
     assignedAt: new Date(),
-    dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+    dueDate: reviewDueDate,
     status: 'PENDING'
   }));
 };
@@ -284,11 +287,14 @@ export const buildAssignedReviewers = async (reviewerIds, assignedById) => {
  * @param {Object} proposal - Mongoose proposal document
  * @param {Array} reviewerIds - Array of user IDs to assign
  * @param {string} assignedById - User ID of who is triggering the assignment
+ * @param {Date} dueDate - Optional due date for the review
  * @returns {Promise<Object>} Object containing updated assignedReviewers and collaborators
  */
-export const assignExpertReviewers = async (proposal, reviewerIds, assignedById) => {
+export const assignExpertReviewers = async (proposal, reviewerIds, assignedById, dueDate = null) => {
   const existingReviewers = proposal.assignedReviewers || [];
   const existingCollaborators = proposal.collaborators || [];
+  
+  const reviewDueDate = dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
   // Get existing reviewer IDs
   const existingReviewerIds = existingReviewers.map(r => r.reviewer.toString());
@@ -300,7 +306,7 @@ export const assignExpertReviewers = async (proposal, reviewerIds, assignedById)
       reviewer: reviewerId,
       assignedBy: assignedById,
       assignedAt: new Date(),
-      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+      dueDate: reviewDueDate,
       status: 'PENDING'
     }));
 
@@ -328,9 +334,10 @@ export const assignExpertReviewers = async (proposal, reviewerIds, assignedById)
  * @param {Object} proposal - Mongoose proposal document
  * @param {string} assignedById - User ID of who is triggering the assignment
  * @param {Array} specificReviewerIds - Optional array of specific reviewer IDs to assign
+ * @param {Date} dueDate - Optional due date for the review
  * @returns {Promise<Array>} Updated assigned reviewers array
  */
-export const updateAssignedReviewersForExpertReview = async (proposal, assignedById, specificReviewerIds = null) => {
+export const updateAssignedReviewersForExpertReview = async (proposal, assignedById, specificReviewerIds = null, dueDate = null) => {
   // If specific reviewers are provided, use them
   // Otherwise, assign all expert reviewers (fallback for backward compatibility)
   let reviewerIds = specificReviewerIds;
@@ -339,6 +346,8 @@ export const updateAssignedReviewersForExpertReview = async (proposal, assignedB
     const expertReviewers = await getUsersByRole('EXPERT_REVIEWER');
     reviewerIds = expertReviewers.map(u => u._id);
   }
+  
+  const reviewDueDate = dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
   const existingReviewers = proposal.assignedReviewers || [];
   const existingReviewerIds = existingReviewers.map(r => r.reviewer.toString());
@@ -350,7 +359,7 @@ export const updateAssignedReviewersForExpertReview = async (proposal, assignedB
       reviewer: reviewerId,
       assignedBy: assignedById,
       assignedAt: new Date(),
-      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+      dueDate: reviewDueDate,
       status: 'PENDING'
     }));
 

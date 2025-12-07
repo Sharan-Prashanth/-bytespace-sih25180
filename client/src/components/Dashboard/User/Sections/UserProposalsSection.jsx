@@ -13,7 +13,10 @@ import {
     XCircle,
     Award,
     Trash2,
-    AlertTriangle
+    AlertTriangle,
+    FileCheck,
+    Download,
+    X
 } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
@@ -40,6 +43,10 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
     const [proposalToDelete, setProposalToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState(null);
+
+    // Validation report modal state
+    const [validationReportOpen, setValidationReportOpen] = useState(false);
+    const [selectedProposal, setSelectedProposal] = useState(null);
 
     const isDark = theme === 'dark' || theme === 'darkest';
     const isDarkest = theme === 'darkest';
@@ -133,6 +140,85 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
 
     // Check if proposal is a draft (can be deleted)
     const isDraftProposal = (status) => status === PROPOSAL_STATUS.DRAFT;
+
+    // Check if proposal is submitted (not draft)
+    const isSubmittedProposal = (status) => status !== PROPOSAL_STATUS.DRAFT;
+
+    // Handle validation report view
+    const handleViewValidationReport = (proposal) => {
+        setSelectedProposal(proposal);
+        setValidationReportOpen(true);
+    };
+
+    const handleCloseValidationReport = () => {
+        setValidationReportOpen(false);
+        setSelectedProposal(null);
+    };
+
+    // Mock validation report data
+    const getMockValidationReport = (proposal) => {
+        return {
+            proposalId: proposal._id,
+            proposalCode: proposal.proposalCode,
+            version: proposal.version || 1,
+            evaluatedAt: proposal.createdAt,
+            overallScore: 85,
+            sections: [
+                {
+                    name: 'Technical Feasibility',
+                    score: 90,
+                    status: 'Pass',
+                    comments: 'Strong technical foundation with clear implementation plan. Methodology is well-defined and achievable.'
+                },
+                {
+                    name: 'Novelty & Innovation',
+                    score: 82,
+                    status: 'Pass',
+                    comments: 'Demonstrates good innovation potential. Some aspects build upon existing work, but introduces novel approaches.'
+                },
+                {
+                    name: 'Cost Validation',
+                    score: 88,
+                    status: 'Pass',
+                    comments: 'Budget is reasonable and well-justified. Cost breakdown aligns with proposed activities.'
+                },
+                {
+                    name: 'Benefit to Coal Industry',
+                    score: 85,
+                    status: 'Pass',
+                    comments: 'Clear benefits to the coal industry. Expected outcomes are well-articulated and measurable.'
+                },
+                {
+                    name: 'Deliverables',
+                    score: 80,
+                    status: 'Pass',
+                    comments: 'Deliverables are concrete and achievable within the proposed timeline.'
+                }
+            ],
+            recommendations: [
+                'Consider expanding the section on risk mitigation strategies.',
+                'Provide more details on the validation methodology.',
+                'Include additional case studies to support the approach.'
+            ],
+            aiDecision: proposal.status === PROPOSAL_STATUS.AI_REJECTED ? 'Rejected' : 'Approved'
+        };
+    };
+
+    // Download validation report as PDF (mock)
+    const downloadValidationReport = () => {
+        // In production, this would call an API to generate and download the PDF
+        const reportData = getMockValidationReport(selectedProposal);
+        const reportText = JSON.stringify(reportData, null, 2);
+        const blob = new Blob([reportText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `validation-report-${selectedProposal.proposalCode || 'draft'}-v${reportData.version}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
 
     // Render proposal row for table view
     const renderProposalRow = (proposal) => {
@@ -233,11 +319,20 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                                         <Trash2 size={16} />
                                     </button>
                                 ) : (
-                                    <Link href={`/proposal/track/${proposal._id}`}>
-                                        <button className={`p-1.5 rounded-lg ${isDark ? 'text-purple-400 hover:bg-purple-900/20' : 'text-purple-600 hover:bg-purple-50'}`} title="Track Progress">
-                                            <BarChart3 size={16} />
+                                    <>
+                                        <button 
+                                            onClick={() => handleViewValidationReport(proposal)}
+                                            className={`p-1.5 rounded-lg ${isDark ? 'text-blue-400 hover:bg-blue-900/20' : 'text-blue-600 hover:bg-blue-50'}`} 
+                                            title="AI Validation Report"
+                                        >
+                                            <FileCheck size={16} />
                                         </button>
-                                    </Link>
+                                        <Link href={`/proposal/track/${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'text-purple-400 hover:bg-purple-900/20' : 'text-purple-600 hover:bg-purple-50'}`} title="Track Progress">
+                                                <BarChart3 size={16} />
+                                            </button>
+                                        </Link>
+                                    </>
                                 )}
                             </>
                         )}
@@ -353,11 +448,20 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                                         <Trash2 size={14} />
                                     </button>
                                 ) : (
-                                    <Link href={`/proposal/track/${proposal._id}`}>
-                                        <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-purple-400' : 'hover:bg-slate-100 text-purple-500'}`} title="Track">
-                                            <BarChart3 size={14} />
+                                    <>
+                                        <button 
+                                            onClick={() => handleViewValidationReport(proposal)}
+                                            className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-blue-400' : 'hover:bg-slate-100 text-blue-500'}`} 
+                                            title="AI Validation Report"
+                                        >
+                                            <FileCheck size={14} />
                                         </button>
-                                    </Link>
+                                        <Link href={`/proposal/track/${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-purple-400' : 'hover:bg-slate-100 text-purple-500'}`} title="Track">
+                                                <BarChart3 size={14} />
+                                            </button>
+                                        </Link>
+                                    </>
                                 )}
                             </>
                         )}
@@ -568,6 +672,157 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                             </button>
                         </Link>
                     )}
+                </div>
+            )}
+
+            {/* Validation Report Modal */}
+            {validationReportOpen && selectedProposal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center animate-fadeIn">
+                    <div className="absolute inset-0 bg-black/50 animate-fadeIn" onClick={handleCloseValidationReport} />
+                    
+                    <div className={`relative ${isDark ? 'bg-slate-800' : 'bg-white'} rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden animate-scaleIn flex flex-col`}>
+                        {/* Header */}
+                        <div className={`p-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} flex items-center justify-between`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                    <FileCheck size={20} />
+                                </div>
+                                <div>
+                                    <h3 className={`text-lg font-bold ${textColor}`}>AI Validation Report</h3>
+                                    <p className={`text-sm ${subTextColor}`}>
+                                        {selectedProposal.proposalCode || 'Draft'} - Version {getMockValidationReport(selectedProposal).version}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={downloadValidationReport}
+                                    className={`p-2 rounded-lg transition-colors ${isDark ? 'text-blue-400 hover:bg-blue-900/20' : 'text-blue-600 hover:bg-blue-50'}`}
+                                    title="Download Report"
+                                >
+                                    <Download size={18} />
+                                </button>
+                                <button
+                                    onClick={handleCloseValidationReport}
+                                    className={`p-2 rounded-lg transition-colors ${isDark ? 'text-slate-400 hover:bg-slate-700' : 'text-black hover:bg-slate-100'}`}
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-4">
+                            {(() => {
+                                const report = getMockValidationReport(selectedProposal);
+                                return (
+                                    <div className="space-y-4">
+                                        {/* Overall Score */}
+                                        <div className={`p-4 rounded-lg border ${isDark ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className={`text-sm font-semibold ${textColor}`}>Overall Score</span>
+                                                <span className={`text-2xl font-bold ${report.overallScore >= 80 ? (isDark ? 'text-green-400' : 'text-green-600') : report.overallScore >= 60 ? (isDark ? 'text-yellow-400' : 'text-yellow-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                                                    {report.overallScore}/100
+                                                </span>
+                                            </div>
+                                            <div className={`w-full h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-900' : 'bg-slate-200'}`}>
+                                                <div
+                                                    className={`h-full transition-all ${report.overallScore >= 80 ? 'bg-green-500' : report.overallScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                                    style={{ width: `${report.overallScore}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* AI Decision */}
+                                        <div className={`p-4 rounded-lg border ${report.aiDecision === 'Approved' ? (isDark ? 'bg-green-900/20 border-green-900/50' : 'bg-green-50 border-green-200') : (isDark ? 'bg-orange-900/20 border-orange-900/50' : 'bg-orange-50 border-orange-200')}`}>
+                                            <div className="flex items-center gap-2">
+                                                {report.aiDecision === 'Approved' ? (
+                                                    <CheckCircle className={`w-5 h-5 ${isDark ? 'text-green-400' : 'text-green-600'}`} />
+                                                ) : (
+                                                    <AlertCircle className={`w-5 h-5 ${isDark ? 'text-orange-400' : 'text-orange-600'}`} />
+                                                )}
+                                                <div>
+                                                    <p className={`text-sm font-semibold ${report.aiDecision === 'Approved' ? (isDark ? 'text-green-400' : 'text-green-700') : (isDark ? 'text-orange-400' : 'text-orange-700')}`}>
+                                                        AI Decision: {report.aiDecision}
+                                                    </p>
+                                                    <p className={`text-xs mt-0.5 ${report.aiDecision === 'Approved' ? (isDark ? 'text-green-300' : 'text-green-600') : (isDark ? 'text-orange-300' : 'text-orange-600')}`}>
+                                                        {report.aiDecision === 'Approved' 
+                                                            ? 'Proposal meets validation criteria and has been forwarded for review.'
+                                                            : 'Proposal requires revisions before proceeding to review.'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Section Scores */}
+                                        <div>
+                                            <h4 className={`text-sm font-bold mb-3 ${textColor}`}>Section-wise Evaluation</h4>
+                                            <div className="space-y-3">
+                                                {report.sections.map((section, index) => (
+                                                    <div key={index} className={`p-3 rounded-lg border ${isDark ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className={`text-sm font-semibold ${textColor}`}>{section.name}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${section.status === 'Pass' ? (isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700') : (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700')}`}>
+                                                                    {section.status}
+                                                                </span>
+                                                                <span className={`text-sm font-bold ${textColor}`}>{section.score}/100</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className={`w-full h-1.5 rounded-full overflow-hidden mb-2 ${isDark ? 'bg-slate-900' : 'bg-slate-200'}`}>
+                                                            <div
+                                                                className={`h-full transition-all ${section.score >= 80 ? 'bg-green-500' : section.score >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                                                style={{ width: `${section.score}%` }}
+                                                            />
+                                                        </div>
+                                                        <p className={`text-xs ${subTextColor}`}>{section.comments}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Recommendations */}
+                                        {report.recommendations && report.recommendations.length > 0 && (
+                                            <div>
+                                                <h4 className={`text-sm font-bold mb-3 ${textColor}`}>Recommendations</h4>
+                                                <div className={`p-3 rounded-lg border ${isDark ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                                    <ul className="space-y-2">
+                                                        {report.recommendations.map((rec, index) => (
+                                                            <li key={index} className="flex items-start gap-2">
+                                                                <span className={`text-xs mt-0.5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>•</span>
+                                                                <span className={`text-xs ${textColor}`}>{rec}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Metadata */}
+                                        <div className={`p-3 rounded-lg border ${isDark ? 'bg-slate-700/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                            <div className="flex items-center justify-between">
+                                                <span className={`text-xs ${subTextColor}`}>Evaluated on: {formatDate(report.evaluatedAt)}</span>
+                                                <span className={`text-xs ${subTextColor}`}>Version: {report.version}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Footer */}
+                        <div className={`p-4 border-t ${isDark ? 'border-slate-700' : 'border-slate-200'} flex justify-between items-center`}>
+                            <p className={`text-xs ${subTextColor}`}>
+                                This is an automated AI-generated validation report.
+                            </p>
+                            <button
+                                onClick={handleCloseValidationReport}
+                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-100 text-black hover:bg-slate-200'}`}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

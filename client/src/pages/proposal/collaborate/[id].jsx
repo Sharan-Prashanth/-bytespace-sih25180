@@ -9,7 +9,8 @@ import { useSocketCollaboration } from '../../../hooks/useSocketCollaboration';
 import { getUserColor } from '../../../hooks/useYjsCollaboration';
 import { getCollaborateStorage } from '../../../utils/collaborateStorage';
 import apiClient from '../../../utils/api';
-import { Clock, MessageSquare, TrendingUp, ChevronDown, ChevronUp, FileCheck, Moon, Sun, MoonStar } from 'lucide-react';
+import { Clock, MessageSquare, TrendingUp, ChevronDown, ChevronUp, FileCheck } from 'lucide-react';
+import StickyNavigation from '../../../components/common/StickyNavigation';
 
 // Import modular collaborate page components
 import {
@@ -29,8 +30,11 @@ const AdvancedProposalEditor = lazy(() =>
   import('../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor')
 );
 const VersionHistory = lazy(() => import('../../../components/VersionHistory'));
-const ChatWindow = lazy(() => import('../../../components/ChatWindow'));
+const ChatWindowNew = lazy(() => import('../../../components/ChatWindow'));
 const Saarthi = lazy(() => import('../../../components/Saarthi'));
+
+// Import quick actions helper
+import { getCommitteeQuickActions, canAccessPage } from '../../../utils/quickActionsHelper';
 
 // Auto-save interval (30 seconds)
 const AUTO_SAVE_INTERVAL = 30000;
@@ -248,6 +252,17 @@ function CollaborateContent() {
   }, [user]);
 
   const isSuperAdmin = useCallback(() => {
+    return user?.roles?.includes('SUPER_ADMIN');
+  }, [user]);
+
+  // Check if proposal is closed (SSRC accepted or any rejection)
+  const isProposalClosed = useCallback(() => {
+    if (!proposal) return false;
+    return ['SSRC_ACCEPTED', 'SSRC_REJECTED', 'CMPDI_REJECTED', 'TSSRC_REJECTED'].includes(proposal.status);
+  }, [proposal]);
+
+  // Check if user can edit in collaborate (committee cannot edit if closed)
+  const canEditInCollaborate = useCallback(() => {
     return user?.roles?.includes('SUPER_ADMIN');
   }, [user]);
 
@@ -594,17 +609,39 @@ function CollaborateContent() {
   }, [proposal, saveToLocalStorage]);
 
   const handleSendChatMessage = useCallback((message) => {
-    const newMessage = {
-      id: Date.now(),
-      sender: user?.fullName || 'Current User',
-      role: isPI() ? 'PI' : isCI() ? 'CI' : 'USER',
-      content: message,
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      isCurrentUser: true
+    if (!message?.trim()) return;
+    
+    // Send via socket - it will save to DB and broadcast
+    if (sendUpdate) {
+      sendUpdate('send-chat-message', {
+        proposalId: id,
+        message: message.trim()
+      });
+    }
+  }, [id, sendUpdate]);
+
+  // Listen for new chat messages from socket
+  useEffect(() => {
+    if (!onUpdate) return;
+
+    const handleNewChatMessage = (data) => {
+      if (data.proposalId === id) {
+        setChatMessages(prev => {
+          // Avoid duplicates
+          if (prev.some(msg => msg._id === data._id)) {
+            return prev;
+          }
+          return [...prev, data];
+        });
+      }
     };
-    setChatMessages(prev => [...prev, newMessage]);
-    // TODO: Send via socket when chat socket is implemented
-  }, [user, isPI, isCI]);
+
+    onUpdate('new-chat-message', handleNewChatMessage);
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [id, onUpdate]);
 
   // Load real data from API
   useEffect(() => {
@@ -620,14 +657,15 @@ function CollaborateContent() {
         const cachedData = storage.getData();
 
         // Fetch fresh data from API (including draft info)
-        const [proposalRes, collaboratorsRes, commentsRes, draftRes] = await Promise.all([
+        const [proposalRes, collaboratorsRes, commentsRes, draftRes, chatRes] = await Promise.all([
           apiClient.get(`/api/collaboration/proposals/${id}/collaborate`).catch(err => {
             console.warn('[API] Collaboration endpoint failed, trying proposals:', err);
             return apiClient.get(`/api/proposals/${id}`);
           }),
           apiClient.get(`/api/collaboration/${id}/collaborators`).catch(() => ({ data: { data: [] } })),
           apiClient.get(`/api/proposals/${id}/comments`).catch(() => ({ data: { data: [] } })),
-          apiClient.get(`/api/proposals/${id}/versions/draft`).catch(() => ({ data: { data: null } }))
+          apiClient.get(`/api/proposals/${id}/versions/draft`).catch(() => ({ data: { data: null } })),
+          apiClient.get(`/api/collaboration/chat/${id}`).catch(() => ({ data: { data: { messages: [] } } }))
         ]);
 
         const proposalData = proposalRes.data.data || proposalRes.data;
@@ -704,6 +742,10 @@ function CollaborateContent() {
 
         setCollaborators(Array.from(collabMap.values()));
         setComments(commentsData);
+        
+        // Set chat messages
+        const chatData = chatRes.data.data || {};
+        setChatMessages(chatData.messages || []);
 
         // Initialize with current user as online
         setOnlineUsers([{
@@ -794,20 +836,16 @@ function CollaborateContent() {
 
   return (
     <div className={`min-h-screen ${bgClass}`}>
-      {/* Theme Toggle Button */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors`}
-        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
-      >
-        {theme === 'light' ? (
-          <Moon className={`w-5 h-5 ${textColor}`} />
-        ) : theme === 'dark' ? (
-          <MoonStar className={`w-5 h-5 ${textColor}`} />
-        ) : (
-          <Sun className={`w-5 h-5 ${textColor}`} />
-        )}
-      </button>
+      {/* Sticky Navigation */}
+      <StickyNavigation
+        onBack={() => router.push('/dashboard')}
+        backLabel="Back to Dashboard"
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+
+      {/* Add top padding for fixed navigation */}
+      <div className="pt-16"></div>
 
       {/* Header */}
       <CollaborateHeader
@@ -817,6 +855,28 @@ function CollaborateContent() {
         onCollaboratorsClick={() => setShowCollaboratorsModal(true)}
         theme={theme}
       />
+
+      {/* Read-Only Banner for closed proposals */}
+      {isProposalClosed() && (isCommitteeMember() || isSuperAdmin()) && (
+        <div className={`max-w-7xl mx-auto px-6 pt-6`}>
+          <div className={`${isDark ? 'bg-amber-900/20 border-amber-800' : 'bg-amber-50 border-amber-200'} border rounded-lg p-4`}>
+            <div className="flex items-start gap-3">
+              <svg className={`w-5 h-5 ${isDark ? 'text-amber-400' : 'text-amber-600'} mt-0.5 flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <h4 className={`font-semibold ${isDark ? 'text-amber-400' : 'text-amber-800'} mb-1`}>
+                  {proposal.status === 'SSRC_ACCEPTED' ? 'Proposal Accepted' : 'Proposal Closed'}
+                </h4>
+                <p className={`text-sm ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
+                  This proposal has been {proposal.status === 'SSRC_ACCEPTED' ? 'accepted' : 'rejected'} and is now read-only. 
+                  You can view the content and team chat but cannot add comments or make edits.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -969,12 +1029,14 @@ function CollaborateContent() {
 
       <Suspense fallback={null}>
         {showTeamChat && (
-          <ChatWindow
+          <ChatWindowNew
             showChatWindow={showTeamChat}
             setShowChatWindow={setShowTeamChat}
             messages={chatMessages}
             onSendMessage={handleSendChatMessage}
             theme={theme}
+            currentUser={user}
+            isReadOnly={isProposalClosed() && (isCommitteeMember() || isSuperAdmin())}
           />
         )}
       </Suspense>

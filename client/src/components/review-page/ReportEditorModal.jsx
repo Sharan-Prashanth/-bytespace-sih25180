@@ -21,6 +21,7 @@ const ReportEditorModal = ({
   proposalTitle,
   isSubmitting = false,
   isExpertReport = false,
+  currentUser = null,
   theme = 'light'
 }) => {
   const [reportTitle, setReportTitle] = useState('');
@@ -31,9 +32,18 @@ const ReportEditorModal = ({
     characters: 0,
     words: 0
   });
-  const [confirmStep, setConfirmStep] = useState(1); // 1: editor, 2: confirmation
+  const [confirmStep, setConfirmStep] = useState(0); // 0: initial confirmation, 1: editor, 2: final confirmation
   const [mounted, setMounted] = useState(false);
   const [editorKey, setEditorKey] = useState(0); // Key to force editor re-render
+
+  // Generate default report title
+  const getDefaultTitle = () => {
+    if (!currentUser || !proposalCode) return '';
+    const userRole = currentUser.roles?.[0] || 'REVIEWER';
+    const userName = currentUser.fullName || 'User';
+    const roleLabel = userRole.replace(/_/g, ' ');
+    return `Report by ${roleLabel} (${userName}) on ${proposalCode}`;
+  };
 
   // Theme helpers
   const isDark = theme === 'dark' || theme === 'darkest';
@@ -57,7 +67,7 @@ const ReportEditorModal = ({
   // Reset state when modal opens
   useEffect(() => {
     if (show) {
-      setReportTitle('');
+      setReportTitle(getDefaultTitle());
       setReportContent({
         html: '',
         text: '',
@@ -65,10 +75,14 @@ const ReportEditorModal = ({
         characters: 0,
         words: 0
       });
-      setConfirmStep(1);
+      setConfirmStep(0);
       setEditorKey(prev => prev + 1); // Force editor to re-render with fresh content
     }
-  }, [show]);
+  }, [show, currentUser, proposalCode]);
+
+  const handleProceedToEditor = () => {
+    setConfirmStep(1);
+  };
 
   if (!mounted || !show) return null;
 
@@ -138,19 +152,23 @@ const ReportEditorModal = ({
             </div>
             <div>
               <h2 className={`text-xl font-semibold ${textColor}`}>
-                {confirmStep === 1 
-                  ? (isExpertReport ? 'Write Expert Review Report' : 'Write Review Report') 
-                  : (isExpertReport ? 'Confirm Report Submission' : 'Confirm Decision')
+                {confirmStep === 0
+                  ? 'Confirm Report Submission'
+                  : confirmStep === 1 
+                    ? (isExpertReport ? 'Write Expert Review Report' : 'Write Review Report') 
+                    : (isExpertReport ? 'Confirm Report Submission' : 'Confirm Decision')
                 }
               </h2>
               <p className={`text-sm ${textColor}`}>
-                {confirmStep === 1 
-                  ? (isExpertReport 
-                      ? 'Provide your detailed assessment and recommendations' 
-                      : 'Provide detailed justification for your decision')
-                  : (isExpertReport 
-                      ? 'Review and confirm your expert report' 
-                      : 'Review and confirm your decision')
+                {confirmStep === 0
+                  ? 'You are about to write and submit a report. This action cannot be undone.'
+                  : confirmStep === 1 
+                    ? (isExpertReport 
+                        ? 'Provide your detailed assessment and recommendations' 
+                        : 'Provide detailed justification for your decision')
+                    : (isExpertReport 
+                        ? 'Review and confirm your expert report' 
+                        : 'Review and confirm your decision')
                 }
               </p>
             </div>
@@ -167,7 +185,59 @@ const ReportEditorModal = ({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {confirmStep === 1 ? (
+          {confirmStep === 0 ? (
+            <>
+              {/* Initial Confirmation */}
+              <div className={`flex items-start gap-4 p-6 ${warningBg} border rounded-lg mb-6`}>
+                <AlertTriangle className={`w-6 h-6 ${warningText} flex-shrink-0 mt-0.5`} />
+                <div>
+                  <p className={`text-sm font-medium ${textColor} mb-2`}>Important Notice</p>
+                  <p className={`text-sm ${textColor}`}>
+                    {isExpertReport 
+                      ? 'By clicking "Proceed to Write Report", you will be taken to the report editor. Once you submit your expert report, you will not be able to access this review page again. Your report will be shared with the committee for decision-making.'
+                      : 'By clicking "Proceed to Write Report", you will be taken to the report editor. This report will be stored permanently as a supporting document for your decision.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Proposal Info */}
+              <div className={`${cardBg} rounded-lg p-4 mb-6`}>
+                <p className={`text-sm ${textColor}`}>
+                  <span className="font-medium">Proposal Code:</span> {proposalCode}
+                </p>
+                <p className={`text-sm ${textColor} mt-1`}>
+                  <span className="font-medium">Title:</span> {proposalTitle}
+                </p>
+              </div>
+
+              {/* What to expect */}
+              <div className={`${cardBg} rounded-lg p-4`}>
+                <h3 className={`font-semibold ${textColor} mb-3`}>What to Expect</h3>
+                <ul className="space-y-2">
+                  <li className={`text-sm ${textColor} flex items-start gap-2`}>
+                    <span className="mt-1">•</span>
+                    <span>You will be provided with a rich text editor to write your detailed report</span>
+                  </li>
+                  <li className={`text-sm ${textColor} flex items-start gap-2`}>
+                    <span className="mt-1">•</span>
+                    <span>The report title will be pre-filled but you can edit it as needed</span>
+                  </li>
+                  <li className={`text-sm ${textColor} flex items-start gap-2`}>
+                    <span className="mt-1">•</span>
+                    <span>You can format text, add headings, lists, and upload images</span>
+                  </li>
+                  <li className={`text-sm ${textColor} flex items-start gap-2`}>
+                    <span className="mt-1">•</span>
+                    <span>Minimum 100 characters required for submission</span>
+                  </li>
+                  <li className={`text-sm ${textColor} flex items-start gap-2`}>
+                    <span className="mt-1">•</span>
+                    <span>You will have a final confirmation step before submitting</span>
+                  </li>
+                </ul>
+              </div>
+            </>
+          ) : confirmStep === 1 ? (
             <>
               {/* Decision Badge */}
               <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border mb-4 ${getDecisionColor()}`}>
@@ -274,7 +344,25 @@ const ReportEditorModal = ({
 
         {/* Footer */}
         <div className={`flex items-center justify-between p-6 border-t ${borderColor} ${footerBg}`}>
-          {confirmStep === 1 ? (
+          {confirmStep === 0 ? (
+            <>
+              <button
+                onClick={onClose}
+                disabled={isSubmitting}
+                className={`px-6 py-2.5 border ${borderColor} rounded-lg ${textColor} font-medium ${hoverBg} transition-colors disabled:opacity-50`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleProceedToEditor}
+                disabled={isSubmitting}
+                className={`flex items-center gap-2 px-6 py-2.5 ${buttonBg} font-medium rounded-lg transition-colors disabled:opacity-50`}
+              >
+                <FileText className="w-4 h-4" />
+                Proceed to Write Report
+              </button>
+            </>
+          ) : confirmStep === 1 ? (
             <>
               <button
                 onClick={onClose}

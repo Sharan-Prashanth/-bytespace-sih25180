@@ -167,7 +167,7 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
  * @access  Private (CMPDI only)
  */
 export const selectExpertReviewers = asyncHandler(async (req, res) => {
-  const { reviewerIds, notes } = req.body;
+  const { reviewerIds, dueDate, notes } = req.body;
 
   // Validate CMPDI member
   const isCMPDI = req.user.roles.includes('CMPDI_MEMBER');
@@ -184,6 +184,26 @@ export const selectExpertReviewers = asyncHandler(async (req, res) => {
     return res.status(400).json({
       success: false,
       message: 'At least one expert reviewer must be selected'
+    });
+  }
+  
+  if (!dueDate) {
+    return res.status(400).json({
+      success: false,
+      message: 'Due date is required for expert review'
+    });
+  }
+  
+  // Validate due date is within 30 days
+  const dueDateObj = new Date(dueDate);
+  const today = new Date();
+  const maxDate = new Date(today);
+  maxDate.setDate(maxDate.getDate() + 30);
+  
+  if (dueDateObj <= today || dueDateObj > maxDate) {
+    return res.status(400).json({
+      success: false,
+      message: 'Due date must be between tomorrow and 30 days from today'
     });
   }
 
@@ -232,9 +252,9 @@ export const selectExpertReviewers = asyncHandler(async (req, res) => {
     notes: notes || 'Sent for expert review'
   });
 
-  // Assign the selected expert reviewers
-  proposal.assignedReviewers = await updateAssignedReviewersForExpertReview(proposal, req.user._id, reviewerIds);
-  console.log(`[EXPERT-ASSIGN] Added ${proposal.assignedReviewers.length} expert reviewers selected by CMPDI`);
+  // Assign the selected expert reviewers with due date
+  proposal.assignedReviewers = await updateAssignedReviewersForExpertReview(proposal, req.user._id, reviewerIds, dueDateObj);
+  console.log(`[EXPERT-ASSIGN] Added ${proposal.assignedReviewers.length} expert reviewers selected by CMPDI with due date ${dueDateObj}`);
 
   // Add expert reviewers as collaborators
   for (const reviewer of reviewers) {

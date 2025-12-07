@@ -51,6 +51,8 @@ class ProposalStorage {
       proposalCode: null,
       currentVersion: 0.1,
       lastSavedAt: null,
+      currentStage: 1,
+      completedStages: [],
       proposalInfo: {
         title: '',
         fundingMethod: 'S&T of MoC',

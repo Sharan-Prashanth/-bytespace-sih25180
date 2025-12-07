@@ -368,20 +368,40 @@ export const initializeCollaborationSockets = (io) => {
       try {
         const { proposalId, message } = data;
 
-        // Broadcast to all users in room
-        io.to(`proposal-${proposalId}`).emit('new-chat-message', {
+        // Save message to database
+        const ChatMessage = (await import('../models/ChatMessage.js')).default;
+        const savedMessage = await ChatMessage.create({
           proposalId,
-          message,
-          sender: {
-            userId: socket.user._id,
-            fullName: socket.user.fullName,
-            email: socket.user.email
-          },
-          timestamp: Date.now()
+          sender: socket.user._id,
+          message
         });
 
+        // Populate sender information
+        await savedMessage.populate('sender', 'fullName email roles');
+
+        // Prepare message data for broadcast
+        const messageData = {
+          _id: savedMessage._id,
+          proposalId: savedMessage.proposalId,
+          message: savedMessage.message,
+          sender: {
+            userId: savedMessage.sender._id,
+            fullName: savedMessage.sender.fullName,
+            email: savedMessage.sender.email,
+            role: savedMessage.sender.roles?.[0] || 'USER'
+          },
+          timestamp: savedMessage.createdAt.getTime(),
+          createdAt: savedMessage.createdAt
+        };
+
+        // Broadcast to all users in room (including sender)
+        io.to(`proposal-${proposalId}`).emit('new-chat-message', messageData);
+
         if (callback) {
-          callback({ success: true });
+          callback({ 
+            success: true, 
+            message: messageData 
+          });
         }
 
       } catch (error) {

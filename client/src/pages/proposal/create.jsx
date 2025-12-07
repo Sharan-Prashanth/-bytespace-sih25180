@@ -9,7 +9,7 @@ import { useToast, ToastContainer } from '../../components/ui (plate files)/toas
 import ProposalStorage from '../../utils/proposalStorage';
 import { createProposal, updateProposal, submitProposal, getProposalById, getProposals } from '../../utils/proposalApi';
 import '../../utils/clearProposalStorage'; // Enable global clearProposalStorage() function
-import { Moon, Sun, MoonStar } from 'lucide-react';
+import StickyNavigation from '../../components/common/StickyNavigation';
 
 // Import new modular components
 import Header from '../../components/create-page/Header';
@@ -21,6 +21,7 @@ import AdditionalFormsUpload from '../../components/create-page/AdditionalFormsU
 import SupportingDocumentsUpload from '../../components/create-page/SupportingDocumentsUpload';
 import ConfirmationModal from '../../components/create-page/ConfirmationModal';
 import SubmissionSuccessModal from '../../components/create-page/SubmissionSuccessModal';
+import StageProgress from '../../components/create-page/StageProgress';
 
 // Lazy load heavy components
 const FormIEditor = lazy(() => import('../../components/create-page/FormIEditor'));
@@ -146,6 +147,10 @@ function CreateNewProposalContent() {
   // Chatbot State
   const [showChatbot, setShowChatbot] = useState(false);
 
+  // Stage Management
+  const [currentStage, setCurrentStage] = useState(1);
+  const [completedStages, setCompletedStages] = useState([]);
+
   // Helper function to normalize fundingMethod value
   const normalizeFundingMethod = (value) => {
     // Map old enum values to new ones
@@ -243,7 +248,7 @@ function CreateNewProposalContent() {
             
             // Update storage with loaded data
             storageRef.current.updateProposalMeta(draftData._id, draftData.proposalCode);
-            storageRef.current.save({
+            const savedData = storageRef.current.save({
               proposalInfo: {
                 title: draftData.title || '',
                 fundingMethod: normalizeFundingMethod(draftData.fundingMethod || 'S&T of MoC'),
@@ -279,6 +284,14 @@ function CreateNewProposalContent() {
               },
               currentVersion: draftData.currentVersion || 0.1,
             }, false);
+            
+            // Restore stage information from localStorage if available
+            if (savedData.currentStage) {
+              setCurrentStage(savedData.currentStage);
+            }
+            if (savedData.completedStages) {
+              setCompletedStages(savedData.completedStages);
+            }
             
             info('Draft proposal loaded');
           } catch (err) {
@@ -338,29 +351,40 @@ function CreateNewProposalContent() {
     const handleBeforeUnload = (e) => {
       // Get latest content and try to save synchronously using sendBeacon
       // Note: async operations don't work reliably in beforeunload
+      
+      // Get latest editor content if on Stage 3 or if editor has been used
+      let latestContent = formIContent;
       if (formIEditorRef.current) {
         try {
-          const latestContent = formIEditorRef.current.getFormData();
-          if (latestContent && proposalId) {
-            // Use sendBeacon for reliable data sending on page close
-            const token = localStorage.getItem('token');
-            const payload = JSON.stringify({
-              formi: latestContent, // Single form field
-              title: proposalInfo.title,
-              fundingMethod: proposalInfo.fundingMethod,
-              principalAgency: proposalInfo.principalImplementingAgency,
-              projectLeader: proposalInfo.projectLeader,
-              projectCoordinator: proposalInfo.projectCoordinator,
-              durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
-              outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0
-            });
-            
-            // Create a Blob with proper content type for the beacon
-            const blob = new Blob([payload], { type: 'application/json' });
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-            navigator.sendBeacon(`${apiUrl}/api/proposals/${proposalId}/beacon-save?token=${token}`, blob);
-            console.log('[SAVE] Sent beacon save on page close');
+          const editorData = formIEditorRef.current.getFormData();
+          if (editorData) {
+            latestContent = editorData;
           }
+        } catch (err) {
+          console.error('Failed to get editor data on page close:', err);
+        }
+      }
+      
+      if (latestContent && proposalId) {
+        try {
+          // Use sendBeacon for reliable data sending on page close
+          const token = localStorage.getItem('token');
+          const payload = JSON.stringify({
+            formi: latestContent, // Single form field
+            title: proposalInfo.title,
+            fundingMethod: proposalInfo.fundingMethod,
+            principalAgency: proposalInfo.principalImplementingAgency,
+            projectLeader: proposalInfo.projectLeader,
+            projectCoordinator: proposalInfo.projectCoordinator,
+            durationMonths: parseInt(proposalInfo.projectDurationMonths) || 0,
+            outlayLakhs: parseFloat(proposalInfo.projectOutlayLakhs) || 0
+          });
+          
+          // Create a Blob with proper content type for the beacon
+          const blob = new Blob([payload], { type: 'application/json' });
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+          const beaconSent = navigator.sendBeacon(`${apiUrl}/api/proposals/${proposalId}/beacon-save?token=${token}`, blob);
+          console.log('[SAVE] Beacon save on page close:', beaconSent ? 'sent' : 'failed');
         } catch (err) {
           console.error('Failed to save draft on page close:', err);
         }
@@ -436,6 +460,111 @@ function CreateNewProposalContent() {
     setValidationErrors(errors);
   };
 
+  // Validate current stage before moving to next
+  const validateStage = (stage) => {
+    switch (stage) {
+      case 1:
+        // Stage 1: Proposal Information must be complete
+        return Object.keys(validationErrors).length === 0 &&
+               proposalInfo.title &&
+               proposalInfo.principalImplementingAgency &&
+               proposalInfo.subImplementingAgency &&
+               proposalInfo.projectLeader &&
+               proposalInfo.projectCoordinator &&
+               proposalInfo.projectDurationMonths &&
+               proposalInfo.projectOutlayLakhs;
+      
+      case 2:
+        // Stage 2: Initial documents must be uploaded
+        return initialDocuments.coveringLetter && initialDocuments.cv;
+      
+      case 3:
+        // Stage 3: Form I must have content
+        return formIContent && formIContent.formi && formIContent.formi.content && formIContent.formi.content.length > 0;
+      
+      case 4:
+        // Stage 4: Mandatory additional forms must be uploaded
+        return additionalForms.formia && additionalForms.formxi && additionalForms.formxii;
+      
+      case 5:
+        // Stage 5: All mandatory supporting documents must be uploaded
+        return supportingDocuments.orgDetails &&
+               supportingDocuments.infrastructure &&
+               supportingDocuments.expertise &&
+               supportingDocuments.rdComponent &&
+               supportingDocuments.benefits &&
+               supportingDocuments.webSurvey &&
+               supportingDocuments.researchContent;
+      
+      default:
+        return false;
+    }
+  };
+
+  // Handle next stage
+  const handleNextStage = async () => {
+    if (!validateStage(currentStage)) {
+      error('Please complete all required fields before proceeding to the next stage');
+      return;
+    }
+
+    // If leaving Stage 3 (Form I Editor), save editor content to backend
+    if (currentStage === 3) {
+      try {
+        const latestContent = getLatestEditorContent();
+        if (latestContent) {
+          await saveToBackendWithContent(latestContent);
+          info('Editor content saved');
+        }
+      } catch (err) {
+        console.error('Failed to save editor content:', err);
+        error('Failed to save editor content. Please try again.');
+        return;
+      }
+    }
+
+    // Mark current stage as completed
+    if (!completedStages.includes(currentStage)) {
+      setCompletedStages([...completedStages, currentStage]);
+    }
+
+    // Trigger auto-save to localStorage
+    hasUnsavedChangesRef.current = true;
+    storageRef.current?.markDirty();
+    handleAutoSave();
+
+    // Move to next stage
+    setCurrentStage(currentStage + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Handle previous stage
+  const handlePreviousStage = async () => {
+    if (currentStage > 1) {
+      // If leaving Stage 3 (Form I Editor), save editor content to backend
+      if (currentStage === 3) {
+        try {
+          const latestContent = getLatestEditorContent();
+          if (latestContent) {
+            await saveToBackendWithContent(latestContent);
+            info('Editor content saved');
+          }
+        } catch (err) {
+          console.error('Failed to save editor content:', err);
+          // Don't block navigation, just log the error
+        }
+      }
+
+      // Save current progress to localStorage
+      hasUnsavedChangesRef.current = true;
+      storageRef.current?.markDirty();
+      handleAutoSave();
+      
+      setCurrentStage(currentStage - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   // Auto-save to localStorage
   const handleAutoSave = () => {
     if (!storageRef.current || isAutoSaving) return;
@@ -450,6 +579,8 @@ function CreateNewProposalContent() {
         formIContent,
         additionalForms,
         supportingDocuments,
+        currentStage,
+        completedStages,
       }, true); // increment version
       
       setCurrentVersion(savedData.currentVersion);
@@ -679,6 +810,30 @@ function CreateNewProposalContent() {
     }
   };
 
+  // Handle save before PDF upload - ensures proposal is saved and returns proposalCode
+  const handleBeforePdfUpload = async () => {
+    console.log('[UPLOAD] Saving before PDF upload...');
+    
+    try {
+      // Get latest editor content
+      const latestContent = getLatestEditorContent();
+      
+      // Update state
+      if (latestContent) {
+        setFormIContent(latestContent);
+      }
+      
+      // Save to backend
+      await saveToBackendWithContent(latestContent);
+      
+      console.log('[UPLOAD] Save complete, proposalCode:', proposalCode);
+      return proposalCode;
+    } catch (err) {
+      console.error('Failed to save before PDF upload:', err);
+      throw err;
+    }
+  };
+
   // Handle additional form upload
   const handleAdditionalFormUpload = (formId, formData) => {
     setAdditionalForms((prev) => ({
@@ -758,51 +913,12 @@ function CreateNewProposalContent() {
   const validateSubmission = () => {
     const errors = [];
 
-    // Check proposal info
-    if (Object.keys(validationErrors).length > 0) {
-      errors.push('Please complete all required fields in Proposal Information');
-    }
-
-    // Check initial documents
-    if (!initialDocuments.coveringLetter) {
-      errors.push('Covering Letter is required');
-    }
-    if (!initialDocuments.cv) {
-      errors.push('CV / Resume is required');
-    }
-
-    // Check Form I content
-    if (!formIContent || !formIContent.formi || !formIContent.formi.content || formIContent.formi.content.length === 0) {
-      errors.push('Form I must be completed');
-    }
-
-    // Check mandatory additional forms
-    if (!additionalForms.formia) {
-      errors.push('Form IA (Endorsement Form) is required');
-    }
-    if (!additionalForms.formxi) {
-      errors.push('Form XI (Manpower Cost) is required');
-    }
-    if (!additionalForms.formxii) {
-      errors.push('Form XII (Travel Expenditure) is required');
-    }
-
-    // Check mandatory supporting documents
-    const mandatorySupportingDocs = [
-      'orgDetails',
-      'infrastructure',
-      'expertise',
-      'rdComponent',
-      'benefits',
-      'webSurvey',
-      'researchContent'
-    ];
-
-    mandatorySupportingDocs.forEach(docId => {
-      if (!supportingDocuments[docId]) {
-        errors.push(`Supporting document for ${docId} is required`);
+    // Check if all stages are completed
+    for (let i = 1; i <= 5; i++) {
+      if (!validateStage(i)) {
+        errors.push(`Stage ${i} is incomplete. Please complete all stages before submission.`);
       }
-    });
+    }
 
     return errors;
   };
@@ -883,34 +999,21 @@ function CreateNewProposalContent() {
     <div className={`min-h-screen ${bgClass} transition-colors duration-300`}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      {/* Fixed Theme Toggle Button */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed top-4 right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/5'}`}
-        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
-      >
-        {theme === 'light' ? (
-          <Moon className={`w-5 h-5 ${textColor}`} />
-        ) : theme === 'dark' ? (
-          <MoonStar className={`w-5 h-5 ${textColor}`} />
-        ) : (
-          <Sun className={`w-5 h-5 ${textColor}`} />
-        )}
-      </button>
+      {/* Sticky Navigation */}
+      <StickyNavigation
+        onBack={handleBackToDashboard}
+        backLabel="Back to Dashboard"
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
 
-      {/* Header with back button */}
+      {/* Add top padding for fixed navigation */}
+      <div className="pt-16"></div>
+
+      {/* Header with proposal info */}
       <div className={`${cardBg} border-b ${borderColor}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button
-              onClick={handleBackToDashboard}
-              className={`flex items-center gap-2 px-4 py-2 text-sm border rounded-lg transition-colors ${isDark ? `border-slate-600 ${textColor} hover:bg-white/5` : `border-slate-300 ${textColor} hover:bg-black/5`}`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back to Dashboard
-            </button>
             {proposalCode && (
               <div className={`flex items-center gap-3 text-sm ${textColor}`}>
                 <span>Code: <span className="font-mono font-semibold">{proposalCode}</span></span>
@@ -949,84 +1052,130 @@ function CreateNewProposalContent() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Guidelines */}
-        <Guidelines theme={theme} />
-
-        {/* Pre-submission info */}
-        <PreSubmissionInfo theme={theme} />
-
-        {/* Proposal Information */}
-        <ProposalInformation
-          proposalInfo={proposalInfo}
-          validationErrors={validationErrors}
-          onChange={handleInfoChange}
-          theme={theme}
+        {/* Stage Progress */}
+        <StageProgress 
+          currentStage={currentStage} 
+          completedStages={completedStages} 
+          theme={theme} 
         />
 
-        {/* Initial Documents */}
-        <InitialDocumentsUpload
-          documents={initialDocuments}
-          onDocumentUpload={handleInitialDocumentUpload}
-          onDocumentRemove={handleInitialDocumentRemove}
-          proposalCode={proposalCode}
-          theme={theme}
-        />
+        {/* Stage 1: Guidelines, Pre-submission Info, and Proposal Information */}
+        {currentStage === 1 && (
+          <>
+            <Guidelines theme={theme} />
+            <PreSubmissionInfo theme={theme} />
+            <ProposalInformation
+              proposalInfo={proposalInfo}
+              validationErrors={validationErrors}
+              onChange={handleInfoChange}
+              theme={theme}
+            />
+          </>
+        )}
 
-        {/* Form I Editor */}
-        <Suspense fallback={
-          <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/10 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
-                <p className={textColor}>Loading editor...</p>
+        {/* Stage 2: Initial Documents */}
+        {currentStage === 2 && (
+          <>
+            <InitialDocumentsUpload
+              documents={initialDocuments}
+              onDocumentUpload={handleInitialDocumentUpload}
+              onDocumentRemove={handleInitialDocumentRemove}
+              proposalCode={proposalCode}
+              theme={theme}
+            />
+          </>
+        )}
+
+        {/* Stage 3: Guidelines and Form I Editor */}
+        {currentStage === 3 && (
+          <>
+            <Guidelines theme={theme} />
+            <Suspense fallback={
+              <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className={`w-12 h-12 border-4 ${isDark ? 'border-white/20 border-t-white' : 'border-black/10 border-t-black'} rounded-full animate-spin mx-auto mb-4`}></div>
+                    <p className={textColor}>Loading editor...</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        }>
-          <FormIEditor
-            ref={formIEditorRef}
-            editorContent={formIContent}
-            uploadedPdf={formIUploadedPdf}
-            onContentChange={handleFormIContentChange}
-            onPdfUpload={setFormIUploadedPdf}
-            onPdfRemove={() => setFormIUploadedPdf(null)}
-            onManualSave={handleFormIManualSave}
-            onAutoSave={handleFormIAutoSave}
-            lastSavedTime={lastSavedTime}
-            isAutoSaving={isAutoSaving}
-            proposalCode={proposalCode}
-            isNewProposal={isNewProposal}
-            theme={theme}
-          />
-        </Suspense>
+            }>
+              <FormIEditor
+                ref={formIEditorRef}
+                editorContent={formIContent}
+                uploadedPdf={formIUploadedPdf}
+                onContentChange={handleFormIContentChange}
+                onPdfUpload={setFormIUploadedPdf}
+                onPdfRemove={() => setFormIUploadedPdf(null)}
+                onManualSave={handleFormIManualSave}
+                onAutoSave={handleFormIAutoSave}
+                onBeforePdfUpload={handleBeforePdfUpload}
+                lastSavedTime={lastSavedTime}
+                isAutoSaving={isAutoSaving}
+                proposalCode={proposalCode}
+                isNewProposal={isNewProposal}
+                theme={theme}
+              />
+            </Suspense>
+          </>
+        )}
 
-        {/* Additional Forms */}
-        <AdditionalFormsUpload
-          forms={additionalForms}
-          onFormUpload={handleAdditionalFormUpload}
-          onFormRemove={handleAdditionalFormRemove}
-          proposalCode={proposalCode}
-          theme={theme}
-        />
+        {/* Stage 4: Additional Forms */}
+        {currentStage === 4 && (
+          <>
+            <AdditionalFormsUpload
+              forms={additionalForms}
+              onFormUpload={handleAdditionalFormUpload}
+              onFormRemove={handleAdditionalFormRemove}
+              proposalCode={proposalCode}
+              theme={theme}
+            />
+          </>
+        )}
 
-        {/* Supporting Documents */}
-        <SupportingDocumentsUpload
-          documents={supportingDocuments}
-          onDocumentUpload={handleSupportingDocumentUpload}
-          onDocumentRemove={handleSupportingDocumentRemove}
-          proposalCode={proposalCode}
-          theme={theme}
-        />
+        {/* Stage 5: Supporting Documents */}
+        {currentStage === 5 && (
+          <>
+            <SupportingDocumentsUpload
+              documents={supportingDocuments}
+              onDocumentUpload={handleSupportingDocumentUpload}
+              onDocumentRemove={handleSupportingDocumentRemove}
+              proposalCode={proposalCode}
+              theme={theme}
+            />
+          </>
+        )}
 
-        {/* Submit Button */}
-        <div className="flex justify-end mb-8">
+        {/* Navigation Buttons */}
+        <div className="flex justify-between mb-8">
           <button
-            onClick={handleSubmitClick}
-            disabled={isSavingToBackend}
-            className={`px-8 py-3 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}
+            onClick={handlePreviousStage}
+            disabled={currentStage === 1}
+            className={`px-6 py-3 rounded-xl font-semibold transition-colors ${
+              currentStage === 1
+                ? 'opacity-50 cursor-not-allowed'
+                : ''
+            } ${isDark ? 'border border-white/30 text-white hover:bg-white/5' : 'border border-black/30 text-black hover:bg-black/5'}`}
           >
-            {isSavingToBackend ? 'Saving...' : 'Submit Proposal'}
+            Previous Stage
           </button>
+
+          {currentStage < 5 ? (
+            <button
+              onClick={handleNextStage}
+              className={`px-6 py-3 rounded-xl font-semibold transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}
+            >
+              Next Stage
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmitClick}
+              disabled={isSavingToBackend}
+              className={`px-8 py-3 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}
+            >
+              {isSavingToBackend ? 'Saving...' : 'Submit Proposal'}
+            </button>
+          )}
         </div>
       </div>
 

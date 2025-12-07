@@ -10,7 +10,7 @@ load_dotenv()
 # --------------------------------------------
 # 1. Load Environment Variables (API KEY)
 # --------------------------------------------
-api_key = os.getenv("GEMINI_API_KEY7")
+api_key = os.getenv("GEMINI_API_KEY2")
 if not api_key:
     raise ValueError("ERROR: Set GEMINI_API_KEY in environment variables.")
 
@@ -34,7 +34,10 @@ def extract_pdf_text_from_path(path: str):
                 text += t + "\n"
     return text
 
-THRUST_AREAS_PATH = r"C:\Users\Shanmuga Shyam. B\OneDrive\Desktop\SIH25180\Model\data_files\Thrust_Areas_2020.pdf"
+# Get the absolute path to the data_files directory
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))
+THRUST_AREAS_PATH = os.path.join(MODEL_DIR, "data_files", "Thrust_Areas_2020.pdf")
 THRUST_TEXT = extract_pdf_text_from_path(THRUST_AREAS_PATH)
 
 print("✔ Agent Memory Loaded: MoC Thrust Areas")

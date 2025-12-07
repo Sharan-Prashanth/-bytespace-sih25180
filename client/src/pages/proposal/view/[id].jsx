@@ -6,7 +6,9 @@ import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { getProposalById } from '../../../utils/proposalApi';
 import apiClient from '../../../utils/api';
-import { Edit, Users, FileText, MessageSquare, Download, ChevronUp, ChevronDown, Clock, ArrowLeft, Moon, Sun, MoonStar, PenLine } from 'lucide-react';
+import { Edit, Users, FileText, MessageSquare, Download, ChevronUp, ChevronDown, Clock, PenLine, Moon, Sun, MoonStar, ArrowLeft } from 'lucide-react';
+import { getUserQuickActions, getCommitteeQuickActions, getExpertQuickActions } from '../../../utils/quickActionsHelper';
+import StickyNavigation from '../../../components/common/StickyNavigation';
 
 // Lazy load heavy components
 const AdvancedProposalEditor = lazy(() => import('../../../components/ProposalEditor/editor (our files)/AdvancedProposalEditor'));
@@ -27,6 +29,7 @@ function ViewProposalContent() {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [viewingVersion, setViewingVersion] = useState(null);
   const [versionData, setVersionData] = useState(null);
+  const [expertHasSubmittedReport, setExpertHasSubmittedReport] = useState(false);
   
   // Theme state
   const [theme, setTheme] = useState('light');
@@ -82,42 +85,38 @@ function ViewProposalContent() {
 
   // Determine the correct dashboard path based on user role
   const getDashboardPath = () => {
-    if (isAdmin) return '/dashboard/admin';
-    if (isExpert) return '/dashboard/expert';
-    if (isCMPDI) return '/dashboard/cmpdi';
-    if (isTSSRC) return '/dashboard/tssrc';
-    if (isSSRC) return '/dashboard/ssrc';
-    return '/dashboard'; // Default for regular users
+    return '/dashboard'; // Single dashboard route for all users
   };
 
   // Get role-specific label
   const getRoleLabel = () => {
-    if (isAdmin) return 'Admin Dashboard';
-    if (isExpert) return 'Expert Dashboard';
-    if (isCMPDI) return 'CMPDI Dashboard';
-    if (isTSSRC) return 'TSSRC Dashboard';
-    if (isSSRC) return 'SSRC Dashboard';
-    return 'Dashboard';
+    return 'Dashboard'; // Simple label for all users
   };
 
-  // Button visibility based on roles:
-  // user - collaborate, track
-  // expert - collaborate, track, review
-  // cmpdi - collaborate, track, review
-  // admin - everything (edit, collaborate, track, review, download)
-  // tssrc, ssrc - collaborate, track, review
-  const showEdit = isAdmin;
-  const showCollaborate = true; // Will be conditionally shown based on status below
-  const showReview = isAdmin || isExpert || isCMPDI || isTSSRC || isSSRC;
-  const showTrack = true; // Everyone can track
-  const showDownload = isAdmin;
-  
-  // Check if proposal is finally rejected (cannot collaborate)
-  const isFinallyRejected = proposal && ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(proposal.status);
-  const isAIRejected = proposal && proposal.status === 'AI_REJECTED';
+  // Determine quick actions based on user role and proposal status
+  const getQuickActions = () => {
+    if (!proposal) return {};
+    
+    // Check if user is committee member
+    const isCommittee = isCMPDI || isTSSRC || isSSRC || isAdmin;
+    
+    // Get appropriate quick actions
+    if (isExpert && !isCommittee) {
+      return getExpertQuickActions(proposal, 'view', user, expertHasSubmittedReport);
+    } else if (isCommittee) {
+      return getCommitteeQuickActions(proposal, 'view', user);
+    } else {
+      return getUserQuickActions(proposal, 'view', user);
+    }
+  };
+
+  const quickActions = getQuickActions();
   
   // Check if proposal is in draft status
   const isDraft = proposal && proposal.status === 'DRAFT';
+  const isSSRCAccepted = proposal && proposal.status === 'SSRC_ACCEPTED';
+  const isAIRejected = proposal && proposal.status === 'AI_EVALUATION_REJECTED';
+  const isFinallyRejected = proposal && (proposal.status === 'CMPDI_REJECTED' || proposal.status === 'TSSRC_REJECTED' || proposal.status === 'SSRC_REJECTED');
 
   // Load specific version data if version parameter is present
   useEffect(() => {
@@ -276,6 +275,14 @@ function ViewProposalContent() {
         }
         
         setProposal({ ...proposalData, processedForms });
+        
+        // Check if expert has submitted their report
+        if (user?.roles?.includes('EXPERT_REVIEWER') && user?._id) {
+          const assignment = proposalData.assignedReviewers?.find(ar => 
+            (ar.reviewer === user._id || ar.reviewer?._id === user._id) && ar.status === 'COMPLETED'
+          );
+          setExpertHasSubmittedReport(!!assignment);
+        }
       } catch (err) {
         console.error('Error loading proposal:', err);
         setError(err.message || 'Failed to load proposal');
@@ -285,7 +292,7 @@ function ViewProposalContent() {
     };
 
     loadProposal();
-  }, [id, versionParam]);
+  }, [id, versionParam, user?._id]);
 
   // Process version data for display
   const getDisplayData = () => {
@@ -394,20 +401,16 @@ function ViewProposalContent() {
 
   return (
     <div className={`min-h-screen ${bgClass} transition-colors duration-300`}>
-      {/* Fixed Theme Toggle Button - positioned below banner when draft/version banner is shown */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed ${viewingVersion || isDraft ? 'top-16' : 'top-4'} right-4 z-50 p-2 rounded-lg ${cardBg} border shadow-lg transition-all ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/5'}`}
-        title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
-      >
-        {theme === 'light' ? (
-          <Moon className={`w-5 h-5 ${textColor}`} />
-        ) : theme === 'dark' ? (
-          <MoonStar className={`w-5 h-5 ${textColor}`} />
-        ) : (
-          <Sun className={`w-5 h-5 ${textColor}`} />
-        )}
-      </button>
+      {/* Sticky Navigation */}
+      <StickyNavigation
+        onBack={() => router.push(getDashboardPath())}
+        backLabel="Back to Dashboard"
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+
+      {/* Add top padding for fixed navigation */}
+      <div className="pt-16"></div>
 
       {/* Version History Panel */}
       <Suspense fallback={null}>
@@ -482,26 +485,27 @@ function ViewProposalContent() {
         </div>
       )}
 
-      {/* Floating Action Button Panel */}
-      <div className={`fixed right-6 top-1/2 -translate-y-1/2 z-40 ${viewingVersion ? 'mt-6' : ''}`}>
-        <div className={`${cardBg} rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
-          {/* Toggle Button */}
-          <button
-            onClick={() => setFabExpanded(!fabExpanded)}
-            className={`w-full flex items-center justify-between p-3 transition-colors border-b ${borderColor} ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/5'}`}
-          >
-            {fabExpanded && <span className={`text-sm font-semibold ${textColor}`}>Actions</span>}
-            {fabExpanded ? (
-              <ChevronDown className={`w-5 h-5 ${textColor}`} />
-            ) : (
-              <ChevronUp className={`w-5 h-5 ${textColor} mx-auto`} />
-            )}
-          </button>
+      {/* Floating Action Button Panel - Hide for experts who have submitted their review */}
+      {!(isExpert && !isCMPDI && !isTSSRC && !isSSRC && !isAdmin && expertHasSubmittedReport) && (
+        <div className={`fixed right-6 top-1/2 -translate-y-1/2 z-40 ${viewingVersion ? 'mt-6' : ''}`}>
+          <div className={`${cardBg} rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 ${fabExpanded ? 'w-48' : 'w-14'}`}>
+            {/* Toggle Button */}
+            <button
+              onClick={() => setFabExpanded(!fabExpanded)}
+              className={`w-full flex items-center justify-between p-3 transition-colors border-b ${borderColor} ${isDark ? 'hover:bg-white/5' : 'hover:bg-black/5'}`}
+            >
+              {fabExpanded && <span className={`text-sm font-semibold ${textColor}`}>Actions</span>}
+              {fabExpanded ? (
+                <ChevronDown className={`w-5 h-5 ${textColor}`} />
+              ) : (
+                <ChevronUp className={`w-5 h-5 ${textColor} mx-auto`} />
+              )}
+            </button>
 
           {/* Action Buttons */}
           <div className="p-2 space-y-1">
-            {/* Version History Button - Hidden for DRAFT proposals */}
-            {!isDraft && (
+            {/* Version History Button */}
+            {quickActions.versions && (
               <button
                 onClick={() => setShowVersionHistory(true)}
                 className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
@@ -516,7 +520,7 @@ function ViewProposalContent() {
             {!viewingVersion && (
               <>
                 {/* Edit Draft Button - Only for DRAFT proposals */}
-                {isDraft && (
+                {quickActions.editDraft && (
                   <button
                     onClick={() => router.push(`/proposal/create?draft=${id}`)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
@@ -527,8 +531,8 @@ function ViewProposalContent() {
                   </button>
                 )}
 
-                {/* Edit Button - Admin only, hidden for drafts */}
-                {showEdit && !isDraft && (
+                {/* Edit Button - Admin only */}
+                {isAdmin && !isDraft && (
                   <button
                     onClick={() => router.push(`/proposal/collaborate/${id}?mode=edit`)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
@@ -539,8 +543,8 @@ function ViewProposalContent() {
                   </button>
                 )}
 
-                {/* Collaborate Button - Everyone except finally rejected and drafts */}
-                {showCollaborate && !isFinallyRejected && !isDraft && (
+                {/* Collaborate Button */}
+                {quickActions.collaborate && (
                   <button
                     onClick={() => router.push(`/proposal/collaborate/${id}`)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
@@ -551,8 +555,8 @@ function ViewProposalContent() {
                   </button>
                 )}
 
-                {/* Review Button - Expert, CMPDI, TSSRC, SSRC, Admin - hidden for drafts */}
-                {showReview && !isDraft && (
+                {/* Review Button */}
+                {quickActions.review && (
                   <button
                     onClick={() => router.push(`/proposal/review/${id}`)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
@@ -563,8 +567,8 @@ function ViewProposalContent() {
                   </button>
                 )}
 
-                {/* Track Button - Everyone except drafts */}
-                {showTrack && !isDraft && (
+                {/* Track Button */}
+                {quickActions.track && (
                   <button
                     onClick={() => router.push(`/proposal/track/${id}`)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${!fabExpanded && 'justify-center'} ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'} ${textColor}`}
@@ -575,8 +579,8 @@ function ViewProposalContent() {
                   </button>
                 )}
 
-                {/* Download Button - Admin only, hidden for drafts */}
-                {showDownload && !isDraft && (
+                {/* Download Button - Admin only */}
+                {isAdmin && !isDraft && (
                   <button
                     onClick={() => {
                       alert('Download feature coming soon!');
@@ -592,37 +596,11 @@ function ViewProposalContent() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Header with Back Button */}
-      <div className={`${cardBg} border-b ${borderColor} ${viewingVersion || isDraft ? 'mt-12' : ''}`}>
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <button
-            onClick={() => {
-              if (viewingVersion) {
-                setViewingVersion(null);
-                setVersionData(null);
-                router.replace(`/proposal/view/${id}`, undefined, { shallow: false });
-              } else {
-                router.push(getDashboardPath());
-              }
-            }}
-            className={`flex items-center gap-2 px-4 py-2 text-sm border rounded-lg transition-colors ${isDark ? `border-slate-600 ${textColor} hover:bg-white/5` : `border-slate-300 ${textColor} hover:bg-black/5`}`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {viewingVersion ? 'Back to Current Version' : `Back to ${getRoleLabel()}`}
-          </button>
-          
-          {/* Date display */}
-          <div className="flex items-center gap-3 mr-12">
-            <span className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-black'}`}>
-              {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-          </div>
         </div>
-      </div>
+      )}
+
+      {/* Add top padding to account for fixed navigation */}
+      <div className="pt-16"></div>
 
       {/* Header */}
       <ViewHeader

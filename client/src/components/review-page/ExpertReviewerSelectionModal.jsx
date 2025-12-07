@@ -17,6 +17,18 @@ const ExpertReviewerSelectionModal = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dueDate, setDueDate] = useState('');
+  
+  // Calculate min and max dates
+  const today = new Date();
+  const minDate = new Date(today);
+  minDate.setDate(minDate.getDate() + 1); // Tomorrow
+  const maxDate = new Date(today);
+  maxDate.setDate(maxDate.getDate() + 30); // 30 days from today
+  
+  const formatDateForInput = (date) => {
+    return date.toISOString().split('T')[0];
+  };
 
   // Theme helpers
   const isDark = theme === 'dark' || theme === 'darkest';
@@ -64,8 +76,8 @@ const ExpertReviewerSelectionModal = ({
   };
 
   const handleConfirm = () => {
-    if (selectedReviewers.length > 0 && onConfirm) {
-      onConfirm(selectedReviewers);
+    if (selectedReviewers.length > 0 && dueDate && onConfirm) {
+      onConfirm(selectedReviewers, dueDate);
     }
   };
 
@@ -204,7 +216,26 @@ const ExpertReviewerSelectionModal = ({
         </div>
 
         {/* Footer */}
-        <div className={`p-6 border-t ${borderColor}`}>
+        <div className={`p-6 border-t ${borderColor} space-y-4`}>
+          {/* Due Date Field */}
+          <div>
+            <label className={`block text-sm font-medium ${textColor} mb-2`}>
+              Due Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              min={formatDateForInput(minDate)}
+              max={formatDateForInput(maxDate)}
+              required
+              className={`w-full px-4 py-3 ${inputBg} ${textColor} rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            />
+            <p className={`text-xs ${subTextColor} mt-1`}>
+              Maximum 30 days from today
+            </p>
+          </div>
+
           <div className="flex items-center justify-between">
             <p className={`text-sm ${subTextColor}`}>
               {selectedReviewers.length} reviewer{selectedReviewers.length !== 1 ? 's' : ''} selected
@@ -219,7 +250,7 @@ const ExpertReviewerSelectionModal = ({
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={selectedReviewers.length === 0 || isSubmitting}
+                disabled={selectedReviewers.length === 0 || !dueDate || isSubmitting}
                 className={`px-6 py-2 ${btnPrimary} rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
               >
                 {isSubmitting ? (

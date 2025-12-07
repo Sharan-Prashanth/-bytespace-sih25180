@@ -204,4 +204,49 @@ router.post('/cleanup', asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * @route   GET /api/collaboration/chat/:proposalId
+ * @desc    Get chat messages for a proposal
+ * @access  Private
+ */
+router.get('/chat/:proposalId', asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  const { limit = 100, skip = 0 } = req.query;
+  
+  const ChatMessage = (await import('../models/ChatMessage.js')).default;
+  
+  const messages = await ChatMessage.find({ proposalId })
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(skip))
+    .populate('sender', 'fullName email roles')
+    .lean();
+
+  // Reverse to show oldest first
+  messages.reverse();
+
+  // Transform messages for client
+  const transformedMessages = messages.map(msg => ({
+    _id: msg._id,
+    proposalId: msg.proposalId,
+    message: msg.message,
+    sender: {
+      userId: msg.sender._id,
+      fullName: msg.sender.fullName,
+      email: msg.sender.email,
+      role: msg.sender.roles?.[0] || 'USER'
+    },
+    timestamp: new Date(msg.createdAt).getTime(),
+    createdAt: msg.createdAt
+  }));
+
+  res.json({
+    success: true,
+    data: {
+      messages: transformedMessages,
+      count: messages.length
+    }
+  });
+}));
+
 export default router;

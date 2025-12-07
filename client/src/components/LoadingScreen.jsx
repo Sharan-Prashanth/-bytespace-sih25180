@@ -34,7 +34,7 @@ export default function LoadingScreen() {
             <div className="w-4 h-4 bg-green-400 rounded-full animate-pulse animation-delay-500"></div>
           </div>
           <div className="text-sm text-slate-500 font-medium mb-8">
-            National Centre for Centres for Engineering Research
+            National Centre for Coal and Energy Research
           </div>
         </div>
         
