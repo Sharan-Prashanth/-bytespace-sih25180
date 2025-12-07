@@ -46,7 +46,7 @@ load_dotenv()
 
 # ---------- CONFIG ----------
 GUIDELINES_PDF_PATH = os.getenv("GUIDELINES_PDF_PATH", "/mnt/data/Guidelines.pdf")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY4") or os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY3")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY1") or os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY3")
 
 # Supabase envs used in extractor (kept as in your provided code)
 SUPABASE_URL = os.getenv("SUPABASE_URL")

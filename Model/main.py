@@ -8,6 +8,7 @@ from RAG import plag
 # from RAG import rag_chat_guidlines
 # from RAG import rag_chat_specialist
 from RAG import timeline
+from Common.SWOT import swot
 from Common.Technical_fesability import fesability
 try:
     # Prefer relative import when running as a package (helps editors/linters)
@@ -41,6 +42,7 @@ app.include_router(timeline.router)
 app.include_router(benefit.router)
 app.include_router(deliverables.router)
 app.include_router(non_ocr.router)
+app.include_router(swot.router)
 # app.include_router(similarity_checker.router)
 app.include_router(validation.router)
 # app.include_router(rag_chat_guidlines.router)
