@@ -14,6 +14,7 @@ const FormIEditor = forwardRef(({
   onPdfRemove,
   onManualSave,
   onAutoSave,
+  onBeforePdfUpload,
   lastSavedTime,
   isAutoSaving,
   proposalCode,
@@ -106,12 +107,36 @@ const FormIEditor = forwardRef(({
       return;
     }
 
-    // Validate proposalCode
+    // Auto-save current editor content before uploading PDF
+    if (onBeforePdfUpload) {
+      try {
+        console.log('[UPLOAD] Auto-saving editor content before PDF upload...');
+        const currentProposalCode = await onBeforePdfUpload();
+        
+        // If we didn't have a proposalCode before, we do now
+        if (!proposalCode && currentProposalCode) {
+          console.log('[UPLOAD] Proposal saved, got proposalCode:', currentProposalCode);
+          // Continue with the upload using the new proposalCode
+          await performUpload(file, currentProposalCode);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to save before upload:', err);
+        showAlert('Save Failed', 'Failed to save current content. Please try again.', 'error');
+        return;
+      }
+    }
+
+    // If we still don't have proposalCode, show error
     if (!proposalCode) {
-      showAlert('Save Required', 'Please save the proposal first before uploading Form I. Fill in the proposal information and wait for it to auto-save.', 'warning');
+      showAlert('Save Required', 'Please fill in the proposal information first. The proposal will be saved automatically.', 'warning');
       return;
     }
 
+    await performUpload(file, proposalCode);
+  };
+
+  const performUpload = async (file, code) => {
     setIsUploading(true);
     setIsExtracting(true);
     setExtractionProgress(0);
@@ -131,7 +156,7 @@ const FormIEditor = forwardRef(({
         });
       }, 300);
 
-      const response = await uploadFormI(file, proposalCode);
+      const response = await uploadFormI(file, code);
       
       clearInterval(progressInterval);
       setExtractionProgress(100);

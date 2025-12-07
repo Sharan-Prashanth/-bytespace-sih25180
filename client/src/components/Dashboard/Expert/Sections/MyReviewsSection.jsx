@@ -39,31 +39,45 @@ export default function MyReviewsSection({ user, theme }) {
     const fetchMyReviews = async () => {
         try {
             setLoading(true);
-            // Fetch all proposals assigned to the expert and their opinions
+            // Fetch all proposals assigned to the expert (including completed ones at any status)
             const [proposalsRes] = await Promise.all([
-                apiClient.get('/api/proposals/assigned-to-me')
+                apiClient.get('/api/proposals/my-review-history')
             ]);
 
             const proposals = proposalsRes.data?.data?.proposals || proposalsRes.data?.proposals || [];
             
-            // For each proposal, try to fetch the user's opinion
+            // For each proposal, try to fetch the user's opinion and expert report
             const reviewsWithOpinions = await Promise.all(
                 proposals.map(async (proposal) => {
                     try {
-                        const opinionRes = await apiClient.get(`/api/proposals/${proposal._id}/opinions/check`);
+                        const [opinionRes, reportsRes] = await Promise.all([
+                            apiClient.get(`/api/proposals/${proposal._id}/opinions/check`),
+                            apiClient.get(`/api/proposals/${proposal._id}/reports`)
+                        ]);
+                        
                         const hasOpinion = opinionRes.data?.data?.hasOpinion;
                         const opinion = opinionRes.data?.data?.opinion;
+                        
+                        // Find expert's submitted report
+                        const allReports = reportsRes.data?.data || [];
+                        const expertReport = allReports.find(r => 
+                            r.reportType === 'EXPERT_REVIEW' && 
+                            r.createdBy?._id === user?._id &&
+                            r.status === 'SUBMITTED'
+                        );
                         
                         return {
                             ...proposal,
                             hasSubmittedOpinion: hasOpinion,
-                            myOpinion: opinion
+                            myOpinion: opinion,
+                            myReport: expertReport
                         };
                     } catch {
                         return {
                             ...proposal,
                             hasSubmittedOpinion: false,
-                            myOpinion: null
+                            myOpinion: null,
+                            myReport: null
                         };
                     }
                 })
@@ -165,11 +179,13 @@ export default function MyReviewsSection({ user, theme }) {
                                 <Eye size={14} />
                             </button>
                         </Link>
-                        <Link href={`/proposal/track/${review._id}`}>
-                            <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-purple-400' : 'hover:bg-slate-100 text-purple-500'}`} title="Track Progress">
-                                <BarChart3 size={14} />
-                            </button>
-                        </Link>
+                        {review.myReport?.fileUrl && (
+                            <a href={review.myReport.fileUrl} target="_blank" rel="noopener noreferrer">
+                                <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-blue-400' : 'hover:bg-slate-100 text-blue-500'}`} title="View My Report">
+                                    <FileText size={14} />
+                                </button>
+                            </a>
+                        )}
                     </div>
                 </div>
             </div>

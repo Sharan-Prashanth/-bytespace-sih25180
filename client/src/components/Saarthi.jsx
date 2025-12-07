@@ -5,8 +5,8 @@ import { useState, useEffect, useRef } from "react";
 export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistory, setShowVersionHistory, context, proposalData, onClose }) {
   console.log('Chatbot render - showSaarthi:', showSaarthi, 'context:', context);
   
-  // Internal state for reviewer mode
-  const [isVisible, setIsVisible] = useState(context === 'reviewer' ? true : showSaarthi);
+  // Internal state for reviewer mode - do NOT auto-open
+  const [isVisible, setIsVisible] = useState(context === 'reviewer' ? false : showSaarthi);
   
   // Chat State - Different messages for reviewer context
   const getInitialMessages = () => {

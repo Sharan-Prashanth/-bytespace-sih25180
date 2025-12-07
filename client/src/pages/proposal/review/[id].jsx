@@ -6,7 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import apiClient from '../../../utils/api';
 import jsPDF from 'jspdf';
-import { Moon, Sun, MoonStar, ArrowLeft } from 'lucide-react';
+import StickyNavigation from '../../../components/common/StickyNavigation';
 
 // Import modular components
 import {
@@ -178,6 +178,19 @@ function ReviewProposalContent() {
               r.status === 'SUBMITTED'
             );
             setHasExpertSubmittedReport(!!expertReport);
+            
+            // Redirect expert to view page if they've already submitted their report
+            // Only redirect if user is ONLY an expert (not also a committee member)
+            const isExpertOnly = userRoles.includes('EXPERT_REVIEWER') && 
+                                !userRoles.includes('CMPDI_MEMBER') && 
+                                !userRoles.includes('TSSRC_MEMBER') && 
+                                !userRoles.includes('SSRC_MEMBER') && 
+                                !userRoles.includes('SUPER_ADMIN');
+            
+            if (isExpertOnly && expertReport) {
+              router.replace(`/proposal/view/${id}`);
+              return;
+            }
           }
         } catch (err) {
           console.warn('Could not load reports:', err);
@@ -197,7 +210,7 @@ function ReviewProposalContent() {
     };
 
     loadProposalData();
-  }, [id, user?._id]);
+  }, [id, user?._id, router, userRoles]);
 
   // Add comment handler
   const handleAddComment = useCallback(async (content) => {
@@ -260,8 +273,8 @@ function ReviewProposalContent() {
   }, []);
 
   // Handle expert reviewer selection confirmation
-  const handleExpertReviewerSelection = useCallback(async (reviewerIds) => {
-    if (!reviewerIds || reviewerIds.length === 0) return;
+  const handleExpertReviewerSelection = useCallback(async (reviewerIds, dueDate) => {
+    if (!reviewerIds || reviewerIds.length === 0 || !dueDate) return;
     
     setIsSubmittingExpertSelection(true);
     
@@ -269,6 +282,7 @@ function ReviewProposalContent() {
       // Call the new API endpoint to select expert reviewers and update status
       await apiClient.post(`/api/workflow/${id}/select-expert-reviewers`, {
         reviewerIds,
+        dueDate,
         notes: 'Sent for expert review'
       });
       
@@ -282,7 +296,7 @@ function ReviewProposalContent() {
       
       // Show success with a custom message for expert review
       setSubmittedDecision('CMPDI_EXPERT_REVIEW');
-      setSubmittedReportTitle('Expert reviewers assigned');
+      setSubmittedReportTitle(`${reviewerIds.length} Expert Reviewer(s) Assigned`);
       setSubmittedReportPdfUrl('');
       setShowSuccessModal(true);
       
@@ -324,22 +338,13 @@ function ReviewProposalContent() {
       const submitResponse = await apiClient.post(`/api/reports/${reportId}/submit`);
       const pdfUrl = submitResponse.data.data?.fileUrl || '';
       
-      // 3. Refresh reports to include the new expert report
-      const reportsResponse = await apiClient.get(`/api/proposals/${id}/reports`);
-      const allReports = reportsResponse.data.data || [];
-      setReports(prev => ({
-        ...prev,
-        reviewer: allReports.filter(r => r.reportType !== 'AI_REVIEW')
-      }));
+      // 3. Update expert's assignment status to COMPLETED
+      await apiClient.patch(`/api/proposals/${id}/review-status`, {
+        status: 'COMPLETED'
+      });
       
-      // 4. Mark that expert has submitted report
-      setHasExpertSubmittedReport(true);
-      
-      // 5. Show success modal
-      setSubmittedDecision('EXPERT_REPORT_SUBMITTED');
-      setSubmittedReportTitle(reportData.title);
-      setSubmittedReportPdfUrl(pdfUrl);
-      setShowSuccessModal(true);
+      // 4. Route back to dashboard after successful submission
+      router.push('/dashboard');
       
     } catch (err) {
       console.error('Error submitting expert report:', err);
@@ -482,33 +487,16 @@ function ReviewProposalContent() {
 
   return (
     <div className={`min-h-screen ${bgClass}`}>
-      {/* Fixed Top Bar - Back Button (left) and Theme Toggle (right) */}
-      <div className="fixed top-0 left-0 right-0 z-50 px-4 py-3 flex items-center justify-between pointer-events-none">
-        {/* Back to Dashboard Button - Expands on hover */}
-        <button
-          onClick={() => router.push('/dashboard')}
-          className={`group flex items-center gap-0 p-2 ${cardBg} border rounded-lg shadow-lg ${hoverBg} transition-all duration-300 pointer-events-auto overflow-hidden`}
-          title="Back to Dashboard"
-        >
-          <ArrowLeft className={`w-5 h-5 ${textColor} flex-shrink-0`} />
-          <span className={`text-sm font-medium ${textColor} max-w-0 group-hover:max-w-40 group-hover:ml-2 group-hover:pr-1 overflow-hidden whitespace-nowrap transition-all duration-300`}>Back to Dashboard</span>
-        </button>
+      {/* Sticky Navigation */}
+      <StickyNavigation
+        onBack={() => router.push('/dashboard')}
+        backLabel="Back to Dashboard"
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
 
-        {/* Theme Toggle Button */}
-        <button
-          onClick={toggleTheme}
-          className={`p-2 rounded-lg ${cardBg} border shadow-lg ${hoverBg} transition-colors pointer-events-auto`}
-          title={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'darkest' : 'light'} mode`}
-        >
-          {theme === 'light' ? (
-            <Moon className={`w-5 h-5 ${textColor}`} />
-          ) : theme === 'dark' ? (
-            <MoonStar className={`w-5 h-5 ${textColor}`} />
-          ) : (
-            <Sun className={`w-5 h-5 ${textColor}`} />
-          )}
-        </button>
-      </div>
+      {/* Add top padding for fixed navigation */}
+      <div className="pt-16"></div>
 
       {/* Header */}
       <ReviewHeader
@@ -641,6 +629,7 @@ function ReviewProposalContent() {
         proposalTitle={proposal.title}
         isSubmitting={isExpertReportMode ? isSubmittingExpertReport : isSubmittingDecision}
         isExpertReport={isExpertReportMode}
+        currentUser={user}
         theme={theme}
       />
 
@@ -676,6 +665,7 @@ function ReviewProposalContent() {
         reportTitle={submittedReportTitle}
         pdfUrl={submittedReportPdfUrl}
         theme={theme}
+        onClose={() => setShowSuccessModal(false)}
       />
     </div>
   );

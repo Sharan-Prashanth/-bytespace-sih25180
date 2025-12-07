@@ -16,7 +16,8 @@ const DecisionSuccessModal = ({
   proposalCode,
   reportTitle,
   pdfUrl,
-  theme = 'light'
+  theme = 'light',
+  onClose
 }) => {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -63,7 +64,7 @@ const DecisionSuccessModal = ({
       return 'The proposal has been rejected. The PI will be notified with your review report.';
     }
     if (decision.includes('EXPERT_REVIEW')) {
-      return 'The proposal has been sent to assigned expert reviewers for detailed assessment.';
+      return 'Expert reviewers have been successfully assigned to this proposal. They will receive notification emails and can now access the proposal for review. You can view their submitted reports in this review page once they complete their assessments.';
     }
     return 'Your decision has been recorded and the relevant parties will be notified.';
   };
@@ -117,37 +118,49 @@ const DecisionSuccessModal = ({
             {getDecisionDescription()}
           </p>
 
-          {/* PDF Generated Notice */}
-          <div className={`flex items-start gap-3 p-4 ${infoBg} border rounded-lg mb-6`}>
-            <FileText className={`w-5 h-5 ${infoText} flex-shrink-0 mt-0.5`} />
-            <div>
-              <p className={`text-sm font-medium ${textColor}`}>PDF Report Generated</p>
-              <p className={`text-sm ${textColor} mt-1`}>
-                Your review report has been converted to PDF and stored securely. 
-                It will be available in the Supporting Documents section.
-              </p>
-              {pdfUrl && (
-                <a
-                  href={pdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`inline-flex items-center gap-2 mt-2 text-sm font-medium ${infoText} hover:underline transition-colors`}
-                >
-                  <Download className="w-4 h-4" />
-                  Download Report PDF
-                </a>
-              )}
+          {/* PDF Generated Notice - Only for decisions with reports */}
+          {!decision.includes('EXPERT_REVIEW') && (
+            <div className={`flex items-start gap-3 p-4 ${infoBg} border rounded-lg mb-6`}>
+              <FileText className={`w-5 h-5 ${infoText} flex-shrink-0 mt-0.5`} />
+              <div>
+                <p className={`text-sm font-medium ${textColor}`}>PDF Report Generated</p>
+                <p className={`text-sm ${textColor} mt-1`}>
+                  Your review report has been converted to PDF and stored securely. 
+                  It will be available in the Supporting Documents section.
+                </p>
+                {pdfUrl && (
+                  <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`inline-flex items-center gap-2 mt-2 text-sm font-medium ${infoText} hover:underline transition-colors`}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Report PDF
+                  </a>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Back to Dashboard Button */}
-          <button
-            onClick={handleBackToDashboard}
-            className={`w-full flex items-center justify-center gap-2 py-3 px-6 ${buttonBg} font-semibold rounded-lg transition-colors`}
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
-          </button>
+          {/* Action Button - Dashboard for reports, Close for expert assignment */}
+          {decision.includes('EXPERT_REVIEW') ? (
+            <button
+              onClick={onClose}
+              className={`w-full flex items-center justify-center gap-2 py-3 px-6 ${buttonBg} font-semibold rounded-lg transition-colors`}
+            >
+              <CheckCircle className="w-5 h-5" />
+              Continue Reviewing
+            </button>
+          ) : (
+            <button
+              onClick={handleBackToDashboard}
+              className={`w-full flex items-center justify-center gap-2 py-3 px-6 ${buttonBg} font-semibold rounded-lg transition-colors`}
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Dashboard
+            </button>
+          )}
         </div>
       </div>
     </div>

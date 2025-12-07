@@ -1510,9 +1510,12 @@ export const getAssignedProposals = asyncHandler(async (req, res) => {
   }
 
   // Find proposals where current user is assigned as reviewer
+  // Only show proposals in CMPDI_EXPERT_REVIEW status
+  // Once status moves to TSSRC or SSRC, expert should not see it in their dashboard
   const query = {
     isDeleted: false,
-    'assignedReviewers.reviewer': user._id
+    'assignedReviewers.reviewer': user._id,
+    status: 'CMPDI_EXPERT_REVIEW' // Only show proposals currently under expert review
   };
 
   // Filter by assignment status if provided
@@ -1630,6 +1633,60 @@ export const updateReviewStatus = asyncHandler(async (req, res) => {
       proposalId: proposal._id,
       proposalCode: proposal.proposalCode,
       reviewStatus: status
+    }
+  });
+});
+
+/**
+ * @route   GET /api/proposals/my-review-history
+ * @desc    Get all proposals assigned to expert reviewer (for My Reviews section)
+ *          Includes proposals at any status - for viewing completed reviews
+ * @access  Private (Expert Reviewers)
+ */
+export const getExpertReviewHistory = asyncHandler(async (req, res) => {
+  const user = req.user;
+  const { page = 1, limit = 50 } = req.query;
+
+  // Check if user is an expert reviewer
+  if (!user.roles.includes('EXPERT_REVIEWER')) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only expert reviewers can access this endpoint'
+    });
+  }
+
+  // Find ALL proposals where current user has been assigned as reviewer
+  // No status filter - includes proposals at any stage
+  const query = {
+    isDeleted: false,
+    'assignedReviewers.reviewer': user._id
+  };
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const [proposals, total] = await Promise.all([
+    Proposal.find(query)
+      .sort({ 'assignedReviewers.assignedAt': -1, createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip(skip)
+      .populate('createdBy', 'fullName email')
+      .populate('coInvestigators', 'fullName email')
+      .populate('assignedReviewers.reviewer', 'fullName email')
+      .populate('assignedReviewers.assignedBy', 'fullName email')
+      .select('-forms -yjsState')
+      .lean(),
+    Proposal.countDocuments(query)
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      proposals,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit))
+      }
     }
   });
 });

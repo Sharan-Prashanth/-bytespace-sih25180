@@ -17,16 +17,27 @@ const activitySchema = new mongoose.Schema({
     enum: [
       'USER_REGISTERED',
       'USER_LOGIN',
+      'USER_LOGOUT',
+      'USER_CREATED',
+      'USER_UPDATED',
+      'USER_DELETED',
+      'USER_ROLES_UPDATED',
+      'PROFILE_UPDATED',
+      'PASSWORD_CHANGED',
       'PROPOSAL_CREATED',
       'PROPOSAL_UPDATED',
       'PROPOSAL_SUBMITTED',
       'PROPOSAL_DELETED',
       'UPLOAD_FORMI',
       'VERSION_CREATED',
+      'VERSION_SUBMITTED',
       'VERSION_REVERTED',
       'STATUS_CHANGED',
       'COLLABORATOR_ADDED',
+      'COLLABORATOR_REMOVED',
       'REVIEWER_ASSIGNED',
+      'EXPERT_REVIEWERS_ASSIGNED',
+      'REVIEW_STATUS_UPDATED',
       'COMMENT_ADDED',
       'COMMENT_RESOLVED',
       'INLINE_COMMENT_ADDED',
@@ -36,7 +47,9 @@ const activitySchema = new mongoose.Schema({
       'PROPOSAL_APPROVED',
       'PROPOSAL_REJECTED',
       'UPDATE_DISCUSSIONS',
-      'DRAFT_UPDATED'
+      'UPDATE_PROPOSAL_INFO',
+      'DRAFT_UPDATED',
+      'DRAFT_DISCARDED'
     ]
   },
   details: {

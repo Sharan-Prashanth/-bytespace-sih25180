@@ -5,7 +5,8 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import apiClient from '../../../utils/api';
-import { Moon, Sun, MoonStar, ArrowLeft, Clock, Users, Eye, ClipboardCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { Moon, Sun, MoonStar, ArrowLeft, Clock, Users, Eye, ClipboardCheck, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { getUserQuickActions, getCommitteeQuickActions, getExpertQuickActions } from '../../../utils/quickActionsHelper';
 
 // Import modular components
 import {
@@ -88,21 +89,18 @@ function TrackProposalContent() {
   const userRoles = user?.roles || [];
   const userId = user?._id;
 
-  // Check if user is PI or CI
-  const isPI = proposal?.createdBy?._id === userId || proposal?.createdBy === userId;
-  const isCI = proposal?.collaborators?.some(c => 
-    (c.user?._id === userId || c.user === userId) && c.role === 'CI'
-  );
+  // Role checks
+  const isExpert = userRoles.includes('EXPERT_REVIEWER');
+  const isCMPDI = userRoles.includes('CMPDI_MEMBER');
+  const isTSSRC = userRoles.includes('TSSRC_MEMBER');
+  const isSSRC = userRoles.includes('SSRC_MEMBER');
+  const isAdmin = userRoles.includes('SUPER_ADMIN');
+  const isCommittee = isCMPDI || isTSSRC || isSSRC || isAdmin;
 
-  // Check if user is a reviewer or committee member
-  const isReviewer = userRoles.some(role => 
-    ['EXPERT_REVIEWER', 'CMPDI_MEMBER', 'TSSRC_MEMBER', 'SSRC_MEMBER', 'SUPER_ADMIN'].includes(role)
+  // Check if expert has submitted report
+  const expertHasSubmittedReport = proposal?.assignedReviewers?.some(ar => 
+    (ar.reviewer === userId || ar.reviewer?._id === userId) && ar.status === 'COMPLETED'
   );
-
-  // Check if proposal is rejected
-  const isRejected = ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED', 'AI_REJECTED'].includes(proposal?.status);
-  // Collaborate link available to everyone except for rejected proposals
-  const canAccessCollaborate = !isRejected;
 
   // Load proposal data
   useEffect(() => {
@@ -299,20 +297,37 @@ function TrackProposalContent() {
 
   const milestones = calculateMilestones();
 
-  // Define quick actions based on role
+  // Get quick actions based on role and status
+  const getQuickActionsData = () => {
+    if (!proposal) return {};
+    
+    if (isExpert && !isCommittee) {
+      return getExpertQuickActions(proposal, 'track', user, expertHasSubmittedReport);
+    } else if (isCommittee) {
+      return getCommitteeQuickActions(proposal, 'track', user);
+    } else {
+      return getUserQuickActions(proposal, 'track', user);
+    }
+  };
+
+  const quickActionsFlags = getQuickActionsData();
+
+  // Build action buttons array
   const getQuickActions = () => {
     const actions = [];
 
-    // Versions - available to all
-    actions.push({
-      label: 'Versions',
-      description: 'View version history',
-      icon: <Clock className="w-5 h-5" />,
-      onClick: () => router.push(`/proposal/view/${id}?tab=versions`)
-    });
+    // View - always show if available
+    if (quickActionsFlags.view) {
+      actions.push({
+        label: 'View',
+        description: 'View proposal',
+        icon: <Eye className="w-5 h-5" />,
+        onClick: () => router.push(`/proposal/view/${id}`)
+      });
+    }
 
-    // Collaborate - available to all except for rejected proposals
-    if (canAccessCollaborate) {
+    // Collaborate
+    if (quickActionsFlags.collaborate) {
       actions.push({
         label: 'Collaborate',
         description: 'Work with team',
@@ -321,20 +336,22 @@ function TrackProposalContent() {
       });
     }
 
-    // View - available to all
-    actions.push({
-      label: 'View',
-      description: 'View proposal',
-      icon: <Eye className="w-5 h-5" />,
-      onClick: () => router.push(`/proposal/view/${id}`)
-    });
+    // Versions
+    if (quickActionsFlags.versions) {
+      actions.push({
+        label: 'Versions',
+        description: 'View version history',
+        icon: <Clock className="w-5 h-5" />,
+        onClick: () => router.push(`/proposal/view/${id}?tab=versions`)
+      });
+    }
 
-    // Review - only for reviewers and committee members
-    if (isReviewer) {
+    // Review
+    if (quickActionsFlags.review) {
       actions.push({
         label: 'Review',
         description: 'Submit review',
-        icon: <ClipboardCheck className="w-5 h-5" />,
+        icon: <FileText className="w-5 h-5" />,
         onClick: () => router.push(`/proposal/review/${id}`)
       });
     }

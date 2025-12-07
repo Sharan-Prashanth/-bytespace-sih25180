@@ -9,7 +9,8 @@ import {
   ChevronDown,
   Upload,
   Cpu,
-  ClipboardCheck
+  ClipboardCheck,
+  X
 } from 'lucide-react';
 
 const SupportingDocuments = ({ 
@@ -20,6 +21,9 @@ const SupportingDocuments = ({
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('user');
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+  const [currentPdfUrl, setCurrentPdfUrl] = useState('');
+  const [currentPdfTitle, setCurrentPdfTitle] = useState('');
 
   // Theme helpers
   const isDark = theme === 'dark' || theme === 'darkest';
@@ -49,6 +53,41 @@ const SupportingDocuments = ({
       month: 'short',
       year: 'numeric'
     });
+  };
+
+  const formatFormName = (formName) => {
+    if (!formName) return '';
+    const formNameMap = {
+      'coveringLetter': 'Covering Letter',
+      'cv': 'CV / Resume',
+      'formIPdf': 'Form I (PDF Upload)',
+      'formia': 'Form IA (Endorsement)',
+      'formix': 'Form IX (Equipment Details)',
+      'formx': 'Form X (Computer & Software)',
+      'formxi': 'Form XI (Manpower Cost)',
+      'formxii': 'Form XII (Travel Expenditure)',
+      'orgDetails': 'Organization Details',
+      'infrastructure': 'Infrastructure Resources',
+      'expertise': 'Expertise & Experience',
+      'rdComponent': 'R&D Component',
+      'benefits': 'Benefits to Coal Industry',
+      'webSurvey': 'Web Survey Report',
+      'researchContent': 'Research Content',
+      'collaboration': 'Collaboration Details'
+    };
+    return formNameMap[formName] || formName;
+  };
+
+  const handleViewPdf = (url, title) => {
+    setCurrentPdfUrl(url);
+    setCurrentPdfTitle(title);
+    setPdfViewerOpen(true);
+  };
+
+  const closePdfViewer = () => {
+    setPdfViewerOpen(false);
+    setCurrentPdfUrl('');
+    setCurrentPdfTitle('');
   };
 
   // Mock data if none provided
@@ -154,35 +193,83 @@ const SupportingDocuments = ({
                   key={index} 
                   className={`flex items-center justify-between p-4 ${docItemBg} border rounded-lg transition-colors`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${docIconBg}`}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${docIconBg} flex-shrink-0`}>
                       <FileText className={`w-5 h-5 ${textColor}`} />
                     </div>
-                    <div>
-                      <div className={`${textColor} font-medium text-sm`}>
-                        {doc.name || doc.title || `Report v${doc.version}`}
+                    <div className="flex-1 min-w-0">
+                      <div className={`${textColor} font-medium text-sm truncate`}>
+                        {/* For user documents: show form name and file name */}
+                        {activeTab === 'user' && doc.formName ? (
+                          <span>
+                            <span className="font-semibold">{formatFormName(doc.formName)}</span>
+                            {doc.fileName && (
+                              <span className="font-normal text-xs ml-1">({doc.fileName})</span>
+                            )}
+                          </span>
+                        ) : (
+                          /* For reports: show title or name */
+                          doc.title || doc.name || `Report v${doc.version}`
+                        )}
                       </div>
-                      <div className={`${textColor} text-xs opacity-70`}>
-                        {doc.fileSize ? formatFileSize(doc.fileSize) : ''} 
-                        {doc.fileSize && (doc.uploadedAt || doc.generatedAt) ? ' - ' : ''}
-                        {formatDate(doc.uploadedAt || doc.generatedAt)}
-                        {doc.author?.fullName && ` by ${doc.author.fullName}`}
+                      <div className={`${textColor} text-xs opacity-70 space-y-0.5`}>
+                        {/* Primary line: Size and Date */}
+                        <div>
+                          {doc.fileSize ? formatFileSize(doc.fileSize) : ''} 
+                          {doc.fileSize && (doc.uploadedAt || doc.generatedAt || doc.createdAt) ? ' - ' : ''}
+                          {formatDate(doc.uploadedAt || doc.generatedAt || doc.createdAt)}
+                        </div>
+                        
+                        {/* For AI reports: Show report type and status */}
+                        {activeTab === 'ai' && (
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">AI Generated Report</span>
+                            {doc.status && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                doc.status === 'SUBMITTED' 
+                                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                  : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                              }`}>
+                                {doc.status}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* For reviewer reports: Show author and role */}
+                        {activeTab === 'reviewer' && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {doc.createdBy?.fullName && (
+                              <span className="font-medium">Submitted by: {doc.createdBy.fullName}</span>
+                            )}
+                            {doc.reportType && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {doc.reportType.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={doc.fileUrl || doc.reportUrl || doc.pdfUrl || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleViewPdf(
+                        doc.fileUrl || doc.reportUrl || doc.pdfUrl || '#',
+                        activeTab === 'user' && doc.formName 
+                          ? `${formatFormName(doc.formName)} - ${doc.fileName || 'Document'}` 
+                          : doc.title || doc.name || `Report v${doc.version}`
+                      )}
                       className={`px-3 py-2 ${viewBtnBg} rounded-lg text-sm transition-colors flex items-center gap-1.5`}
                     >
                       <Eye size={14} />
                       View
-                    </a>
+                    </button>
                     <a
                       href={doc.fileUrl || doc.reportUrl || doc.pdfUrl || '#'}
-                      download
+                      download={doc.fileName || doc.title || 'document.pdf'}
                       className={`px-3 py-2 ${activeBtnBg} rounded-lg text-sm transition-colors flex items-center gap-1.5`}
                     >
                       <Download size={14} />
@@ -192,6 +279,35 @@ const SupportingDocuments = ({
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* PDF Viewer Modal */}
+      {pdfViewerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className={`${cardBg} rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col border ${borderColor}`}>
+            {/* Modal Header */}
+            <div className={`flex items-center justify-between p-4 border-b ${borderColor}`}>
+              <h3 className={`text-lg font-semibold ${textColor} truncate mr-4`}>
+                {currentPdfTitle}
+              </h3>
+              <button
+                onClick={closePdfViewer}
+                className={`p-2 ${hoverBg} rounded-lg transition-colors flex-shrink-0`}
+              >
+                <X className={`w-5 h-5 ${textColor}`} />
+              </button>
+            </div>
+            
+            {/* PDF Viewer */}
+            <div className="flex-1 overflow-hidden">
+              <iframe
+                src={currentPdfUrl}
+                className="w-full h-full"
+                title={currentPdfTitle}
+              />
+            </div>
           </div>
         </div>
       )}

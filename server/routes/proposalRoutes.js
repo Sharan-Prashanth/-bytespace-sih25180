@@ -16,6 +16,7 @@ import {
   addInlineComment,
   resolveDiscussion,
   getAssignedProposals,
+  getExpertReviewHistory,
   updateReviewStatus
 } from '../controllers/proposalController.js';
 import { authenticate, authenticateBeacon, optionalAuthenticate } from '../middleware/auth.js';
@@ -46,6 +47,7 @@ router.use(authenticate);
 
 // Assigned proposals for expert reviewers (must be before /:proposalId routes)
 router.get('/assigned-to-me', getAssignedProposals);
+router.get('/my-review-history', getExpertReviewHistory);
 
 router.route('/')
   .get(getProposals)
