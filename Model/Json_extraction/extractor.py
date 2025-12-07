@@ -24,9 +24,29 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 UPLOAD_BUCKET = "Coal-research-files"
 JSON_BUCKET = "processed-json"
 
-# Gemini
+# Gemini configuration
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
+
+# Monkey patch to increase timeout globally
+import google.api_core.gapic_v1.method
+import functools
+
+original_wrap_method = google.api_core.gapic_v1.method.wrap_method
+
+def custom_wrap_method(func, default_retry=None, default_timeout=None, client_info=None):
+    # Override default timeout to 600 seconds (10 minutes)
+    custom_timeout = 600.0
+    return original_wrap_method(func, default_retry=default_retry, default_timeout=custom_timeout, client_info=client_info)
+
+google.api_core.gapic_v1.method.wrap_method = custom_wrap_method
+
+# Configure model with generation settings
+model = genai.GenerativeModel(
+    "gemini-2.5-flash-lite",
+    generation_config=genai.GenerationConfig(
+        temperature=0.7,
+    )
+)
 
 
 # ----------------------------------------------------
