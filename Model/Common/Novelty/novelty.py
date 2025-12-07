@@ -87,7 +87,7 @@ embedder = SentenceTransformer(EMBED_MODEL)
 # Gemini (gemini-2.5-flash-lite)
 GENAI_AVAILABLE = False
 gemini_model = None
-GEMINI_KEY = os.getenv("GEMINI_API_KEY4")
+GEMINI_KEY = os.getenv("GEMINI_API_KEY5")
 if GEMINI_KEY:
     try:
         import google.generativeai as genai

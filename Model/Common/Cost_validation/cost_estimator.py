@@ -24,7 +24,7 @@ router = APIRouter()
 # --- Your existing environment & initialization (kept as-is) ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY4")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY3")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise Exception("Missing SUPABASE_URL or SUPABASE_KEY in environment variables")
