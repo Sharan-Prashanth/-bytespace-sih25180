@@ -85,6 +85,9 @@ async def full_analysis(pdf: UploadFile = File(...)):
         "filename": pdf.filename,
         "results": results
     }
+    # Include Supabase project URL and bucket in the response (may be None)
+    response_data["supabase_url"] = SUPABASE_URL
+    response_data["supabase_bucket"] = SUPABASE_BUCKET
     
     # Store latest result for GET endpoint (auto-render on frontend)
     global latest_analysis_result
@@ -96,13 +99,37 @@ async def full_analysis(pdf: UploadFile = File(...)):
             payload = json.dumps(response_data, ensure_ascii=False, indent=None).encode("utf-8")
             supabase.storage.from_(SUPABASE_BUCKET).upload(obj_name, payload, {"content-type": "application/json"})
             public = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(obj_name)
-            # Attach public URL to the stored latest result
+            # Normalize public URL (client may return a dict)
+            public_url = None
+            if isinstance(public, str):
+                public_url = public
+            elif isinstance(public, dict):
+                for k in ("publicUrl", "public_url", "url", "publicURL"):
+                    if k in public and isinstance(public[k], str):
+                        public_url = public[k]
+                        break
+                if not public_url:
+                    try:
+                        public_url = str(public.get("publicUrl") or public.get("url") or next(iter(public.values())))
+                    except Exception:
+                        public_url = str(public)
+            else:
+                public_url = str(public)
+
+            # Attach public URL and Supabase info to both the immediate response and stored latest result
+            response_data["uploaded_url"] = public_url
+            response_data["uploaded_object"] = obj_name
+
             latest_analysis_result = {
                 **latest_analysis_result,
-                "uploaded_url": public,
-                "uploaded_object": obj_name
+                "uploaded_url": public_url,
+                "uploaded_object": obj_name,
+                "supabase_url": SUPABASE_URL,
+                "supabase_bucket": SUPABASE_BUCKET,
             }
         except Exception as e:
             print(f"Supabase upload failed: {e}")
+            response_data.setdefault("uploaded_url", None)
+            response_data.setdefault("uploaded_object", None)
 
     return latest_analysis_result
