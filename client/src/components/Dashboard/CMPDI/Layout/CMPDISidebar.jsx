@@ -1,7 +1,6 @@
 'use client';
 
 import {
-    AlertTriangle,
     Briefcase,
     DollarSign,
     Folder,
@@ -22,7 +21,6 @@ const MENU_ITEMS = [
     { id: 'proposals', label: 'Proposals', icon: Briefcase, section: 'proposals' },
     { id: 'experts', label: 'Experts', icon: UserCheck, section: 'experts' },
     { id: 'finance', label: 'Finance', icon: DollarSign, section: 'finance' },
-    { id: 'safety', label: 'Safety', icon: AlertTriangle, section: 'safety' },
     { id: 'gis', label: 'GIS Map', icon: Map, section: 'gis' },
 ];
 

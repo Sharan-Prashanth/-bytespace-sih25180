@@ -10,6 +10,7 @@ import CMPDIHome from './CMPDI/Sections/CMPDIHome';
 import ProjectsSection from './CMPDI/Sections/ProjectsSection';
 import CMPDIProposalsSection from './CMPDI/Sections/CMPDIProposalsSection';
 import ExpertsSection from './CMPDI/Sections/ExpertsSection';
+import FinanceSection from './CMPDI/Sections/FinanceSection';
 import GISSection from './CMPDI/Sections/GISSection';
 
 // Placeholder components for sections not yet implemented
@@ -152,9 +153,7 @@ export default function CMPDIDashboard() {
             case 'experts':
                 return <ExpertsSection theme={theme} />;
             case 'finance':
-                return <PlaceholderSection title="Finance Module" />;
-            case 'safety':
-                return <PlaceholderSection title="Safety Module" />;
+                return <FinanceSection theme={theme} />;
             case 'gis':
                 return <GISSection theme={theme} />;
             default:

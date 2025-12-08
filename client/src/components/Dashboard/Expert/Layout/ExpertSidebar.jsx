@@ -3,7 +3,6 @@
 import {
     Briefcase,
     FileText,
-    History,
     Home,
     LogOut
 } from 'lucide-react';
@@ -13,7 +12,6 @@ const MENU_ITEMS = [
     { id: 'overview', label: 'Home', icon: Home, section: 'overview' },
     { id: 'proposals', label: 'Assigned Proposals', icon: Briefcase, section: 'proposals' },
     { id: 'reviews', label: 'My Reviews', icon: FileText, section: 'reviews' },
-    { id: 'history', label: 'History', icon: History, section: 'history' },
 ];
 
 export default function ExpertSidebar({ activeSection, setActiveSection, onLogout, theme }) {

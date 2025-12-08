@@ -61,12 +61,6 @@ export default function ExpertDashboardLayout({
                                 <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Manage your reviews and proposals</p>
                             </div>
                         )}
-                        {activeSection === 'proposals' && (
-                            <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-                                <h1 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Assigned Proposals</h1>
-                                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Review and evaluate assigned proposals</p>
-                            </div>
-                        )}
                     </div>
                     <div className={`flex items-center gap-3 font-medium text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         <span>{formattedDate}</span>
