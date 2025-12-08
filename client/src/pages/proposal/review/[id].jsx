@@ -538,6 +538,7 @@ function ReviewProposalContent() {
                 userDocuments={reports.user}
                 aiReports={reports.ai}
                 reviewerReports={reports.reviewer}
+                proposalId={id}
                 theme={theme}
               />
 

@@ -19,6 +19,11 @@ import {
   getExpertReviewHistory,
   updateReviewStatus
 } from '../controllers/proposalController.js';
+import {
+  getAIReportData,
+  getAIReportHTML,
+  generateAIReport
+} from '../controllers/aiReportController.js';
 import { authenticate, authenticateBeacon, optionalAuthenticate } from '../middleware/auth.js';
 import { upload, uploadFormIPdf } from '../middleware/upload.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -42,6 +47,11 @@ router.get('/:proposalId/discussions', authenticate, getInlineDiscussions);
 router.post('/:proposalId/discussions', discussionsAuth, saveInlineDiscussions);
 router.post('/:proposalId/discussions/comment', authenticate, addInlineComment);
 router.post('/:proposalId/discussions/resolve', authenticate, resolveDiscussion);
+
+// AI Report routes - public access for viewing HTML reports
+router.get('/:proposalId/ai-report/html', getAIReportHTML);
+router.get('/:proposalId/ai-report', authenticate, getAIReportData);
+router.post('/:proposalId/generate-ai-report', authenticate, generateAIReport);
 
 router.use(authenticate);
 
