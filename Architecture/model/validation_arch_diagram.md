@@ -6,6 +6,54 @@ A FastAPI-based microservice that validates Ministry of Coal S&T grant proposals
 
 ---
 
+## System Flow Architecture
+
+```
++----------------------+       +----------------------+       +----------------------+
+|    Frontend UI       |------>|   Backend Server     |------>|  Validation Engine   |
+| (Next.js Client)     |       | (FastAPI/Express)    |       | (Hybrid Rules + LLM) |
++----------------------+       +----------------------+       +----------------------+
+          |                              |                              |
+          |                              |                              |
+          v                              v                              v
++----------------------+       +----------------------+       +----------------------+
+| 1. User uploads a    |       | 2. Server processes  |       | 3. Validation engine |
+|    proposal form     |       |    the request and   |       |    checks fields     |
+|    (PDF/DOCX/TXT)    |       |    extracts text via |       |    against Ministry  |
+|                      |       |    PyPDF2/docx, then |       |    of Coal S&T       |
++----------------------+       |    calls Gemini AI   |       |    Guidelines.pdf    |
+                               |    to extract FORM-I |       |                      |
+                               |    structured JSON.  |       +----------------------+
+                               |    Stores file in    |
+                               |    Supabase Storage  |              |
+                               |    and metadata in   |              |
+                               |    proposals table.  |              v
+                               +----------------------+       +----------------------+
+                                        |                     | 4. Returns detailed  |
+                                        |                     |    validation_result |
+                                        v                     |    with field-level  |
+                               +----------------------+       |    pass/fail status  |
+                               | 5. Server returns    |       |    and reasons based |
+                               |    complete response |       |    on deterministic  |
+                               |    with validation_  |<------|    rules + LLM       |
+                               |    result, extracted_|       |    qualitative check |
+                               |    data, and raw_    |       +----------------------+
+                               |    extracted JSON    |
+                               +----------------------+
+                                        |
+                                        |
+                                        v
+                               +----------------------+
+                               | 6. Frontend polls    |
+                               |    GET /latest-result|
+                               |    to retrieve and   |
+                               |    auto-render the   |
+                               |    validation report |
+                               +----------------------+
+```
+
+---
+
 ## High-Level Architecture Diagram
 
 ```mermaid
@@ -143,6 +191,209 @@ graph TB
     class VAL_ROUTER,RULE_ENGINE,RULE_SET,LLM_ENGINE,GEMINI_VAL,FALLBACK,MAPPER valLayer
     class STORAGE,DATABASE,STORE_FUNC,GUIDE_PDF,MEM_CACHE dataLayer
     class GEMINI_API,SUPABASE_API external
+```
+
+---
+
+## Component Interaction Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              FORM-I VALIDATION SERVICE                               │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
+│   API Gateway    │          │  File Processing │          │   AI Extraction  │
+│   (FastAPI)      │─────────▶│   Pipeline       │─────────▶│   (Gemini API)   │
+│                  │          │                  │          │                  │
+│ • POST /validate │          │ • PyPDF2 (PDF)   │          │ • Text→JSON      │
+│ • GET /latest    │          │ • python-docx    │          │ • Schema-based   │
+│ • GET /health    │          │ • chardet (TXT)  │          │   Extraction     │
+└──────────────────┘          └──────────────────┘          └──────────────────┘
+         │                              │                              │
+         │                              │                              │
+         ▼                              ▼                              ▼
+┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
+│  Temp File Mgmt  │          │   Normalizer     │          │ Structured JSON  │
+│                  │          │                  │          │                  │
+│ • tempfile.Named │          │ • clean_text_    │          │ • basic_info     │
+│   TemporaryFile  │          │   field()        │          │ • project_details│
+│ • Cleanup in     │          │ • construct_     │          │ • cost_breakdown │
+│   finally block  │          │   simple_json_   │          │ • additional_info│
+└──────────────────┘          │   structure()    │          └──────────────────┘
+                               └──────────────────┘                    │
+                                        │                              │
+                                        └──────────────┬───────────────┘
+                                                       │
+                                                       ▼
+                                          ┌─────────────────────┐
+                                          │  Validation Router  │
+                                          │                     │
+                                          │ • get_value_from_   │
+                                          │   extracted_payload │
+                                          │ • Field mapping     │
+                                          └─────────────────────┘
+                                                       │
+                        ┌──────────────────────────────┼──────────────────────────────┐
+                        │                              │                              │
+                        ▼                              ▼                              ▼
+            ┌───────────────────┐        ┌───────────────────┐        ┌───────────────────┐
+            │ Rule-Based Engine │        │  LLM Validator    │        │ Deterministic     │
+            │                   │        │                   │        │ Fallback          │
+            │ • GUIDELINE_RULES │        │ • ask_gemini_     │        │                   │
+            │ • PLACEHOLDER_RE  │        │   validate()      │        │ • Simple checks   │
+            │ • count_words()   │        │ • Guideline       │        │ • Pattern match   │
+            │ • parse_objectives│        │   excerpts (RAG)  │        │ • Conservative    │
+            │ • Regex patterns  │        │ • Qualitative     │        │   approval        │
+            └───────────────────┘        └───────────────────┘        └───────────────────┘
+                        │                              │                              │
+                        └──────────────────────────────┼──────────────────────────────┘
+                                                       │
+                                                       ▼
+                                          ┌─────────────────────┐
+                                          │ Result Aggregator   │
+                                          │                     │
+                                          │ • Overall validation│
+                                          │ • Missing columns   │
+                                          │ • Failing columns   │
+                                          │ • Field-level status│
+                                          └─────────────────────┘
+                                                       │
+                        ┌──────────────────────────────┼──────────────────────────────┐
+                        │                              │                              │
+                        ▼                              ▼                              ▼
+            ┌───────────────────┐        ┌───────────────────┐        ┌───────────────────┐
+            │ Supabase Storage  │        │ In-Memory Cache   │        │ Response Builder  │
+            │                   │        │                   │        │                   │
+            │ • Upload file     │        │ • latest_         │        │ • JSONResponse    │
+            │ • Store metadata  │        │   validation_     │        │ • Status codes    │
+            │ • Get public URL  │        │   result (global) │        │ • Error handling  │
+            │ • proposals table │        │ • Polling support │        │ • Logging         │
+            └───────────────────┘        └───────────────────┘        └───────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              EXTERNAL DEPENDENCIES                                   │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐            │
+│  │  Google Gemini   │     │  Supabase Cloud  │     │  Guidelines.pdf  │            │
+│  │  API             │     │                  │     │                  │            │
+│  │                  │     │ • PostgreSQL DB  │     │ • pdfplumber     │            │
+│  │ • gemini-2.5-    │     │ • Storage Bucket │     │ • Keyword search │            │
+│  │   flash-lite     │     │ • REST API       │     │ • Sentence window│            │
+│  │ • Extraction     │     │ • RLS Policies   │     │ • Context extract│            │
+│  │ • Validation     │     │                  │     │                  │            │
+│  └──────────────────┘     └──────────────────┘     └──────────────────┘            │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Data Flow Through Layers
+
+```
+REQUEST (Upload PDF/DOCX/TXT)
+    │
+    ├──▶ [API Layer]
+    │       │
+    │       ├──▶ Validate file extension (.pdf, .docx, .txt)
+    │       ├──▶ Save to tempfile.NamedTemporaryFile
+    │       └──▶ Read file_bytes
+    │
+    ├──▶ [Extraction Layer]
+    │       │
+    │       ├──▶ extract_text_from_file(filename, file_bytes)
+    │       │       │
+    │       │       ├──▶ If PDF: PyPDF2.PdfReader → iterate pages → extract_text()
+    │       │       ├──▶ If DOCX: docx.Document → paragraphs → join text
+    │       │       └──▶ If TXT: chardet.detect → decode(encoding)
+    │       │
+    │       ├──▶ extract_form_data_with_ai(extracted_text)
+    │       │       │
+    │       │       ├──▶ Build FORM-I extraction prompt
+    │       │       ├──▶ Call Gemini API (generate_content)
+    │       │       ├──▶ Parse JSON response (clean ```json markers)
+    │       │       └──▶ Return proposal_data (40+ fields)
+    │       │
+    │       └──▶ construct_simple_json_structure(proposal_data)
+    │               │
+    │               ├──▶ Apply clean_text_field to all strings
+    │               └──▶ Build hierarchical JSON (basic_info, project_details, etc.)
+    │
+    ├──▶ [Persistence Layer] (Optional - Supabase)
+    │       │
+    │       ├──▶ Upload file to UPLOAD_BUCKET
+    │       ├──▶ Get public_url
+    │       └──▶ Insert into proposals table (store_in_supabase)
+    │
+    ├──▶ [Guidelines Layer]
+    │       │
+    │       ├──▶ load_guidelines_text(GUIDELINES_PDF_PATH)
+    │       │       │
+    │       │       └──▶ pdfplumber.open → extract_text per page
+    │       │
+    │       └──▶ build_guideline_excerpts(guidelines_text, VALIDATE_FIELDS)
+    │               │
+    │               ├──▶ Split into sentences
+    │               ├──▶ Keyword search per field
+    │               └──▶ Return 2-sentence context window
+    │
+    ├──▶ [Validation Layer] (Loop through VALIDATE_FIELDS)
+    │       │
+    │       For each field in ["Project Title", "Principal Investigator", ...]:
+    │       │
+    │       ├──▶ get_value_from_extracted_payload(json_structure, field_label)
+    │       │       │
+    │       │       ├──▶ Try structured paths (basic_information.project_title)
+    │       │       └──▶ Fallback to flat key fuzzy match
+    │       │
+    │       ├──▶ Check if value empty → not_filled
+    │       ├──▶ Check PLACEHOLDER_RE → not_following_guidelines
+    │       │
+    │       ├──▶ If field in GUIDELINE_RULES:
+    │       │       │
+    │       │       └──▶ rule_based_check(field_label, value)
+    │       │               │
+    │       │               ├──▶ Project Title: count_words ≤ 60
+    │       │               ├──▶ Objectives: parse_objectives → 2-5 items, list format
+    │       │               ├──▶ Work Plan: min_words + keyword check (Phase|Milestone)
+    │       │               ├──▶ Methodology: min_words + keyword check (technique|method)
+    │       │               └──▶ Return {validation_result, reason}
+    │       │
+    │       └──▶ Else (no deterministic rule):
+    │               │
+    │               └──▶ ask_gemini_validate(field_label, value, guideline_excerpt)
+    │                       │
+    │                       ├──▶ Build validation prompt with field + excerpt
+    │                       ├──▶ Call Gemini API
+    │                       ├──▶ Parse JSON {validation_result, reason}
+    │                       └──▶ On failure → deterministic_llm_fallback
+    │
+    ├──▶ [Aggregation Layer]
+    │       │
+    │       ├──▶ Collect all field results
+    │       ├──▶ Build columns_missing_value (not_filled)
+    │       ├──▶ Build columns_not_following_guidelines (violations)
+    │       └──▶ Compute overall_validation (False if any missing/failing)
+    │
+    ├──▶ [Response Layer]
+    │       │
+    │       ├──▶ Build final JSON response:
+    │       │       {
+    │       │         "validation_result": {...},
+    │       │         "extracted_data": {...},
+    │       │         "raw_extracted": {...},
+    │       │         "guidelines_used": "Guidelines.pdf"
+    │       │       }
+    │       │
+    │       ├──▶ Update latest_validation_result (in-memory cache)
+    │       └──▶ Return JSONResponse(status_code=200)
+    │
+    └──▶ [Cleanup]
+            │
+            └──▶ finally: os.remove(temp_path)
 ```
 
 ---
