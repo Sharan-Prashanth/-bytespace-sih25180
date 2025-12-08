@@ -17,6 +17,7 @@ const SupportingDocuments = ({
   userDocuments = [], 
   aiReports = [], 
   reviewerReports = [],
+  proposalId = null,
   theme = 'light'
 }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -78,7 +79,16 @@ const SupportingDocuments = ({
     return formNameMap[formName] || formName;
   };
 
-  const handleViewPdf = (url, title) => {
+  const handleViewPdf = (url, title, isAIReport = false, proposalId = null) => {
+    // If it's an AI report, open the test.html template directly
+    if (isAIReport) {
+      const baseUrl = window.location.origin.replace(':3000', ':5000'); // Switch from client port to server port
+      const reportUrl = `${baseUrl}/template/test.html`;
+      window.open(reportUrl, '_blank');
+      return;
+    }
+    
+    // For regular PDFs, open in modal
     setCurrentPdfUrl(url);
     setCurrentPdfTitle(title);
     setPdfViewerOpen(true);
@@ -97,8 +107,18 @@ const SupportingDocuments = ({
     { name: 'Budget Breakdown', type: 'financial', fileSize: 876544, uploadedAt: '2024-01-15', fileUrl: '#' },
   ];
 
-  const displayAIReports = aiReports.length > 0 ? aiReports : [
-    { name: 'AI Evaluation Report v1', type: 'ai', version: 1, generatedAt: '2024-01-16', reportUrl: '#' },
+  // Always show the AI report entry (it will fetch the latest from backend)
+  const displayAIReports = [
+    { 
+      name: 'AI Comprehensive Analysis Report', 
+      title: 'AI Comprehensive Analysis Report',
+      type: 'ai', 
+      version: 1, 
+      generatedAt: new Date().toISOString(),
+      status: 'AVAILABLE',
+      reportUrl: '#' // Will be replaced by HTML rendering
+    },
+    ...aiReports
   ];
 
   const displayReviewerReports = reviewerReports.length > 0 ? reviewerReports : [];
@@ -260,21 +280,25 @@ const SupportingDocuments = ({
                         doc.fileUrl || doc.reportUrl || doc.pdfUrl || '#',
                         activeTab === 'user' && doc.formName 
                           ? `${formatFormName(doc.formName)} - ${doc.fileName || 'Document'}` 
-                          : doc.title || doc.name || `Report v${doc.version}`
+                          : doc.title || doc.name || `Report v${doc.version}`,
+                        activeTab === 'ai', // isAIReport
+                        proposalId // proposalId
                       )}
                       className={`px-3 py-2 ${viewBtnBg} rounded-lg text-sm transition-colors flex items-center gap-1.5`}
                     >
                       <Eye size={14} />
                       View
                     </button>
-                    <a
-                      href={doc.fileUrl || doc.reportUrl || doc.pdfUrl || '#'}
-                      download={doc.fileName || doc.title || 'document.pdf'}
-                      className={`px-3 py-2 ${activeBtnBg} rounded-lg text-sm transition-colors flex items-center gap-1.5`}
-                    >
-                      <Download size={14} />
-                      Download
-                    </a>
+                    {activeTab !== 'ai' && (
+                      <a
+                        href={doc.fileUrl || doc.reportUrl || doc.pdfUrl || '#'}
+                        download={doc.fileName || doc.title || 'document.pdf'}
+                        className={`px-3 py-2 ${activeBtnBg} rounded-lg text-sm transition-colors flex items-center gap-1.5`}
+                      >
+                        <Download size={14} />
+                        Download
+                      </a>
+                    )}
                   </div>
                 </div>
               ))

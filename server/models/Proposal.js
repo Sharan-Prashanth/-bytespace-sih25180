@@ -174,7 +174,7 @@ const proposalSchema = new mongoose.Schema({
     type: Boolean,
     default: null // null = not yet determined, true = skipped, false = expert review was conducted
   },
-  aiReports: [{
+  orts: [{
     version: Number,
     reportUrl: String,
     generatedAt: {
@@ -211,7 +211,7 @@ proposalSchema.virtual('formi')
   })
   .set(function(value) {
     this.forms = value;
-  });
+  });aiRep
 
 // Ensure virtuals are included in JSON output
 proposalSchema.set('toJSON', { virtuals: true });
