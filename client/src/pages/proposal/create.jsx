@@ -508,6 +508,19 @@ function CreateNewProposalContent() {
       return;
     }
 
+    // If leaving Stage 1, save proposal to backend to create proposalId/proposalCode for file uploads
+    if (currentStage === 1) {
+      try {
+        console.log('[SAVE] Saving proposal info to backend before moving to stage 2...');
+        await saveToBackendWithContent(null);
+        info('Proposal information saved');
+      } catch (err) {
+        console.error('Failed to save proposal info:', err);
+        error('Failed to save proposal information. Please try again.');
+        return;
+      }
+    }
+
     // If leaving Stage 3 (Form I Editor), save editor content to backend
     if (currentStage === 3) {
       try {
@@ -699,11 +712,17 @@ function CreateNewProposalContent() {
         const response = await createProposal(proposalData);
         const newProposal = response.data;
         
+        // Update state immediately
         setProposalId(newProposal._id);
         setProposalCode(newProposal.proposalCode);
         
         // Update storage with new IDs
         storageRef.current.updateProposalMeta(newProposal._id, newProposal.proposalCode);
+        
+        console.log('[SAVE] New proposal created:', {
+          id: newProposal._id,
+          code: newProposal.proposalCode
+        });
       }
       
       hasUnsavedChangesRef.current = false;
@@ -826,8 +845,16 @@ function CreateNewProposalContent() {
       // Save to backend
       await saveToBackendWithContent(latestContent);
       
-      console.log('[UPLOAD] Save complete, proposalCode:', proposalCode);
-      return proposalCode;
+      // Return the proposalCode (which should be set after save)
+      // Use a ref to get the latest value since state might not update immediately
+      const codeToReturn = proposalCode;
+      console.log('[UPLOAD] Save complete, proposalCode:', codeToReturn);
+      
+      if (!codeToReturn) {
+        throw new Error('Failed to get proposal code after saving');
+      }
+      
+      return codeToReturn;
     } catch (err) {
       console.error('Failed to save before PDF upload:', err);
       throw err;

@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 from typing import List, Dict, Any, Tuple
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -33,7 +33,7 @@ class Settings:
 
     gcp_project: str = os.getenv("GOOGLE_CLOUD_PROJECT", "")
     gemini_location: str = os.getenv("GEMINI_LOCATION", "global")
-    gemini_model_id: str = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash-lite")
+    gemini_model_id: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     sbert_model_name: str = os.getenv("SBERT_MODEL_NAME", "all-MiniLM-L6-v2")
 
@@ -79,17 +79,17 @@ class SBERTEmbedder:
         for i in range(1, len(sentences)):
             sim = cos_sim(current_vec, sentence_embeddings[i])
             if sim < similarity_threshold or len(current_chunk) >= max_sentences_per_chunk:
-                chunks.routerend(" ".join(current_chunk))
+                chunks.append(" ".join(current_chunk))
                 current_chunk = [sentences[i]]
                 current_vec = sentence_embeddings[i]
             else:
-                current_chunk.routerend(sentences[i])
+                current_chunk.append(sentences[i])
                 current_vec = (current_vec * len(current_chunk) + sentence_embeddings[i]) / (
                     len(current_chunk) + 1e-8
                 )
 
         if current_chunk:
-            chunks.routerend(" ".join(current_chunk))
+            chunks.append(" ".join(current_chunk))
 
         return chunks
 
@@ -152,7 +152,7 @@ class PineconeVectorStore:
                 "page_num": row.get("page_num") or row.get("page") or row.get("page_number"),
                 "chunk_text": text,
             }
-            vectors_batch.routerend((vec_id, text, metadata))
+            vectors_batch.append((vec_id, text, metadata))
 
         for i in range(0, len(vectors_batch), batch_size):
             batch = vectors_batch[i: i + batch_size]
@@ -164,7 +164,7 @@ class PineconeVectorStore:
 
             pine_vectors = []
             for _id, emb, meta in zip(ids, embeddings, metadata):
-                pine_vectors.routerend({"id": _id, "values": emb, "metadata": meta})
+                pine_vectors.append({"id": _id, "values": emb, "metadata": meta})
 
             self.index.upsert(vectors=pine_vectors)
 
@@ -183,9 +183,9 @@ class PineconeVectorStore:
 
 class GeminiRAGModel:
     def __init__(self, project: str, location: str, model_id: str):
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY2")
+        api_key = os.getenv("COMMON_GEMINI_KEY")
         if not api_key:
-            raise ValueError("GEMINI API KEY missing")
+            raise ValueError("COMMON_GEMINI_KEY missing in environment")
 
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_id)
@@ -244,7 +244,7 @@ class RAGChatbot:
 # ---------------------- FASTAPI ENDPOINTS -----------------------
 # ================================================================
 
-router = APIRouter()
+app = FastAPI(title="S&T RAG API", version="1.0")
 
 chatbot = RAGChatbot(settings)
 
@@ -259,18 +259,18 @@ class AskResponse(BaseModel):
     retrieved: List[Dict[str, Any]]
 
 
-@router.post("/ingest")
+@app.post("/ingest")
 def ingest(limit: int | None = None):
     count = chatbot.ingest_supabase_chunks_to_pinecone(limit)
     return {"message": f"Ingestion completed for {count} chunks."}
 
 
-@router.post("/ask", response_model=AskResponse)
+@app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
     answer, retrieved = chatbot.answer_question(req.question, req.top_k)
     return AskResponse(answer=answer, retrieved=retrieved)
 
 
-@router.get("/")
+@app.get("/")
 def home():
     return {"status": "RAG API running", "model": settings.gemini_model_id}

@@ -43,7 +43,7 @@ load_dotenv()
 # -------------------- CONFIG --------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")  # service_role recommended
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY2")
+GEMINI_API_KEY = os.getenv("DETECT_AI_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
     raise Exception("Set SUPABASE_URL, SUPABASE_KEY, and GEMINI_API_KEY in .env")
@@ -58,7 +58,7 @@ FIELD_VALIDATE_THRESHOLD = float(os.getenv("FIELD_VALIDATE_THRESHOLD", "0.65")) 
 SENTENCE_VALIDATE_THRESHOLD = float(os.getenv("SENTENCE_VALIDATE_THRESHOLD", "0.7"))  # sentence-level detector threshold for Gemini validation
 WORKER_COUNT = min(int(os.getenv("WORKER_COUNT", str(max(1, cpu_count() - 1)))), 8)
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash-lite")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Initialize Supabase and Gemini
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)

@@ -21,7 +21,8 @@ load_dotenv()
 # -----------------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY7")
+GEMINI_API_KEY = os.getenv("COMMON_GEMINI_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 TIMELINE_BUCKET = "timelines-json"
 STORE_IN_BUCKET = os.getenv("STORE_IN_BUCKET", "true").lower() in ("true", "1", "yes")
 
@@ -149,7 +150,7 @@ DOCUMENT CONTENT:
 # GEMINI CALL
 # -----------------------------------------------------------
 def call_gemini(prompt: str) -> Dict[str, Any]:
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    model = genai.GenerativeModel(GEMINI_MODEL)
     resp = model.generate_content(prompt)
     raw = resp.text or ""
 

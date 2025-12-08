@@ -55,7 +55,10 @@ QA_PROMPT = PromptTemplate(
 )
 
 def make_rag_chain(store):
-    llm = GoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0)  # updated model
+    # Set API key from environment
+    os.environ["GOOGLE_API_KEY"] = os.getenv("COMMON_GEMINI_KEY") or ""
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    llm = GoogleGenerativeAI(model=GEMINI_MODEL, temperature=0)
     retriever = store.as_retriever(search_kwargs={"k": 5})
     qa = RetrievalQA.from_chain_type(
         llm=llm,

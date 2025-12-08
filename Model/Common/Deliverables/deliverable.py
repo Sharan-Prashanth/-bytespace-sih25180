@@ -27,8 +27,8 @@ except Exception:
     genai = None
     _GEMINI_AVAILABLE = False
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY2") or os.getenv("GEMINI_API_KEY")
-MODEL_NAME = os.getenv("GEMINI_MODEL") or "gemini-2.5-flash-lite"
+GEMINI_API_KEY = os.getenv("DELIVERABLES_KEY")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 if _GEMINI_AVAILABLE and GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)

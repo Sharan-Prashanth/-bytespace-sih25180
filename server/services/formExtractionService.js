@@ -85,7 +85,7 @@ class FormExtractionService {
           headers: {
             ...formData.getHeaders()
           },
-          timeout: 120000, // 2 minutes timeout for PDF processing
+          timeout: 1200000, // 20 minutes timeout for PDF processing
           maxContentLength: Infinity,
           maxBodyLength: Infinity
         }

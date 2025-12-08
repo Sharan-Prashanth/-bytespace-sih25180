@@ -25,7 +25,9 @@ UPLOAD_BUCKET = "Coal-research-files"
 JSON_BUCKET = "processed-json"
 
 # Gemini configuration
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+GEMINI_API_KEY = os.getenv("PROCESS_FILE_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Monkey patch to increase timeout globally
 import google.api_core.gapic_v1.method
@@ -42,7 +44,7 @@ google.api_core.gapic_v1.method.wrap_method = custom_wrap_method
 
 # Configure model with generation settings
 model = genai.GenerativeModel(
-    "gemini-2.5-flash-lite",
+    GEMINI_MODEL,
     generation_config=genai.GenerationConfig(
         temperature=0.7,
     )

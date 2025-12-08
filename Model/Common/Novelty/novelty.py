@@ -1,6 +1,6 @@
 # novelty_agent_gnn_gemini.py
 """
-Novelty Agent with 3-component scoring + GNN + Gemini (gemini-2.5-flash-lite)
+Novelty Agent with 3-component scoring + GNN + Gemini (gemini-2.5-flash)
 
 Endpoint:
   POST /analyze-novelty
@@ -28,11 +28,12 @@ Outputs JSON with:
 import os
 import json
 import uuid
+import hashlib
 import logging
 import traceback
 from io import BytesIO
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import requests
 import numpy as np
@@ -66,6 +67,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 PROCESSED_BUCKET = os.getenv("PROCESSED_JSON_BUCKET", "processed-json")
 UPLOAD_BUCKET = os.getenv("UPLOAD_BUCKET", "Coal-research-files")
 EXTRACT_BUCKET = os.getenv("EXTRACT_JSON_BUCKET", "proposal-json")
+NOVELTY_CACHE_BUCKET = os.getenv("NOVELTY_CACHE_BUCKET", "novelty-json")
 
 EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.6"))
@@ -84,15 +86,16 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 embedder = SentenceTransformer(EMBED_MODEL)
 
-# Gemini (gemini-2.5-flash-lite)
+# Gemini configuration
 GENAI_AVAILABLE = False
 gemini_model = None
-GEMINI_KEY = os.getenv("GEMINI_API_KEY5")
+GEMINI_KEY = os.getenv("NOVELTY_ANALYSIS_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 if GEMINI_KEY:
     try:
         import google.generativeai as genai
         genai.configure(api_key=GEMINI_KEY)
-        gemini_model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        gemini_model = genai.GenerativeModel(GEMINI_MODEL)
         GENAI_AVAILABLE = True
         logger.info("Gemini configured.")
     except Exception as e:
@@ -101,6 +104,59 @@ if GEMINI_KEY:
 
 app = FastAPI(title="Novelty Agent (GNN + Gemini)")
 router = APIRouter()
+
+# ---------------------- CACHE HELPERS ----------------------
+def compute_pdf_hash(pdf_bytes: bytes) -> str:
+    """Compute SHA-256 hash of PDF file for caching."""
+    return hashlib.sha256(pdf_bytes).hexdigest()
+
+def check_novelty_cache(pdf_hash: str) -> Optional[Dict[str, Any]]:
+    """Check if novelty analysis result exists in cache (Supabase S3)."""
+    try:
+        cache_filename = f"{pdf_hash}.json"
+        logger.info(f"[CACHE] Checking for cached result: {cache_filename}")
+        
+        # Try to download from novelty-json bucket
+        response = supabase.storage.from_(NOVELTY_CACHE_BUCKET).download(cache_filename)
+        
+        # Handle different response types
+        content = None
+        if hasattr(response, "content"):
+            content = response.content
+        elif isinstance(response, (bytes, bytearray)):
+            content = bytes(response)
+        else:
+            content = response
+        
+        if not content:
+            logger.info(f"[CACHE] No cached result found")
+            return None
+        
+        # Parse JSON
+        cached_data = json.loads(content.decode("utf-8") if isinstance(content, bytes) else content)
+        logger.info(f"[CACHE] Found cached result from {cached_data.get('checked_at')}")
+        return cached_data
+        
+    except Exception as e:
+        logger.debug(f"[CACHE] Cache miss or error: {e}")
+        return None
+
+def store_novelty_cache(pdf_hash: str, result_data: Dict[str, Any]) -> None:
+    """Store novelty analysis result in cache (Supabase S3)."""
+    try:
+        cache_filename = f"{pdf_hash}.json"
+        json_bytes = json.dumps(result_data, indent=2).encode("utf-8")
+        
+        logger.info(f"[CACHE] Storing result in cache: {cache_filename}")
+        supabase.storage.from_(NOVELTY_CACHE_BUCKET).upload(
+            cache_filename,
+            json_bytes,
+            {"content-type": "application/json", "upsert": "true"}
+        )
+        logger.info(f"[CACHE] Successfully cached result")
+        
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed to store cache: {e}")
 
 # ---------------------- PDF extraction ----------------------
 def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
@@ -481,6 +537,20 @@ async def analyze_novelty(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Only PDF files accepted")
 
         file_bytes = await file.read()
+        
+        # Compute PDF hash for caching
+        pdf_hash = compute_pdf_hash(file_bytes)
+        logger.info(f"[NOVELTY] Processing PDF with hash: {pdf_hash}")
+        
+        # Check if we have a cached result
+        cached_result = check_novelty_cache(pdf_hash)
+        if cached_result:
+            logger.info(f"[CACHE HIT] Returning cached novelty analysis")
+            cached_result["cached"] = True
+            cached_result["cache_hit_at"] = datetime.now().isoformat()
+            return JSONResponse(content=cached_result)
+        
+        logger.info(f"[CACHE MISS] Performing new novelty analysis")
         raw_text = extract_text_from_pdf_bytes(file_bytes)
         if not raw_text.strip():
             raise HTTPException(status_code=400, detail="No text extracted from PDF")
@@ -766,8 +836,13 @@ Internal top matches summary:
             "idea": idea,
             "uploaded_pdf_url": uploaded_pdf_url,
             "extracted_json_url": extracted_json_url,
-            "max_internal_similarity": round(max_sim, 4)
+            "max_internal_similarity": round(max_sim, 4),
+            "pdf_hash": pdf_hash,
+            "cached": False
         }
+        
+        # Store result in cache for future requests
+        store_novelty_cache(pdf_hash, result)
 
         return JSONResponse(content=result)
 

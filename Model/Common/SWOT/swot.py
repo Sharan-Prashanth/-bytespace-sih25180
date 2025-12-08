@@ -10,9 +10,10 @@ load_dotenv()
 # --------------------------------------------
 # 1. Load Environment Variables (API KEY)
 # --------------------------------------------
-api_key = os.getenv("GEMINI_API_KEY2")
+api_key = os.getenv("SWOT_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 if not api_key:
-    raise ValueError("ERROR: Set GEMINI_API_KEY in environment variables.")
+    raise ValueError("ERROR: Set SWOT_KEY in environment variables.")
 
 genai.configure(api_key=api_key)
 
@@ -149,7 +150,7 @@ async def swot_agent(form1_pdf: UploadFile = File(...)):
     prompt = build_agent_prompt(form_text)
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(prompt)
         swot_output = response.text
     except Exception as e:

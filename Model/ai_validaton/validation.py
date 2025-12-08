@@ -46,7 +46,8 @@ load_dotenv()
 
 # ---------- CONFIG ----------
 GUIDELINES_PDF_PATH = os.getenv("GUIDELINES_PDF_PATH", "/mnt/data/Guidelines.pdf")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY1") or os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY3")
+GEMINI_API_KEY = os.getenv("AI_VALIDATION_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Supabase envs used in extractor (kept as in your provided code)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -63,7 +64,7 @@ model = None
 if GEMINI_API_KEY and genai:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        model = genai.GenerativeModel(GEMINI_MODEL)
         logger.info("Gemini configured for validation")
     except Exception:
         logger.exception("Failed to configure Gemini - falling back to deterministic validation")
@@ -101,7 +102,7 @@ if genai and GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         # extractor uses the same model name in your snippet
-        extractor_model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        extractor_model = genai.GenerativeModel(GEMINI_MODEL)
     except Exception:
         extractor_model = None
 else:

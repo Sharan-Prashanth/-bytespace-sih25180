@@ -23,8 +23,9 @@ load_dotenv()
 # CONFIG - set in .env
 # -------------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")  # service_role
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY5")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+GEMINI_API_KEY = os.getenv("COMMON_GEMINI_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
     raise Exception("Set SUPABASE_URL, SUPABASE_KEY and GEMINI_API_KEY in environment")
@@ -32,7 +33,7 @@ if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
 
-MODEL_NAME = "gemini-2.5-flash-lite"
+MODEL_NAME = GEMINI_MODEL
 RAW_BUCKET = "Coal-research-files"
 PLAG_BUCKET = "plagiarism-json"
 PROCESSED_BUCKET = "processed-json"     # other processed results to compare with

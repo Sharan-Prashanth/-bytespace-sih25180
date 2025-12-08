@@ -24,7 +24,8 @@ router = APIRouter()
 # --- Your existing environment & initialization (kept as-is) ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY3")
+GEMINI_API_KEY = os.getenv("PROCESS_ESTIMATE_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise Exception("Missing SUPABASE_URL or SUPABASE_KEY in environment variables")
@@ -37,7 +38,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Initialize Gemini AI
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
+model = genai.GenerativeModel(GEMINI_MODEL)
 
 # Storage buckets
 UPLOAD_BUCKET = "Coal-research-files"

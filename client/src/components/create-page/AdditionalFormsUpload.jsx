@@ -94,6 +94,12 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
     // Reset the input
     event.target.value = '';
 
+    // Check if proposalCode exists (proposal must be saved first)
+    if (!proposalCode) {
+      showAlert('Save Required', 'Please save the proposal first by completing earlier stages.', 'warning');
+      return;
+    }
+
     // Validate PDF format
     if (file.type !== 'application/pdf') {
       showAlert('Invalid File Type', 'Please upload a PDF file.', 'error');
@@ -110,12 +116,15 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
 
     try {
       // Upload to S3 via backend API
-      const response = await uploadDocument(file, proposalCode || 'temp');
+      console.log('[ADDITIONAL FORMS] Uploading form with proposalCode:', proposalCode);
+      const response = await uploadDocument(file, proposalCode);
+      
+      console.log('[ADDITIONAL FORMS] Upload response:', response);
       
       onFormUpload(formId, {
         name: file.name,
         url: response.data.fileUrl || response.data.url,
-        s3Key: response.data.s3Key || response.data.path, // Store S3 key for deletion
+        s3Key: response.data.s3Key || response.data.path,
         size: file.size,
         uploadedAt: new Date().toISOString()
       });
