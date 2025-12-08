@@ -211,7 +211,7 @@ proposalSchema.virtual('formi')
   })
   .set(function(value) {
     this.forms = value;
-  });aiRep
+  });
 
 // Ensure virtuals are included in JSON output
 proposalSchema.set('toJSON', { virtuals: true });
