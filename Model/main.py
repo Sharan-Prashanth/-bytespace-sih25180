@@ -11,6 +11,7 @@ from RAG import timeline
 from Common.SWOT import swot
 from Common.Technical_fesability import fesability
 from birbal import user_sarathi
+from Common.pampus import pampus
 try:
     # Prefer relative import when running as a package (helps editors/linters)
     from . import non_ocr
@@ -46,6 +47,7 @@ app.include_router(non_ocr.router)
 app.include_router(swot.router)
 # app.include_router(similarity_checker.router)
 app.include_router(validation.router)
+app.include_router(pampus.router)
 # app.include_router(rag_chat_guidlines.router)
 # app.include_router(rag_chat_specialist.router)
 app.include_router(extractor.router)

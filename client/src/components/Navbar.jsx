@@ -119,16 +119,18 @@ export default function Navbar({ variant = "default" }) {
                     <img
                       src="/images/GOI logo.png"
                       alt="Government of India"
-                      className="h-10 w-auto brightness-0 invert opacity-90 group-hover:opacity-100 transition-opacity"
+                      className="h-10 w-auto brightness-90 invert opacity-90 group-hover:opacity-100 transition-opacity"
                     />
 
                     {/* Divider */}
                     <div className="h-8 w-px bg-white/20"></div>
 
                     {/* PRISM Logo */}
-                    <div className={`w-10 h-10 backdrop-blur-md rounded-lg flex items-center justify-center border border-white/20 transition-colors ${isScrolled ? 'bg-white/10' : 'bg-transparent'}`}>
-                      <img src="/images/prism brand logo.png" alt="PRISM Logo" className="w-6 h-6 object-contain brightness-0 invert" />
-                    </div>
+                    <div
+  className={`w-10 h-10 backdrop-blur-md rounded-lg flex items-center justify-center transition-colors ${
+    isScrolled ? 'bg-white/10' : 'bg-transparent'
+  }`}
+/>
 
                     {/* PRISM Text */}
                     <span className="font-bold text-xl tracking-tight text-white">PRISM</span>

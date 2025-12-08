@@ -621,7 +621,7 @@ export default function Home() {
         .animate-fade-in { animation: fade-in 1s ease-out forwards; animation-delay: 0.5s; opacity: 0; }
       `}</style>
 
-      {/* Hero Section - Shopify Style (Cinematic & Minimal) */}
+      {/* Hero Section - Nama Style (Cinematic & Minimal) */}
       <section className="relative h-screen w-full overflow-hidden bg-slate-900 text-white">
         {/* Background Layer */}
         <div className="absolute inset-0 z-0">
@@ -633,7 +633,7 @@ export default function Home() {
             playsInline
             className="absolute inset-0 w-full h-full object-cover"
           >
-            <source src="/edit-hero-section1.mp4" type="video/mp4" />
+            <source src="/hero_section_vedio.mp4" type="video/mp4" />
           </video>
         </div>
 

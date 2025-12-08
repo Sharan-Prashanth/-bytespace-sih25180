@@ -16,7 +16,8 @@ import shutil
 import tempfile
 import logging
 import traceback
-from typing import Dict, Any, List
+import hashlib
+from typing import Dict, Any, List, Optional
 
 import PyPDF2
 import docx
@@ -54,6 +55,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 UPLOAD_BUCKET = "Coal-research-files"
 JSON_BUCKET = "proposal-json"
+VALIDATION_CACHE_BUCKET = "ai_validation"  # Bucket for storing validation results
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -160,7 +162,6 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
         "work_plan": "",
         "methodology": "",
         "organization_of_work": "",
-        "time_schedule": "",
         "foreign_exchange_details": "",
         "land_building_cost_total": "",
         "land_building_cost_year1": "",
@@ -239,7 +240,6 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
                 "work_plan": "",
                 "methodology": "",
                 "organization_of_work": "",
-                "time_schedule": "",
                 "foreign_exchange_details": "",
                 "land_building_cost_total": "",
                 "land_building_cost_year1": "",
@@ -297,7 +297,6 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
             "work_plan": "",
             "methodology": "",
             "organization_of_work": "",
-            "time_schedule": "",
             "foreign_exchange_details": "",
             "land_building_cost_total": "",
             "land_building_cost_year1": "",
@@ -340,6 +339,56 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
             "contact_phone": ""
         }
 
+def compute_file_hash(file_bytes: bytes) -> str:
+    """Compute SHA256 hash of file content for caching."""
+    return hashlib.sha256(file_bytes).hexdigest()
+
+def check_cached_validation(file_hash: str) -> Optional[Dict[str, Any]]:
+    """Check if validation result exists in Supabase bucket for this file hash."""
+    if not supabase:
+        return None
+    try:
+        cache_filename = f"{file_hash}.json"
+        logger.info(f"[CACHE] Checking for cached validation: {cache_filename}")
+        
+        # Try to download the cached result
+        response = supabase.storage.from_(VALIDATION_CACHE_BUCKET).download(cache_filename)
+        if response:
+            cached_data = json.loads(response)
+            logger.info(f"[CACHE] Found cached validation result")
+            return cached_data
+    except Exception as e:
+        logger.info(f"[CACHE] No cached validation found or error: {e}")
+    return None
+
+def store_validation_cache(file_hash: str, validation_data: Dict[str, Any]) -> bool:
+    """Store validation result in cache bucket."""
+    if not supabase:
+        return False
+    try:
+        cache_filename = f"{file_hash}.json"
+        
+        # Add metadata to cached data
+        cached_result = {
+            "file_hash": file_hash,
+            "cached_at": datetime.now().isoformat(),
+            "validation_data": validation_data
+        }
+        
+        json_bytes = json.dumps(cached_result, indent=2).encode("utf-8")
+        
+        logger.info(f"[CACHE] Storing validation result in cache: {cache_filename}")
+        supabase.storage.from_(VALIDATION_CACHE_BUCKET).upload(
+            cache_filename,
+            json_bytes,
+            {"content-type": "application/json", "upsert": "true"}
+        )
+        logger.info(f"[CACHE] Successfully cached validation result")
+        return True
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed to store validation cache: {e}")
+        return False
+
 def construct_simple_json_structure(extracted_data: Dict[str, Any]) -> Dict[str, Any]:
     """Construct a simple JSON structure from extracted data (kept your function)."""
     cleaned_data = {}
@@ -370,7 +419,6 @@ def construct_simple_json_structure(extracted_data: Dict[str, Any]) -> Dict[str,
             "work_plan": cleaned_data.get("work_plan", ""),
             "methodology": cleaned_data.get("methodology", ""),
             "organization_of_work": cleaned_data.get("organization_of_work", ""),
-            "time_schedule": cleaned_data.get("time_schedule", ""),
             "foreign_exchange_details": cleaned_data.get("foreign_exchange_details", "")
         },
         "cost_breakdown": {
@@ -453,7 +501,6 @@ def store_in_supabase(proposal_data: Dict[str, Any], file_info: Dict[str, str]) 
             "work_plan": proposal_data.get("work_plan", ""),
             "methodology": proposal_data.get("methodology", ""),
             "organization_of_work": proposal_data.get("organization_of_work", ""),
-            "time_schedule": proposal_data.get("time_schedule", ""),
             "total_cost_total": proposal_data.get("total_cost_total", ""),
             "total_cost_year1": proposal_data.get("total_cost_year1", ""),
             "total_cost_year2": proposal_data.get("total_cost_year2", ""),
@@ -498,7 +545,6 @@ VALIDATE_FIELDS = [
     "Work Plan",
     "Methodology",
     "Organization of Work Elements",
-    "Time Schedule"
 ]
 
 # Rules derived from Guidelines.pdf (you asked to use Guidelines.pdf content)
@@ -514,7 +560,6 @@ GUIDELINE_RULES = {
     "Work Plan": {"min_words": 30, "fail_reason": "Work Plan should be phase-wise/stepwise with responsibilities and milestones."},
     "Methodology": {"min_words": 30, "fail_reason": "Methodology must state technical approach, tools and data analysis plan."},
     "Organization of Work Elements": {"min_words": 10, "fail_reason": "Organization of work should specify team roles and responsibilities."},
-    "Time Schedule": {"must_have_chart": True, "fail_reason": "Time Schedule must include a Bar/PERT/Gantt chart or explicit milestones."}
 }
 
 PLACEHOLDER_RE = re.compile(
@@ -565,7 +610,6 @@ def build_guideline_excerpts(text: str, fields: List[str], window_sentences: int
         "Work Plan": ["work plan", "organization of work", "work elements"],
         "Methodology": ["methodology", "approach"],
         "Organization of Work Elements": ["organization of work", "roles", "responsibilities"],
-        "Time Schedule": ["time schedule", "bar chart", "pert chart", "gantt", "schedule"]
     }
 
     for f in fields:
@@ -628,15 +672,7 @@ def rule_based_check(field_label: str, value: str) -> Dict[str, str]:
             return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + f" (only {words} words)."}
         return {"validation_result": "filled_and_ok", "reason": "Definition appears sufficiently detailed."}
 
-    if field_label == "Objectives":
-        items = parse_objectives(v)
-        must_list = rule.get("must_be_list", False)
-        # if must be list and looks like a paragraph, fail
-        if must_list and len(items) == 1 and "\n" not in v and not re.search(r'\d+\)', v):
-            return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + " (objectives appear as a paragraph rather than listed items)."}
-        if len(items) < rule.get("min_count", 0) or len(items) > rule.get("max_count", 9999):
-            return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + f" (found {len(items)} objectives)."}
-        return {"validation_result": "filled_and_ok", "reason": f"{len(items)} objectives provided (within allowed range)."}
+    
 
     if field_label == "Justification for Subject Area":
         if count_words(v) < rule.get("min_words", 0):
@@ -650,12 +686,7 @@ def rule_based_check(field_label: str, value: str) -> Dict[str, str]:
             return {"validation_result": "not_following_guidelines", "reason": "Benefits are too vague; S&T Guidelines require explicit measurable benefits."}
         return {"validation_result": "filled_and_ok", "reason": "Benefits appear explicit."}
 
-    if field_label == "Work Plan":
-        if count_words(v) < rule.get("min_words", 0):
-            return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + f" (only {count_words(v)} words)."}
-        if not re.search(r"\b(Phase|Phase-I|Phase II|Milestone|month|quarter|year|Q1|Q2|Q3|Q4)\b", v, flags=re.IGNORECASE):
-            return {"validation_result": "not_following_guidelines", "reason": "Work Plan lacks phase-wise/milestone indications as required by S&T Guidelines."}
-        return {"validation_result": "filled_and_ok", "reason": "Work Plan includes phase-wise steps/milestones."}
+    
 
     if field_label == "Methodology":
         if count_words(v) < rule.get("min_words", 0):
@@ -671,10 +702,7 @@ def rule_based_check(field_label: str, value: str) -> Dict[str, str]:
             return {"validation_result": "not_following_guidelines", "reason": "Organization of Work lacks roles/responsibilities specification."}
         return {"validation_result": "filled_and_ok", "reason": "Organization of work elements described."}
 
-    if field_label == "Time Schedule":
-        if re.search(r"\b(bar chart|pert|gantt|milestone|schedule|month|year|quarter)\b", v, flags=re.IGNORECASE):
-            return {"validation_result": "filled_and_ok", "reason": "Time Schedule mentions chart/milestones."}
-        return {"validation_result": "not_following_guidelines", "reason": GUIDELINE_RULES["Time Schedule"]["fail_reason"]}
+    
 
     return {"validation_result": "filled_and_ok", "reason": "Field validated by deterministic rule."}
 
@@ -761,7 +789,6 @@ def get_value_from_extracted_payload(extracted_payload: Dict[str, Any], field_la
         "Work Plan": ["project_details.work_plan", "work_plan"],
         "Methodology": ["project_details.methodology", "methodology"],
         "Organization of Work Elements": ["project_details.organization_of_work", "organization_of_work"],
-        "Time Schedule": ["project_details.time_schedule", "time_schedule"]
     }
 
     def deep_get(obj, path):
@@ -824,6 +851,8 @@ async def validate_form1(file: UploadFile = File(...)):
 
     tmp_path = None
     try:
+        global latest_validation_result
+        
         # Save temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
             shutil.copyfileobj(file.file, tmp)
@@ -831,6 +860,24 @@ async def validate_form1(file: UploadFile = File(...)):
 
         with open(tmp_path, "rb") as fh:
             file_bytes = fh.read()
+
+        # Compute file hash for caching
+        file_hash = compute_file_hash(file_bytes)
+        logger.info(f"Processing file: {file.filename}, hash: {file_hash}")
+
+        # Check if validation result is already cached
+        cached_result = check_cached_validation(file_hash)
+        if cached_result:
+            logger.info(f"[CACHE] Returning cached validation result")
+            # Add cache indicator to response
+            response = cached_result.get("validation_data", cached_result)
+            response["cached"] = True
+            response["file_hash"] = file_hash
+            
+            # Store latest result for GET endpoint
+            latest_validation_result = response
+            
+            return JSONResponse(status_code=200, content=response)
 
         # ----- Call extractor logic exactly as your /extract-form1 route -----
         extracted_text = extract_text_from_file(file.filename, file_bytes)
@@ -940,11 +987,17 @@ async def validate_form1(file: UploadFile = File(...)):
             "validation_result": validation_result,
             "extracted_data": json_structure,
             "raw_extracted": raw_extracted,
-            "guidelines_used": os.path.basename(GUIDELINES_PDF_PATH)
+            "guidelines_used": os.path.basename(GUIDELINES_PDF_PATH),
+            "cached": False,
+            "file_hash": file_hash
         }
 
+        # Store validation result in cache for future requests
+        cache_stored = store_validation_cache(file_hash, response)
+        if cache_stored:
+            logger.info(f"[CACHE] Validation result stored in cache")
+
         # Store latest result for GET endpoint (auto-render on frontend)
-        global latest_validation_result
         latest_validation_result = response
 
         return JSONResponse(status_code=200, content=response)

@@ -8,6 +8,9 @@ import chardet
 import PyPDF2
 import docx
 import re
+import hashlib
+from datetime import datetime
+from typing import Optional
 import google.generativeai as genai
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
@@ -23,6 +26,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 UPLOAD_BUCKET = "Coal-research-files"
 JSON_BUCKET = "processed-json"
+PROCESS_FILE_CACHE_BUCKET = "process-file-route"  # Bucket for caching processed file outputs
 
 # Gemini configuration
 GEMINI_API_KEY = os.getenv("PROCESS_FILE_KEY")
@@ -75,6 +79,55 @@ def extract_text(filename, file_bytes):
     else:
         return ""
 
+
+# ----------------------------------------------------
+# CACHING FUNCTIONS
+# ----------------------------------------------------
+def compute_file_hash(file_bytes: bytes) -> str:
+    """Compute SHA256 hash of file content for caching."""
+    return hashlib.sha256(file_bytes).hexdigest()
+
+def check_cached_output(file_hash: str) -> Optional[dict]:
+    """Check if processed output exists in cache bucket for this file hash."""
+    try:
+        cache_filename = f"{file_hash}.json"
+        print(f"[CACHE] Checking for cached output: {cache_filename}")
+        
+        # Try to download the cached result
+        response = supabase.storage.from_(PROCESS_FILE_CACHE_BUCKET).download(cache_filename)
+        if response:
+            cached_data = json.loads(response)
+            print(f"[CACHE] Found cached output")
+            return cached_data
+    except Exception as e:
+        print(f"[CACHE] No cached output found or error: {e}")
+    return None
+
+def store_output_cache(file_hash: str, output_data: dict) -> bool:
+    """Store processed output in cache bucket."""
+    try:
+        cache_filename = f"{file_hash}.json"
+        
+        # Add metadata to cached data
+        cached_result = {
+            "file_hash": file_hash,
+            "cached_at": datetime.now().isoformat(),
+            "output_data": output_data
+        }
+        
+        json_bytes = json.dumps(cached_result, indent=2).encode("utf-8")
+        
+        print(f"[CACHE] Storing output in cache: {cache_filename}")
+        supabase.storage.from_(PROCESS_FILE_CACHE_BUCKET).upload(
+            cache_filename,
+            json_bytes,
+            {"content-type": "application/json", "upsert": "true"}
+        )
+        print(f"[CACHE] Successfully cached output")
+        return True
+    except Exception as e:
+        print(f"[CACHE] Failed to store cache: {e}")
+        return False
 
 # ----------------------------------------------------
 # JSON GENERATION
@@ -1350,68 +1403,6 @@ Populate the above structure with the extracted text. Return ONLY the valid JSON
 # ----------------------------------------------------
 # MAIN AUTOMATIC PROCESSING ENDPOINT
 # ----------------------------------------------------
-@router.post("/process-all-files")
-def process_all_files():
-    try:
-        files = supabase.storage.from_(UPLOAD_BUCKET).list()
-
-        if not files:
-            return {"message": "No files found in bucket"}
-
-        results = []
-
-        for f in files:
-            try:
-                filename = f["name"]
-                print(f"Processing file: {filename}")
-
-                # 1️⃣ Download file
-                file_bytes = supabase.storage.from_(UPLOAD_BUCKET).download(filename)
-
-                if not file_bytes:
-                    print(f"Skipping: unable to download {filename}")
-                    continue
-
-                # 2️⃣ Extract text safely
-                try:
-                    text = extract_text(filename, file_bytes)
-                except Exception as err:
-                    print(f"Skipping {filename}: unsupported file or extraction error {err}")
-                    continue
-
-                # 3️⃣ Generate JSON
-                structured = generate_json(text)
-
-                # 4️⃣ Save JSON
-                json_name = filename.rsplit(".", 1)[0] + ".json"
-                supabase.storage.from_(JSON_BUCKET).upload(
-                    json_name,
-                    json.dumps(structured).encode(),
-                    {"content-type": "application/json"},
-                )
-
-                # 5️⃣ Public URL
-                json_url = supabase.storage.from_(JSON_BUCKET).get_public_url(json_name)
-
-                results.append({
-                    "file": filename,
-                    "json_file": json_name,
-                    "json_url": json_url
-                })
-
-            except Exception as file_error:
-                print("Error inside processing loop:", file_error)
-                continue  # continue processing other files
-
-        return {
-            "message": "Processing completed",
-            "processed_files": results
-        }
-
-    except Exception as e:
-        import traceback
-        print(traceback.format_exc())
-        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @router.post("/process-file")
@@ -1420,13 +1411,41 @@ async def process_file(file: UploadFile = File(...)):
 
     This endpoint reads the uploaded file, extracts text depending on extension,
     runs `generate_json`, normalizes Slate fields, and returns the JSON result.
+    Uses caching to avoid reprocessing the same file.
     """
     try:
         filename = file.filename
         file_bytes = await file.read()
 
+        # Compute file hash for caching
+        file_hash = compute_file_hash(file_bytes)
+        print(f"Processing file: {filename}, hash: {file_hash}")
+
+        # Check if output is already cached
+        cached_result = check_cached_output(file_hash)
+        if cached_result:
+            print(f"[CACHE] Returning cached output")
+            # Return cached output data
+            output = cached_result.get("output_data", cached_result)
+            # Add cache indicator
+            if isinstance(output, dict):
+                output["_cached"] = True
+                output["_file_hash"] = file_hash
+            return JSONResponse(output)
+
+        # Process file if not cached
         text = extract_text(filename, file_bytes)
         structured = generate_json(text)
+
+        # Store result in cache
+        cache_stored = store_output_cache(file_hash, structured)
+        if cache_stored:
+            print(f"[CACHE] Output stored in cache")
+
+        # Add cache metadata to response
+        if isinstance(structured, dict):
+            structured["_cached"] = False
+            structured["_file_hash"] = file_hash
 
         return JSONResponse(structured)
 
