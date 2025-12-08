@@ -16,7 +16,8 @@ import shutil
 import tempfile
 import logging
 import traceback
-from typing import Dict, Any, List
+import hashlib
+from typing import Dict, Any, List, Optional
 
 import PyPDF2
 import docx
@@ -54,6 +55,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 UPLOAD_BUCKET = "Coal-research-files"
 JSON_BUCKET = "proposal-json"
+VALIDATION_CACHE_BUCKET = "ai_validation"  # Bucket for storing validation results
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -336,6 +338,56 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
             "contact_email": "",
             "contact_phone": ""
         }
+
+def compute_file_hash(file_bytes: bytes) -> str:
+    """Compute SHA256 hash of file content for caching."""
+    return hashlib.sha256(file_bytes).hexdigest()
+
+def check_cached_validation(file_hash: str) -> Optional[Dict[str, Any]]:
+    """Check if validation result exists in Supabase bucket for this file hash."""
+    if not supabase:
+        return None
+    try:
+        cache_filename = f"{file_hash}.json"
+        logger.info(f"[CACHE] Checking for cached validation: {cache_filename}")
+        
+        # Try to download the cached result
+        response = supabase.storage.from_(VALIDATION_CACHE_BUCKET).download(cache_filename)
+        if response:
+            cached_data = json.loads(response)
+            logger.info(f"[CACHE] Found cached validation result")
+            return cached_data
+    except Exception as e:
+        logger.info(f"[CACHE] No cached validation found or error: {e}")
+    return None
+
+def store_validation_cache(file_hash: str, validation_data: Dict[str, Any]) -> bool:
+    """Store validation result in cache bucket."""
+    if not supabase:
+        return False
+    try:
+        cache_filename = f"{file_hash}.json"
+        
+        # Add metadata to cached data
+        cached_result = {
+            "file_hash": file_hash,
+            "cached_at": datetime.now().isoformat(),
+            "validation_data": validation_data
+        }
+        
+        json_bytes = json.dumps(cached_result, indent=2).encode("utf-8")
+        
+        logger.info(f"[CACHE] Storing validation result in cache: {cache_filename}")
+        supabase.storage.from_(VALIDATION_CACHE_BUCKET).upload(
+            cache_filename,
+            json_bytes,
+            {"content-type": "application/json", "upsert": "true"}
+        )
+        logger.info(f"[CACHE] Successfully cached validation result")
+        return True
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed to store validation cache: {e}")
+        return False
 
 def construct_simple_json_structure(extracted_data: Dict[str, Any]) -> Dict[str, Any]:
     """Construct a simple JSON structure from extracted data (kept your function)."""
@@ -799,6 +851,8 @@ async def validate_form1(file: UploadFile = File(...)):
 
     tmp_path = None
     try:
+        global latest_validation_result
+        
         # Save temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
             shutil.copyfileobj(file.file, tmp)
@@ -806,6 +860,24 @@ async def validate_form1(file: UploadFile = File(...)):
 
         with open(tmp_path, "rb") as fh:
             file_bytes = fh.read()
+
+        # Compute file hash for caching
+        file_hash = compute_file_hash(file_bytes)
+        logger.info(f"Processing file: {file.filename}, hash: {file_hash}")
+
+        # Check if validation result is already cached
+        cached_result = check_cached_validation(file_hash)
+        if cached_result:
+            logger.info(f"[CACHE] Returning cached validation result")
+            # Add cache indicator to response
+            response = cached_result.get("validation_data", cached_result)
+            response["cached"] = True
+            response["file_hash"] = file_hash
+            
+            # Store latest result for GET endpoint
+            latest_validation_result = response
+            
+            return JSONResponse(status_code=200, content=response)
 
         # ----- Call extractor logic exactly as your /extract-form1 route -----
         extracted_text = extract_text_from_file(file.filename, file_bytes)
@@ -915,11 +987,17 @@ async def validate_form1(file: UploadFile = File(...)):
             "validation_result": validation_result,
             "extracted_data": json_structure,
             "raw_extracted": raw_extracted,
-            "guidelines_used": os.path.basename(GUIDELINES_PDF_PATH)
+            "guidelines_used": os.path.basename(GUIDELINES_PDF_PATH),
+            "cached": False,
+            "file_hash": file_hash
         }
 
+        # Store validation result in cache for future requests
+        cache_stored = store_validation_cache(file_hash, response)
+        if cache_stored:
+            logger.info(f"[CACHE] Validation result stored in cache")
+
         # Store latest result for GET endpoint (auto-render on frontend)
-        global latest_validation_result
         latest_validation_result = response
 
         return JSONResponse(status_code=200, content=response)

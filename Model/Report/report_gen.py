@@ -17,8 +17,9 @@ INTERNAL_ENDPOINTS = [
     "/deliverable-check",
     "/analyze-novelty",
     "/technical_feasibility",
-    "/benefit-check"
-    ,"/swot-agent"
+    "/benefit-check",
+    "/swot-agent",
+    "/scamper/analyze"
 ]
 
 BASE_URL = "http://localhost:8000"   # Change if your internal services run elsewhere
