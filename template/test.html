@@ -689,164 +689,42 @@
         });
       } catch(e){ console.warn('capability render failed', e); }
 
-      // ---------- Page 3: Cost breakdown legend & table ----------
+      // ---------- Page 3: SWOT Analysis ----------
       try {
-        const breakdown = cost.breakdown || {};
-        const legendList = document.getElementById('legend-list');
-        const tbody = document.getElementById('cost-rows');
-        if(legendList) legendList.innerHTML = '';
-        if(tbody) tbody.innerHTML = '';
+        const swotData = getOutput(results, 'swot-agent') || getOutput(results, 'swot') || {};
+        const swotString = swotData.swot || '';
 
-        // If breakdown is an object with named keys -> convert to array of {category,cost,percent}
-        const items = [];
-        for(const k in breakdown) {
-          if(Object.prototype.hasOwnProperty.call(breakdown,k)) {
-            const v = breakdown[k];
-            if(typeof v === 'number') items.push({category: k.replace(/_/g,' '), cost: v, percent: Math.round((v / (cost.government_budget_lakhs || 1)) * 100)});
-            else if(typeof v === 'object' && v !== null && (v.total || v.year1 || v.year2 || v.year3)) {
-              // attempt to derive a numeric sum
-              const sum = Number(v.total) || (Number(v.year1||0) + Number(v.year2||0) + Number(v.year3||0));
-              items.push({category: k.replace(/_/g,' '), cost: sum || 0, percent: 0});
+        // Parse the SWOT string format: "S — Strengths\n\n* point1\n* point2..."
+        function parseSWOTCategory(text, categoryMarker) {
+          const regex = new RegExp(categoryMarker + '[^\\n]*\\n\\n([\\s\\S]*?)(?=\\n\\n[SWOT] —|$)', 'i');
+          const match = text.match(regex);
+          if (!match) return [];
+          
+          const content = match[1];
+          // Extract bullet points (lines starting with * or -)
+          const lines = content.split(/\n/).map(l => l.trim()).filter(l => l.startsWith('*') || l.startsWith('-'));
+          return lines.map(l => l.replace(/^[\*\-]\s*/, '').trim()).filter(Boolean);
+        }
+
+        const strengths = parseSWOTCategory(swotString, 'S —');
+        const weaknesses = parseSWOTCategory(swotString, 'W —');
+        const opportunities = parseSWOTCategory(swotString, 'O —');
+        const threats = parseSWOTCategory(swotString, 'T —');
+
+        // Fill exactly 6 placeholders per category
+        function fillCategory(items, idPrefix) {
+          for(let i = 1; i <= 6; i++) {
+            const el = document.getElementById(idPrefix + '-' + i);
+            if(el) {
+              el.textContent = items[i-1] || '—';
             }
           }
         }
 
-        // fallback: if cost.breakdown has named numeric keys like equipment,manpower etc.
-        if(items.length === 0 && breakdown) {
-          for(const k of ['equipment','manpower','travel_and_fieldwork','consumables','maintenance_and_operations','contingency']) {
-            if(typeof breakdown[k] === 'number') items.push({category: k.replace(/_/g,' '), cost: breakdown[k], percent: Math.round((breakdown[k] / (cost.government_budget_lakhs || 1)) * 100)});
-          }
-        }
-
-        // Provide some default categories if none found
-        if(items.length === 0) {
-          items.push({category: 'Equipment', cost: (cost.breakdown?.equipment || 0), percent: 0});
-          items.push({category: 'Manpower', cost: (cost.breakdown?.manpower || 0), percent: 0});
-          items.push({category: 'Travel & Fieldwork', cost: (cost.breakdown?.travel_and_fieldwork || 0), percent: 0});
-        }
-
-        // Fill legend and table
-        items.forEach((it, idx) => {
-          const color = ['#3a86ff','#2556a6','#0077b6','#00b4d8','#90e0ef','#48cae4','#00b894'][idx % 7];
-          if(legendList) {
-            const w = document.createElement('div'); w.className='legend-item';
-            const sw = document.createElement('div'); sw.className='legend-swatch'; sw.style.background = color;
-            const txt = document.createElement('div'); txt.style.display='flex'; txt.style.flexDirection='column';
-            const t1 = document.createElement('div'); t1.className='legend-text'; t1.textContent = it.category;
-            const t2 = document.createElement('div'); t2.className='legend-details'; t2.textContent = (it.percent? it.percent+'% • ' : '') + '₹ ' + Number(it.cost).toLocaleString();
-            txt.appendChild(t1); txt.appendChild(t2);
-            w.appendChild(sw); w.appendChild(txt);
-            legendList.appendChild(w);
-          }
-          
-          if(tbody) {
-            const row = document.createElement('tr');
-            const td1 = document.createElement('td');
-            td1.innerHTML = '<div style="font-weight:800;color:var(--gov-navy)">'+it.category+'</div><div style="color:#666;font-size:12px;margin-top:6px;">Details</div>';
-            const td2 = document.createElement('td'); td2.innerHTML = '<span class="pill">'+(it.percent||0)+'%</span>';
-            const td3 = document.createElement('td'); td3.className='right-cost'; td3.textContent = '₹ ' + Number(it.cost).toLocaleString();
-            row.appendChild(td1); row.appendChild(td2); row.appendChild(td3);
-            tbody.appendChild(row);
-          }
-        });
-
-        // Draw donut chart from items
-        try {
-          function drawDonut(svgId, data) {
-            const svg = document.getElementById(svgId);
-            if(!svg) return;
-            // clear
-            while(svg.firstChild) svg.removeChild(svg.firstChild);
-            const total = data.reduce((s,i)=>s+Number(i.cost||0),0) || 1;
-            const center = 160; const r = 90; const stroke = 36;
-            const circumference = 2 * Math.PI * r;
-            // background circle
-            const bg = document.createElementNS('http://www.w3.org/2000/svg','circle');
-            bg.setAttribute('cx', center); bg.setAttribute('cy', center); bg.setAttribute('r', r);
-            bg.setAttribute('fill','none'); bg.setAttribute('stroke','#f2f2f2'); bg.setAttribute('stroke-width', stroke);
-            svg.appendChild(bg);
-
-            let offset = 0;
-            const colors = ['#3a86ff','#2556a6','#0077b6','#00b4d8','#90e0ef','#48cae4','#00b894'];
-            const gapPx = 3; // small visual gap between segments
-            // store slice mid-angles for labels
-            const midAngles = [];
-            data.forEach((d, idx) => {
-              const pct = Number(d.cost||0) / total;
-              let dash = Math.max(0.0001, pct) * circumference;
-              dash = Math.max(0.0001, dash - gapPx);
-              const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
-              circle.setAttribute('cx', center); circle.setAttribute('cy', center); circle.setAttribute('r', r);
-              circle.setAttribute('fill','none');
-              circle.setAttribute('stroke', colors[idx % colors.length]);
-              circle.setAttribute('stroke-width', stroke);
-              circle.setAttribute('stroke-linecap','butt');
-              circle.setAttribute('transform','rotate(-90 '+center+' '+center+')');
-              circle.setAttribute('stroke-dasharray', dash + ' ' + (circumference - dash));
-              circle.setAttribute('stroke-dashoffset', -offset);
-              svg.appendChild(circle);
-              // compute mid-angle (in degrees) for this slice center
-              const sliceAngle = (dash / circumference) * 360;
-              const startAngle = (offset / circumference) * 360;
-              const mid = startAngle + sliceAngle/2 - 90; // account for rotation
-              midAngles.push({angle: mid, pct: pct, color: colors[idx % colors.length]});
-              offset += (dash + gapPx);
-            });
-
-            // add percentage labels around donut
-            try {
-              midAngles.forEach(ma => {
-                const radians = (ma.angle) * (Math.PI/180);
-                const labelR = r + stroke/2 + 18; // outside the donut
-                const lx = center + Math.cos(radians) * labelR;
-                const ly = center + Math.sin(radians) * labelR;
-                const t = document.createElementNS('http://www.w3.org/2000/svg','text');
-                t.setAttribute('x', lx);
-                t.setAttribute('y', ly);
-                t.setAttribute('text-anchor', 'middle');
-                t.setAttribute('dominant-baseline', 'middle');
-                t.setAttribute('font-size', '12');
-                t.setAttribute('fill', ma.color);
-                t.setAttribute('font-weight','700');
-                t.textContent = Math.round(ma.pct * 100) + '%';
-                svg.appendChild(t);
-              });
-            } catch(e) { console.warn('donut labels failed', e); }
-
-            // inner white circle to create donut hole and central label
-            const innerR = r - stroke/2 - 6;
-            const hole = document.createElementNS('http://www.w3.org/2000/svg','circle');
-            hole.setAttribute('cx', center); hole.setAttribute('cy', center); hole.setAttribute('r', innerR);
-            hole.setAttribute('fill', '#fff'); hole.setAttribute('stroke', '#f2f2f2'); hole.setAttribute('stroke-width', 4);
-            svg.appendChild(hole);
-
-            // center text: TOTAL and amount
-            const title = document.createElementNS('http://www.w3.org/2000/svg','text');
-            title.setAttribute('x', center); title.setAttribute('y', center - 6); title.setAttribute('text-anchor','middle'); title.setAttribute('font-size','18'); title.setAttribute('font-weight','800'); title.setAttribute('fill','var(--gov-navy)');
-            title.textContent = 'TOTAL';
-            svg.appendChild(title);
-
-            const amount = document.createElementNS('http://www.w3.org/2000/svg','text');
-            amount.setAttribute('x', center); amount.setAttribute('y', center + 18); amount.setAttribute('text-anchor','middle'); amount.setAttribute('font-size','14'); amount.setAttribute('font-weight','700'); amount.setAttribute('fill','var(--gov-navy)');
-            // prefer government_budget_lakhs display if available
-            const displayTotal = (cost && cost.government_budget_lakhs) ? ('₹ ' + Number(cost.government_budget_lakhs).toLocaleString() + ' lakhs') : ('₹ ' + Number(total).toLocaleString());
-            amount.textContent = displayTotal;
-            svg.appendChild(amount);
-            // also populate nearby DOM element for clearer visibility
-            try {
-              const totalEl = document.getElementById('donut-total');
-              if(totalEl) totalEl.textContent = displayTotal;
-            } catch(e) { /* ignore */ }
-          }
-          drawDonut('donut-svg', items);
-        } catch(e){ console.warn('drawDonut failed', e); }
-
-        // Update dashboard total
-        const totalEl = document.getElementById('dashboard-total');
-        if(totalEl) {
-          const total = cost.government_budget_lakhs || (items.reduce((s,i)=>s+Number(i.cost||0),0));
-          totalEl.textContent = '₹ ' + Number(total).toLocaleString();
-        }
+        fillCategory(strengths, 'strength');
+        fillCategory(weaknesses, 'weakness');
+        fillCategory(opportunities, 'opportunity');
+        fillCategory(threats, 'threat');
       } catch(e){ console.warn(e); }
 
       // update status
@@ -1145,41 +1023,112 @@
   </div>
 </div>
 </div>
-<!-- ================= PAGE 3 (SUMMARY DASHBOARD) ================= -->
+<!-- ================= PAGE 3 (SWOT ANALYSIS) ================= -->
 <div class="page">
   <div class="dashboard-dark">
-    <div class="dash-header" style="display:flex;align-items:center;gap:12px;">
-      <div style="flex:1;">Financial Summary</div>
+    <div class="dash-header" style="display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:20px;">
+      <div style="display:flex;align-items:flex-end;gap:4px;">
+        <div style="background:#FF9933;padding:12px 24px;border-radius:12px 12px 0 0;text-align:center;">
+          <div style="font-size:11px;font-weight:700;color:#fff;margin-bottom:4px;">Strengths</div>
+          <div style="font-size:40px;font-weight:900;color:#fff;line-height:1;">S</div>
+        </div>
+        <div style="background:#FFFFFF;padding:12px 24px;border-radius:12px 12px 0 0;text-align:center;border:2px solid #ddd;">
+          <div style="font-size:11px;font-weight:700;color:#000;margin-bottom:4px;">Weaknesses</div>
+          <div style="font-size:40px;font-weight:900;color:#000;line-height:1;">W</div>
+        </div>
+        <div style="background:#138808;padding:12px 24px;border-radius:12px 12px 0 0;text-align:center;">
+          <div style="font-size:11px;font-weight:700;color:#fff;margin-bottom:4px;">Opportunities</div>
+          <div style="font-size:40px;font-weight:900;color:#fff;line-height:1;">O</div>
+        </div>
+        <div style="background:#000080;padding:12px 24px;border-radius:12px 12px 0 0;text-align:center;">
+          <div style="font-size:11px;font-weight:700;color:#fff;margin-bottom:4px;">Threats</div>
+          <div style="font-size:40px;font-weight:900;color:#fff;line-height:1;">T</div>
+        </div>
+      </div>
     </div>
-    <div class="dash-body" style="margin-top:12px;">
-      <div class="dashboard-top">
-        <div class="legend-panel">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-weight:900;color:var(--gov-navy);font-size:15px;">Category</div>
-          </div>
-          <div id="legend-list" style="margin-top:6px;display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="dash-body" style="margin-top:0;">
+      
+      <!-- Strengths -->
+      <div style="display:flex;gap:0;margin-bottom:10px;background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="background:#FF9933;width:50px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+          <div style="color:#fff;font-weight:900;font-size:32px;">S</div>
         </div>
-
-        <div class="donut-panel" style="align-self:center;">
-          <div class="donut-svg">
-            <svg id="donut-svg" width="320" height="320" viewBox="0 0 320 320"></svg>
-          </div>
-            <div style="margin-top:8px;color:var(--gov-navy);font-weight:700;text-align:center;">This graph/chart is linked to data and updates automatically</div>
-            <div id="donut-total" style="margin-top:8px;text-align:center;font-weight:800;color:var(--gov-navy);font-size:15px;"> </div>
+        <div style="background:linear-gradient(to right, #FF9933 0%, #ffcc99 5%, #fffbf0 15%);flex:1;padding:16px 20px;">
+          <ul style="margin:0;padding:0;list-style:none;line-height:1.7;color:#333;font-size:12px;">
+            <li id="strength-1" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="strength-2" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="strength-3" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="strength-4" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="strength-5" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="strength-6" style="margin-bottom:0;padding-left:16px;position:relative;">—</li>
+          </ul>
         </div>
       </div>
 
-      <div class="dash-bottom">
-        <table class="cost-table" id="cost-table" aria-hidden="false">
-          <thead>
-            <tr><th style="width:60%">Details</th><th style="width:20%"></th><th style="text-align:right;">Cost</th></tr>
-          </thead>
-          <tbody id="cost-rows"></tbody>
-          <tfoot>
-            <tr class="total-row"><td class="total-left">TOTAL</td><td></td><td class="right-cost" id="dashboard-total">₹ 32,500</td></tr>
-          </tfoot>
-        </table>
+      <!-- Weaknesses -->
+      <div style="display:flex;gap:0;margin-bottom:10px;background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="background:#FFFFFF;width:50px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-right:2px solid #f0f0f0;position:relative;">
+          <svg style="position:absolute;width:24px;height:24px;opacity:0.3;" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="#000080" stroke-width="4"/>
+            <g transform="translate(50,50)">
+              <line x1="0" y1="-35" x2="0" y2="35" stroke="#000080" stroke-width="2"/>
+              <line x1="-35" y1="0" x2="35" y2="0" stroke="#000080" stroke-width="2"/>
+              <line x1="-25" y1="-25" x2="25" y2="25" stroke="#000080" stroke-width="1.5"/>
+              <line x1="25" y1="-25" x2="-25" y2="25" stroke="#000080" stroke-width="1.5"/>
+              <line x1="-30" y1="-15" x2="30" y2="15" stroke="#000080" stroke-width="1.5"/>
+              <line x1="30" y1="-15" x2="-30" y2="15" stroke="#000080" stroke-width="1.5"/>
+              <line x1="-15" y1="-30" x2="15" y2="30" stroke="#000080" stroke-width="1.5"/>
+              <line x1="15" y1="-30" x2="-15" y2="30" stroke="#000080" stroke-width="1.5"/>
+            </g>
+          </svg>
+          <div style="color:#000;font-weight:900;font-size:32px;position:relative;z-index:1;">W</div>
+        </div>
+        <div style="background:linear-gradient(to right, #FFFFFF 0%, #fffef5 5%, #fffbf0 15%);flex:1;padding:16px 20px;">
+          <ul style="margin:0;padding:0;list-style:none;line-height:1.7;color:#333;font-size:12px;">
+            <li id="weakness-1" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="weakness-2" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="weakness-3" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="weakness-4" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="weakness-5" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="weakness-6" style="margin-bottom:0;padding-left:16px;position:relative;">—</li>
+          </ul>
+        </div>
       </div>
+
+      <!-- Opportunities -->
+      <div style="display:flex;gap:0;margin-bottom:10px;background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="background:#138808;width:50px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+          <div style="color:#fff;font-weight:900;font-size:32px;">O</div>
+        </div>
+        <div style="background:linear-gradient(to right, #138808 0%, #99cc99 5%, #fffbf0 15%);flex:1;padding:16px 20px;">
+          <ul style="margin:0;padding:0;list-style:none;line-height:1.7;color:#333;font-size:12px;">
+            <li id="opportunity-1" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="opportunity-2" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="opportunity-3" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="opportunity-4" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="opportunity-5" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="opportunity-6" style="margin-bottom:0;padding-left:16px;position:relative;">—</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Threats -->
+      <div style="display:flex;gap:0;margin-bottom:10px;background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="background:#000080;width:50px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+          <div style="color:#fff;font-weight:900;font-size:32px;">T</div>
+        </div>
+        <div style="background:linear-gradient(to right, #000080 0%, #9999cc 5%, #fffbf0 15%);flex:1;padding:16px 20px;">
+          <ul style="margin:0;padding:0;list-style:none;line-height:1.7;color:#333;font-size:12px;">
+            <li id="threat-1" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="threat-2" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="threat-3" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="threat-4" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="threat-5" style="margin-bottom:10px;padding-left:16px;position:relative;">—</li>
+            <li id="threat-6" style="margin-bottom:0;padding-left:16px;position:relative;">—</li>
+          </ul>
+        </div>
+      </div>
+
     </div>
   </div>
 
