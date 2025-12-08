@@ -153,7 +153,7 @@ export default function MetricCard({ metric, isActive, onClick, theme, animation
         <button
             onClick={onClick}
             className={`
-                relative flex flex-col items-start p-4 rounded-xl border transition-all duration-500 ease-out text-left w-full h-[110px] group
+                relative flex flex-col items-start p-5 rounded-xl border transition-all duration-500 ease-out text-left w-full h-[120px] group
                 ${getActiveStyle()}
                 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
             `}
@@ -174,7 +174,7 @@ export default function MetricCard({ metric, isActive, onClick, theme, animation
             </div>
 
             <div className="mt-auto w-full">
-                <p className={`text-xs font-medium mb-1 truncate w-full ${isDark ? 'text-slate-400' : 'text-black'}`} title={title}>{title}</p>
+                <p className={`text-xs font-medium mb-1.5 truncate w-full ${isDark ? 'text-slate-400' : 'text-black'}`} title={title}>{title}</p>
                 <h3 className={`text-2xl font-bold tracking-tight truncate w-full tabular-nums ${isDark ? 'text-white' : 'text-black'}`} title={value}>
                     {animatedValue}
                 </h3>
