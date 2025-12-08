@@ -160,7 +160,6 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
         "work_plan": "",
         "methodology": "",
         "organization_of_work": "",
-        "time_schedule": "",
         "foreign_exchange_details": "",
         "land_building_cost_total": "",
         "land_building_cost_year1": "",
@@ -239,7 +238,6 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
                 "work_plan": "",
                 "methodology": "",
                 "organization_of_work": "",
-                "time_schedule": "",
                 "foreign_exchange_details": "",
                 "land_building_cost_total": "",
                 "land_building_cost_year1": "",
@@ -297,7 +295,6 @@ def extract_form_data_with_ai(content: str) -> Dict[str, Any]:
             "work_plan": "",
             "methodology": "",
             "organization_of_work": "",
-            "time_schedule": "",
             "foreign_exchange_details": "",
             "land_building_cost_total": "",
             "land_building_cost_year1": "",
@@ -370,7 +367,6 @@ def construct_simple_json_structure(extracted_data: Dict[str, Any]) -> Dict[str,
             "work_plan": cleaned_data.get("work_plan", ""),
             "methodology": cleaned_data.get("methodology", ""),
             "organization_of_work": cleaned_data.get("organization_of_work", ""),
-            "time_schedule": cleaned_data.get("time_schedule", ""),
             "foreign_exchange_details": cleaned_data.get("foreign_exchange_details", "")
         },
         "cost_breakdown": {
@@ -453,7 +449,6 @@ def store_in_supabase(proposal_data: Dict[str, Any], file_info: Dict[str, str]) 
             "work_plan": proposal_data.get("work_plan", ""),
             "methodology": proposal_data.get("methodology", ""),
             "organization_of_work": proposal_data.get("organization_of_work", ""),
-            "time_schedule": proposal_data.get("time_schedule", ""),
             "total_cost_total": proposal_data.get("total_cost_total", ""),
             "total_cost_year1": proposal_data.get("total_cost_year1", ""),
             "total_cost_year2": proposal_data.get("total_cost_year2", ""),
@@ -498,7 +493,6 @@ VALIDATE_FIELDS = [
     "Work Plan",
     "Methodology",
     "Organization of Work Elements",
-    "Time Schedule"
 ]
 
 # Rules derived from Guidelines.pdf (you asked to use Guidelines.pdf content)
@@ -514,7 +508,6 @@ GUIDELINE_RULES = {
     "Work Plan": {"min_words": 30, "fail_reason": "Work Plan should be phase-wise/stepwise with responsibilities and milestones."},
     "Methodology": {"min_words": 30, "fail_reason": "Methodology must state technical approach, tools and data analysis plan."},
     "Organization of Work Elements": {"min_words": 10, "fail_reason": "Organization of work should specify team roles and responsibilities."},
-    "Time Schedule": {"must_have_chart": True, "fail_reason": "Time Schedule must include a Bar/PERT/Gantt chart or explicit milestones."}
 }
 
 PLACEHOLDER_RE = re.compile(
@@ -565,7 +558,6 @@ def build_guideline_excerpts(text: str, fields: List[str], window_sentences: int
         "Work Plan": ["work plan", "organization of work", "work elements"],
         "Methodology": ["methodology", "approach"],
         "Organization of Work Elements": ["organization of work", "roles", "responsibilities"],
-        "Time Schedule": ["time schedule", "bar chart", "pert chart", "gantt", "schedule"]
     }
 
     for f in fields:
@@ -745,7 +737,6 @@ def get_value_from_extracted_payload(extracted_payload: Dict[str, Any], field_la
         "Work Plan": ["project_details.work_plan", "work_plan"],
         "Methodology": ["project_details.methodology", "methodology"],
         "Organization of Work Elements": ["project_details.organization_of_work", "organization_of_work"],
-        "Time Schedule": ["project_details.time_schedule", "time_schedule"]
     }
 
     def deep_get(obj, path):
