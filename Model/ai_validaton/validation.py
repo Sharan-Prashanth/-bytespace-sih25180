@@ -628,15 +628,7 @@ def rule_based_check(field_label: str, value: str) -> Dict[str, str]:
             return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + f" (only {words} words)."}
         return {"validation_result": "filled_and_ok", "reason": "Definition appears sufficiently detailed."}
 
-    if field_label == "Objectives":
-        items = parse_objectives(v)
-        must_list = rule.get("must_be_list", False)
-        # if must be list and looks like a paragraph, fail
-        if must_list and len(items) == 1 and "\n" not in v and not re.search(r'\d+\)', v):
-            return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + " (objectives appear as a paragraph rather than listed items)."}
-        if len(items) < rule.get("min_count", 0) or len(items) > rule.get("max_count", 9999):
-            return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + f" (found {len(items)} objectives)."}
-        return {"validation_result": "filled_and_ok", "reason": f"{len(items)} objectives provided (within allowed range)."}
+    
 
     if field_label == "Justification for Subject Area":
         if count_words(v) < rule.get("min_words", 0):
@@ -650,12 +642,7 @@ def rule_based_check(field_label: str, value: str) -> Dict[str, str]:
             return {"validation_result": "not_following_guidelines", "reason": "Benefits are too vague; S&T Guidelines require explicit measurable benefits."}
         return {"validation_result": "filled_and_ok", "reason": "Benefits appear explicit."}
 
-    if field_label == "Work Plan":
-        if count_words(v) < rule.get("min_words", 0):
-            return {"validation_result": "not_following_guidelines", "reason": rule.get("fail_reason", "") + f" (only {count_words(v)} words)."}
-        if not re.search(r"\b(Phase|Phase-I|Phase II|Milestone|month|quarter|year|Q1|Q2|Q3|Q4)\b", v, flags=re.IGNORECASE):
-            return {"validation_result": "not_following_guidelines", "reason": "Work Plan lacks phase-wise/milestone indications as required by S&T Guidelines."}
-        return {"validation_result": "filled_and_ok", "reason": "Work Plan includes phase-wise steps/milestones."}
+    
 
     if field_label == "Methodology":
         if count_words(v) < rule.get("min_words", 0):
@@ -671,10 +658,7 @@ def rule_based_check(field_label: str, value: str) -> Dict[str, str]:
             return {"validation_result": "not_following_guidelines", "reason": "Organization of Work lacks roles/responsibilities specification."}
         return {"validation_result": "filled_and_ok", "reason": "Organization of work elements described."}
 
-    if field_label == "Time Schedule":
-        if re.search(r"\b(bar chart|pert|gantt|milestone|schedule|month|year|quarter)\b", v, flags=re.IGNORECASE):
-            return {"validation_result": "filled_and_ok", "reason": "Time Schedule mentions chart/milestones."}
-        return {"validation_result": "not_following_guidelines", "reason": GUIDELINE_RULES["Time Schedule"]["fail_reason"]}
+    
 
     return {"validation_result": "filled_and_ok", "reason": "Field validated by deterministic rule."}
 
