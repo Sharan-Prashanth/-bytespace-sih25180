@@ -10,6 +10,7 @@ from RAG import plag
 from RAG import timeline
 from Common.SWOT import swot
 from Common.Technical_fesability import fesability
+from birbal import user_sarathi
 try:
     # Prefer relative import when running as a package (helps editors/linters)
     from . import non_ocr
@@ -56,6 +57,7 @@ app.include_router(plag.router)
 app.include_router(file_storage.router)
 app.include_router(ai_detector_pipeline.router)
 app.include_router(report_gen.router)
+app.include_router(user_sarathi.router)
 # app.include_router(online_checker.app)
 # -----------------------------
 # Run FastAPI directly with Python
