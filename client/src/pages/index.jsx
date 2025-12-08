@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 
 // Dynamic imports for client-only components
+
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 const ReactDatamaps = dynamic(() => import("react-india-states-map"), { ssr: false });
 const Navbar = dynamic(() => import("../components/Navbar"), { ssr: false });
