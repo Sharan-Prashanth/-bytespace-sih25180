@@ -255,6 +255,49 @@ export default function AIEvaluationReport() {
           {showJsonDebug ? 'Hide Report / Show JSON' : 'Hide JSON / Show Report'}
         </button>
 
+        {/* Navigation Panel */}
+        <div className="no-print fixed top-20 right-5 bg-white rounded-lg shadow-xl p-4 z-50 max-w-xs">
+          <h3 className="text-sm font-bold text-[#002855] mb-3 border-b pb-2">Quick Navigation</h3>
+          <div className="space-y-2">
+            <button
+              onClick={() => router.push(`/proposal/ai-evaluation/${id}/ai-detection`)}
+              className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 text-sm font-semibold transition-all"
+            >
+              🤖 AI Detection
+            </button>
+            <button
+              onClick={() => router.push(`/proposal/ai-evaluation/${id}/novelty`)}
+              className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 text-sm font-semibold transition-all"
+            >
+              💡 Novelty
+            </button>
+            <button
+              onClick={() => router.push(`/proposal/ai-evaluation/${id}/cost`)}
+              className="w-full px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:from-orange-600 hover:to-orange-700 text-sm font-semibold transition-all"
+            >
+              💰 Cost Analysis
+            </button>
+            <button
+              onClick={() => router.push(`/proposal/ai-evaluation/${id}/technical-feasibility`)}
+              className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 text-sm font-semibold transition-all"
+            >
+              🔧 Technical Feasibility
+            </button>
+            <button
+              onClick={() => router.push(`/proposal/ai-evaluation/${id}/impact-factor`)}
+              className="w-full px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 text-sm font-semibold transition-all"
+            >
+              📊 Impact Factor
+            </button>
+            <button
+              onClick={() => router.push(`/proposal/ai-evaluation/${id}/deliverables`)}
+              className="w-full px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-lg hover:from-indigo-600 hover:to-indigo-700 text-sm font-semibold transition-all"
+            >
+              📅 Deliverables
+            </button>
+          </div>
+        </div>
+
         {/* Print Button */}
         <button
           onClick={handlePrint}
