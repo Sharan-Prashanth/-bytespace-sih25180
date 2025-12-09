@@ -26,11 +26,13 @@ Outputs JSON with:
   gnn_score, llm_comment, citations_global, citations_internal, table, checked_at, ...
 """
 import os
+import re
 import json
 import uuid
 import hashlib
 import logging
 import traceback
+import tempfile
 from io import BytesIO
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -57,9 +59,22 @@ try:
 except Exception:
     HAS_EXTRACT_MODULE = False
 
+# Import SCAMPER analysis function and router
+HAS_SCAMPER_MODULE = False
+try:
+    from Model.Common.pampus.pampus import semantic_scamper_check, router as scamper_router
+    HAS_SCAMPER_MODULE = True
+except Exception as e:
+    scamper_router = None
+    pass  # Will log warning after logger is configured
+
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("novelty-agent-gnn-gemini")
+
+# Log SCAMPER availability
+if not HAS_SCAMPER_MODULE:
+    logger.warning("SCAMPER module not available - SCAMPER analysis will be skipped")
 
 # ---------------------- CONFIG ----------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -104,6 +119,11 @@ if GEMINI_KEY:
 
 app = FastAPI(title="Novelty Agent (GNN + Gemini)")
 router = APIRouter()
+
+# Include SCAMPER router if available
+if scamper_router:
+    app.include_router(scamper_router)
+    logger.info("SCAMPER router included at /scamper")
 
 # ---------------------- CACHE HELPERS ----------------------
 def compute_pdf_hash(pdf_bytes: bytes) -> str:
@@ -416,6 +436,197 @@ def academic_search_combined(idea: str, limit: int = 8) -> List[Dict[str, Any]]:
             logger.debug(f"Academic search {fn.__name__} failed: {e}")
     return results
 
+# ---------------------- SCAMPER Analysis Helper ----------------------
+def analyze_scamper_for_similarity(objectives: str, methodology: str, raw_text: str = "") -> Dict[str, Any]:
+    """
+    Analyzes SCAMPER elements when similarity is detected.
+    Uses the extracted objectives and methodology to perform semantic SCAMPER analysis.
+    Returns parsed SCAMPER results with counts and adjustments.
+    """
+    if not HAS_SCAMPER_MODULE:
+        logger.warning("SCAMPER module not available, skipping SCAMPER analysis")
+        return {
+            "scamper_available": False, 
+            "scamper_score": 0, 
+            "scamper_count": 0,
+            "scamper_elements": [], 
+            "scamper_analysis": "SCAMPER analysis not available - module not imported"
+        }
+    
+    if not objectives and not methodology:
+        logger.warning("No objectives or methodology provided for SCAMPER analysis")
+        return {
+            "scamper_available": False,
+            "scamper_score": 0,
+            "scamper_count": 0,
+            "scamper_elements": [],
+            "scamper_analysis": "SCAMPER analysis skipped - no objectives or methodology extracted"
+        }
+    
+    try:
+        logger.info(f"Performing SCAMPER analysis on objectives ({len(objectives)} chars) and methodology ({len(methodology)} chars)")
+        
+        # Call SCAMPER semantic check directly with the text content
+        scamper_result = semantic_scamper_check(objectives, methodology)
+        
+        # Parse the result to extract YES/NO for each element
+        scamper_elements = ["Substitute", "Combine", "Adapt", "Modify", "Put to Other Use", "Eliminate", "Reverse"]
+        scamper_present = {}
+        scamper_details = {}
+        scamper_evidence = {}
+        
+        # Parse the text response from Gemini
+        result_text = scamper_result if isinstance(scamper_result, str) else str(scamper_result)
+        
+        logger.info(f"SCAMPER analysis returned {len(result_text)} characters")
+        
+        for element in scamper_elements:
+            # Look for "Present: Yes" or "Present: No" patterns
+            pattern = rf"{element}.*?Present:\s*(Yes|No)"
+            match = re.search(pattern, result_text, re.IGNORECASE | re.DOTALL)
+            if match:
+                scamper_present[element] = match.group(1).lower() == "yes"
+            else:
+                scamper_present[element] = False
+            
+            # Extract explanation for this element
+            expl_pattern = rf"{element}.*?Explanation:\s*([^\n]+(?:\n(?!\d+\.|\*\*)[^\n]+)*)"
+            expl_match = re.search(expl_pattern, result_text, re.IGNORECASE | re.DOTALL)
+            if expl_match:
+                explanation_text = expl_match.group(1).strip()
+                # Limit explanation length
+                scamper_details[element] = explanation_text[:500]
+            else:
+                scamper_details[element] = "No explanation extracted"
+            
+            # Extract evidence for this element
+            evid_pattern = rf"{element}.*?Evidence:\s*([^\n]+(?:\n(?!\d+\.|\*\*)[^\n]+)*)"
+            evid_match = re.search(evid_pattern, result_text, re.IGNORECASE | re.DOTALL)
+            if evid_match:
+                evidence_text = evid_match.group(1).strip()
+                scamper_evidence[element] = evidence_text[:300]
+            else:
+                scamper_evidence[element] = "No evidence extracted"
+        
+        # Count how many SCAMPER elements are present
+        scamper_count = sum(1 for v in scamper_present.values() if v)
+        
+        # Calculate SCAMPER score (0-100)
+        # More SCAMPER elements present = more innovation/novelty
+        scamper_score = (scamper_count / len(scamper_elements)) * 100
+        
+        logger.info(f"SCAMPER analysis complete: {scamper_count}/{len(scamper_elements)} elements detected, score: {scamper_score:.2f}")
+        
+        return {
+            "scamper_available": True,
+            "scamper_score": round(scamper_score, 2),
+            "scamper_count": scamper_count,
+            "scamper_present": scamper_present,
+            "scamper_details": scamper_details,
+            "scamper_evidence": scamper_evidence,
+            "scamper_analysis": result_text,
+            "scamper_elements_detected": [k for k, v in scamper_present.items() if v]
+        }
+        
+    except Exception as e:
+        logger.error(f"SCAMPER analysis failed: {e}")
+        logger.error(traceback.format_exc())
+        return {
+            "scamper_available": False, 
+            "scamper_score": 0, 
+            "scamper_count": 0,
+            "scamper_error": str(e), 
+            "scamper_analysis": f"SCAMPER analysis failed: {str(e)}"
+        }
+
+def adjust_novelty_with_scamper(base_novelty: float, uniqueness: int, advantage: int, significance: int, scamper_result: Dict[str, Any], max_similarity: float) -> tuple:
+    """
+    Adjusts novelty scores based on SCAMPER analysis.
+    
+    NEW LOGIC:
+    - If ANY SCAMPER element is detected (count >= 1): Minimum novelty score of 70
+    - For each additional element beyond the first: Add incremental boost
+    - Scale: 1 element = 70, 2 = 75, 3 = 80, 4 = 85, 5 = 90, 6 = 95, 7 = 100
+    
+    Returns: (adjusted_novelty, adjusted_uniqueness, adjusted_advantage, adjusted_significance)
+    """
+    if not scamper_result.get("scamper_available", False):
+        return (base_novelty, uniqueness, advantage, significance)
+    
+    scamper_score = scamper_result.get("scamper_score", 0)
+    scamper_count = scamper_result.get("scamper_count", 0)
+    
+    # If NO SCAMPER elements detected, return base scores
+    if scamper_count == 0:
+        logger.info("No SCAMPER elements detected, using base novelty score")
+        return (base_novelty, uniqueness, advantage, significance)
+    
+    # If ANY SCAMPER element is detected (count >= 1), ensure minimum novelty of 70
+    # Progressive scale: 1→70, 2→75, 3→80, 4→85, 5→90, 6→95, 7→100
+    scamper_minimum_score = 70 + (scamper_count - 1) * 5  # 70, 75, 80, 85, 90, 95, 100
+    
+    logger.info(f"SCAMPER elements detected: {scamper_count}/7")
+    logger.info(f"SCAMPER minimum novelty score: {scamper_minimum_score}")
+    
+    # Calculate target novelty based on SCAMPER count
+    target_novelty = float(scamper_minimum_score)
+    
+    # If base novelty is already higher, use the higher value
+    if base_novelty >= target_novelty:
+        logger.info(f"Base novelty ({base_novelty:.2f}) already meets/exceeds SCAMPER minimum ({target_novelty})")
+        # Still apply small boost for validation
+        adjusted_novelty = min(100, base_novelty + scamper_count)
+        return (adjusted_novelty, uniqueness, advantage, significance)
+    
+    # Otherwise, boost to meet SCAMPER minimum
+    logger.info(f"Boosting novelty from {base_novelty:.2f} to {target_novelty} (SCAMPER threshold)")
+    
+    # Calculate how much boost is needed to reach target
+    novelty_gap = target_novelty - base_novelty
+    
+    # Distribute the boost across components proportionally
+    # We need to adjust uniqueness, advantage, significance such that the weighted sum reaches target_novelty
+    # Current: base_novelty = uniqueness*0.4 + advantage*0.3 + significance*0.3
+    # Target: target_novelty = new_uniqueness*0.4 + new_advantage*0.3 + new_significance*0.3
+    
+    # Strategy: Boost each component proportionally to reach the target
+    boost_factor = novelty_gap / base_novelty if base_novelty > 0 else 1.0
+    
+    # Calculate component boosts (distributed by their weights)
+    uniqueness_boost = int((novelty_gap / UNIQUENESS_WEIGHT) * 0.4)
+    advantage_boost = int((novelty_gap / ADVANTAGE_WEIGHT) * 0.4)
+    significance_boost = int((novelty_gap / SIGNIFICANCE_WEIGHT) * 0.4)
+    
+    adjusted_uniqueness = min(100, uniqueness + uniqueness_boost)
+    adjusted_advantage = min(100, advantage + advantage_boost)
+    adjusted_significance = min(100, significance + significance_boost)
+    
+    # Recalculate actual novelty with adjusted components
+    adjusted_novelty = (
+        adjusted_uniqueness * UNIQUENESS_WEIGHT +
+        adjusted_advantage * ADVANTAGE_WEIGHT +
+        adjusted_significance * SIGNIFICANCE_WEIGHT
+    )
+    
+    # Ensure we meet the minimum (may need further adjustment due to rounding)
+    if adjusted_novelty < target_novelty:
+        # Direct adjustment to meet minimum
+        adjusted_novelty = target_novelty
+        # Recalculate components to be consistent
+        scale_factor = target_novelty / (adjusted_novelty + 0.01)
+        adjusted_uniqueness = min(100, int(adjusted_uniqueness * scale_factor))
+        adjusted_advantage = min(100, int(adjusted_advantage * scale_factor))
+        adjusted_significance = min(100, int(adjusted_significance * scale_factor))
+    
+    # Cap at 100
+    adjusted_novelty = min(100.0, adjusted_novelty)
+    
+    logger.info(f"Novelty adjusted from {base_novelty:.2f} to {adjusted_novelty:.2f}")
+    logger.info(f"Component adjustments - Uniqueness: {uniqueness}→{adjusted_uniqueness}, "
+                f"Advantage: {advantage}→{adjusted_advantage}, Significance: {significance}→{adjusted_significance}")
+    
+    return (adjusted_novelty, adjusted_uniqueness, adjusted_advantage, adjusted_significance)
+
 # ---------------------- Gemini comparator for 3-component scoring ----------------------
 def gemini_score_components(idea: str, internal_matches: List[Dict[str, Any]], external_matches: List[Dict[str, Any]], gnn_score: float = 0.0, methodology: str = "", objectives: str = "") -> Dict[str, Any]:
     """
@@ -529,6 +740,20 @@ async def analyze_novelty(file: UploadFile = File(...)):
     """
     POST /analyze-novelty
     form-data: file (PDF)
+    
+    This endpoint analyzes the novelty of a research proposal by:
+    1. Extracting text, objectives, and methodology from the PDF
+    2. Computing similarity with past projects using GNN embeddings
+    3. If similarity exceeds threshold, triggering SCAMPER analysis to identify innovation elements
+    4. Using Gemini LLM to score uniqueness, advantage, and significance
+    5. Adjusting novelty scores based on SCAMPER findings
+    6. Returning comprehensive analysis with SCAMPER details
+    
+    SCAMPER Analysis (triggered on high similarity):
+    - Evaluates 7 innovation dimensions: Substitute, Combine, Adapt, Modify, 
+      Put to Other Use, Eliminate, Reverse/Rearrange
+    - Boosts novelty scores when innovative approaches are detected despite similarity
+    - Provides detailed breakdown of which elements are present and why
     """
     try:
         if not file or not file.filename:
@@ -656,6 +881,16 @@ async def analyze_novelty(file: UploadFile = File(...)):
             if s >= SIMILARITY_THRESHOLD:
                 flagged_internal.append({"source": past_filenames[i] if i < len(past_filenames) else f"proj_{i}", "similarity_score": round(s, 4), "past_idea": past_ideas[i] if i < len(past_ideas) else ""})
         flagged_internal = sorted(flagged_internal, key=lambda x: x["similarity_score"], reverse=True)[:TOP_FLAGGED]
+        
+        # SCAMPER Analysis: ALWAYS perform to check for innovation elements
+        # If ANY SCAMPER element is detected, novelty score will be boosted to minimum 70
+        logger.info(f"Performing SCAMPER analysis (similarity: {max_sim:.4f})...")
+        scamper_result = analyze_scamper_for_similarity(objectives, methodology, raw_text)
+        
+        if scamper_result.get("scamper_available") and scamper_result.get("scamper_count", 0) > 0:
+            logger.info(f"✓ SCAMPER elements detected: {scamper_result.get('scamper_count')}/7 - Novelty boost will be applied")
+        else:
+            logger.info(f"✗ No SCAMPER elements detected - Using base novelty score")
 
         # External academic search
         citations_global = academic_search_combined(idea, limit=12)
@@ -681,20 +916,100 @@ async def analyze_novelty(file: UploadFile = File(...)):
         significance = comp_result.get("significance", 0)
         explanation = comp_result.get("explanation", "")
         recommended_actions = comp_result.get("recommended_actions", [])
+        
+        # Build uniqueness comparison against internal proposals
+        uniqueness_comparisons = []
+        if GENAI_AVAILABLE and gemini_model and flagged_internal:
+            logger.info("Generating uniqueness comparisons with internal proposals...")
+            for idx, internal_match in enumerate(flagged_internal[:5]):  # Top 5 similar proposals
+                try:
+                    similarity_to_past = internal_match.get("similarity_score", 0)
+                    uniqueness_score = round((1.0 - similarity_to_past) * 100, 2)  # Inverse of similarity
+                    
+                    # Ask Gemini to explain what makes this proposal unique compared to the similar one
+                    uniqueness_prompt = f"""
+Compare these two proposals and explain in 2-3 sentences what makes the NEW proposal unique/different from the PAST proposal.
+Focus on methodology differences, novel approaches, or new applications.
+
+NEW PROPOSAL IDEA:
+{idea[:800]}
+
+NEW METHODOLOGY:
+{methodology[:600] if methodology else "Not extracted"}
+
+PAST PROPOSAL:
+{internal_match.get('past_idea', '')[:800]}
+
+Return ONLY a brief explanation (2-3 sentences) highlighting the key differences and unique aspects of the NEW proposal.
+"""
+                    resp = gemini_model.generate_content(uniqueness_prompt)
+                    unique_snippet = resp.text.strip()
+                    if unique_snippet.startswith("```"):
+                        unique_snippet = unique_snippet.strip("`")
+                    
+                    uniqueness_comparisons.append({
+                        "compared_to": internal_match.get("source", "unknown"),
+                        "similarity_to_past": round(similarity_to_past, 4),
+                        "uniqueness_score": uniqueness_score,
+                        "past_idea_snippet": internal_match.get("past_idea", "")[:300],
+                        "what_makes_unique": unique_snippet[:500],
+                        "status": "unique" if uniqueness_score > 40 else "similar"
+                    })
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to generate uniqueness comparison for {internal_match.get('source')}: {e}")
+                    uniqueness_comparisons.append({
+                        "compared_to": internal_match.get("source", "unknown"),
+                        "similarity_to_past": round(internal_match.get("similarity_score", 0), 4),
+                        "uniqueness_score": round((1.0 - internal_match.get("similarity_score", 0)) * 100, 2),
+                        "past_idea_snippet": internal_match.get("past_idea", "")[:300],
+                        "what_makes_unique": "Could not generate uniqueness analysis",
+                        "status": "analysis_failed"
+                    })
+        else:
+            # Fallback: Basic uniqueness comparison without Gemini explanations
+            for internal_match in flagged_internal[:5]:
+                similarity_to_past = internal_match.get("similarity_score", 0)
+                uniqueness_score = round((1.0 - similarity_to_past) * 100, 2)
+                
+                uniqueness_comparisons.append({
+                    "compared_to": internal_match.get("source", "unknown"),
+                    "similarity_to_past": round(similarity_to_past, 4),
+                    "uniqueness_score": uniqueness_score,
+                    "past_idea_snippet": internal_match.get("past_idea", "")[:300],
+                    "what_makes_unique": f"Uniqueness score: {uniqueness_score}% - Lower similarity indicates higher uniqueness in approach or methodology",
+                    "status": "unique" if uniqueness_score > 40 else "similar"
+                })
+        
+        logger.info(f"Generated {len(uniqueness_comparisons)} uniqueness comparisons")
 
         # If Gemini provided a direct novelty percentage, prefer it (validated later by LLM comment JSON if present)
         if comp_result.get("novelty_percentage") is not None:
             try:
-                final_novelty = float(comp_result.get("novelty_percentage"))
+                base_novelty = float(comp_result.get("novelty_percentage"))
             except Exception:
-                final_novelty = None
+                base_novelty = None
         else:
-            final_novelty = None
+            base_novelty = None
 
-        # If final_novelty wasn't provided by Gemini, compute weighted final novelty
-        if final_novelty is None:
-            final_novelty = (uniqueness * UNIQUENESS_WEIGHT) + (advantage * ADVANTAGE_WEIGHT) + (significance * SIGNIFICANCE_WEIGHT)
-        final_novelty = float(max(0.0, min(100.0, final_novelty)))
+        # If base_novelty wasn't provided by Gemini, compute weighted novelty
+        if base_novelty is None:
+            base_novelty = (uniqueness * UNIQUENESS_WEIGHT) + (advantage * ADVANTAGE_WEIGHT) + (significance * SIGNIFICANCE_WEIGHT)
+        base_novelty = float(max(0.0, min(100.0, base_novelty)))
+        
+        # Adjust novelty score based on SCAMPER analysis
+        final_novelty, uniqueness, advantage, significance = adjust_novelty_with_scamper(
+            base_novelty, uniqueness, advantage, significance, scamper_result, max_sim
+        )
+        
+        # Update explanation to include SCAMPER impact if applicable
+        if scamper_result and scamper_result.get("scamper_available"):
+            scamper_count = scamper_result.get("scamper_count", 0)
+            if scamper_count > 0:
+                scamper_elements_list = [k for k, v in scamper_result.get("scamper_present", {}).items() if v]
+                explanation += f" SCAMPER Analysis: {scamper_count}/7 innovation elements detected ({', '.join(scamper_elements_list)}), indicating structured innovation approach."
+                if max_sim >= SIMILARITY_THRESHOLD:
+                    explanation += f" Despite similarity to existing work, SCAMPER elements provide differentiation and strategic advantage."
 
         # Build LLM reviewer-style comment (use generated explanation + citations)
         # Compose citations block for comment
@@ -805,9 +1120,17 @@ Internal top matches summary:
             compact_comment = f"{label} ({novelty_for_comment:.1f}%)."
 
         # Build a clear, verifiable response focused on novelty + extraction
+        # Add SCAMPER-based scoring explanation
+        scamper_count = scamper_result.get("scamper_count", 0)
+        scamper_boost_applied = scamper_result.get("scamper_available", False) and scamper_count > 0
+        scamper_minimum_score = 70 + (scamper_count - 1) * 5 if scamper_count > 0 else 0
+        
         result = {
             "novelty_percentage": round(final_novelty, 2),
             "novelty_source": ("llm" if comp_result.get("novelty_percentage") is not None else "heuristic"),
+            "novelty_base_score": round(base_novelty, 2),
+            "novelty_adjusted_by_scamper": scamper_boost_applied,
+            "scamper_minimum_applied": scamper_minimum_score if scamper_boost_applied else None,
             "uniqueness_score": uniqueness,
             "advantage_score": advantage,
             "significance_score": significance,
@@ -817,8 +1140,28 @@ Internal top matches summary:
             "explanation": explanation,
             "recommended_actions": recommended_actions,
 
+            # SCAMPER Analysis Results
+            "scamper_analysis": {
+                "performed": True,  # Always performed now
+                "available": scamper_result.get("scamper_available", False),
+                "score": scamper_result.get("scamper_score", 0),
+                "elements_count": scamper_result.get("scamper_count", 0),
+                "elements_detected": scamper_result.get("scamper_elements_detected", []),
+                "minimum_novelty_threshold": scamper_minimum_score if scamper_count > 0 else None,
+                "boost_applied": scamper_boost_applied,
+                "scoring_rule": "If ANY SCAMPER element detected: Minimum score = 70 + (count-1)*5. Scale: 1→70, 2→75, 3→80, 4→85, 5→90, 6→95, 7→100",
+                "elements_present": scamper_result.get("scamper_present", {}),
+                "details": scamper_result.get("scamper_details", {}),
+                "evidence": scamper_result.get("scamper_evidence", {}),
+                "full_analysis": scamper_result.get("scamper_analysis", ""),
+                "error": scamper_result.get("scamper_error", None)
+            },
+
             # Internal matches / provenance
             "citations_internal": flagged_internal,
+            
+            # Uniqueness comparisons - detailed analysis of how this proposal differs from similar internal proposals
+            "uniqueness_comparisons": uniqueness_comparisons,
 
             # Global citations (top 5) with snippets so the reviewer decision is auditable
             "citations_global": [
