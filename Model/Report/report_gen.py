@@ -46,34 +46,61 @@ def compute_file_hash(file_bytes: bytes) -> str:
 
 
 def check_cached_analysis(file_hash: str):
-    """Check if analysis exists in Supabase for this file hash."""
+    """Check if analysis exists in Supabase bucket for this file hash."""
     if not supabase:
         return None
     try:
-        response = supabase.table(SUPABASE_TABLE).select("*").eq("file_hash", file_hash).order("created_at", desc=True).limit(1).execute()
-        if response.data and len(response.data) > 0:
-            return response.data[0]
+        cache_filename = f"{file_hash}.json"
+        print(f"[CACHE] Checking for cached analysis: {cache_filename}")
+        
+        # Try to download the cached result from bucket
+        data = supabase.storage.from_(SUPABASE_BUCKET).download(cache_filename)
+        if data:
+            # Convert bytes to string and parse JSON
+            if isinstance(data, bytes):
+                cached_data = json.loads(data.decode('utf-8'))
+            else:
+                cached_data = json.loads(data)
+            print(f"[CACHE] Found cached analysis")
+            return cached_data
     except Exception as e:
-        print(f"Error checking cache: {e}")
+        print(f"[CACHE] No cached analysis found or error: {e}")
     return None
 
 
 def store_analysis_result(file_hash: str, filename: str, analysis_data: dict):
-    """Store analysis result in Supabase table."""
+    """Store analysis result in Supabase bucket."""
     if not supabase:
-        return None
+        print("[CACHE] Supabase not configured, skipping cache storage")
+        return False
     try:
-        record = {
+        cache_filename = f"{file_hash}.json"
+        
+        # Add metadata to cached data
+        cached_result = {
             "file_hash": file_hash,
             "filename": filename,
-            "analysis_result": analysis_data,
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            "cached_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "analysis_data": analysis_data
         }
-        response = supabase.table(SUPABASE_TABLE).insert(record).execute()
-        return response.data[0] if response.data else None
+        
+        json_bytes = json.dumps(cached_result, indent=2).encode("utf-8")
+        
+        print(f"[CACHE] Storing analysis in cache: {cache_filename}")
+        print(f"[CACHE] Data size: {len(json_bytes)} bytes")
+        
+        result = supabase.storage.from_(SUPABASE_BUCKET).upload(
+            cache_filename,
+            json_bytes,
+            {"content-type": "application/json", "upsert": True}
+        )
+        
+        print(f"[CACHE] Upload result: {result}")
+        print(f"[CACHE] Successfully cached analysis")
+        return True
     except Exception as e:
-        print(f"Error storing analysis: {e}")
-        return None
+        print(f"[CACHE] Failed to store cache: {e}")
+        return False
 
 @router.get("/full-analysis/latest")
 async def get_latest_analysis_result():
@@ -105,9 +132,10 @@ async def full_analysis(pdf: UploadFile = File(...)):
     if cached_result:
         print(f"Found cached analysis for file: {pdf.filename} (hash: {file_hash[:16]}...)")
         # Update latest result for GET endpoint
-        cached_data = cached_result.get("analysis_result", {})
+        cached_data = cached_result.get("analysis_data", cached_result)
         cached_data["cached"] = True
-        cached_data["cached_at"] = cached_result.get("created_at")
+        cached_data["cached_at"] = cached_result.get("cached_at")
+        cached_data["file_hash"] = file_hash
         cached_data["cache_note"] = "This analysis was retrieved from cache (file previously analyzed)"
         latest_analysis_result = cached_data
         return JSONResponse(status_code=200, content=cached_data)
@@ -154,56 +182,13 @@ async def full_analysis(pdf: UploadFile = File(...)):
     # Store latest result for GET endpoint (auto-render on frontend)
     latest_analysis_result = response_data
     
-    # Store analysis result in Supabase table for future retrieval
+    # Store analysis result in Supabase bucket for future retrieval
     if supabase:
-        try:
-            stored_record = store_analysis_result(file_hash, pdf.filename, response_data)
-            if stored_record:
-                response_data["stored_in_db"] = True
-                response_data["db_record_id"] = stored_record.get("id")
-                print(f"Analysis stored in database with ID: {stored_record.get('id')}")
-        except Exception as e:
-            print(f"Failed to store analysis in database: {e}")
-            response_data["stored_in_db"] = False
+        cache_stored = store_analysis_result(file_hash, pdf.filename, response_data)
+        if cache_stored:
+            response_data["stored_in_cache"] = True
+            print(f"[CACHE] Analysis stored in cache bucket")
+        else:
+            response_data["stored_in_cache"] = False
     
-    # Try uploading the JSON result to Supabase storage (best-effort)
-    if supabase:
-        try:
-            obj_name = f"{os.path.splitext(pdf.filename)[0]}_full-analysis_{int(time.time())}.json"
-            payload = json.dumps(response_data, ensure_ascii=False, indent=None).encode("utf-8")
-            supabase.storage.from_(SUPABASE_BUCKET).upload(obj_name, payload, {"content-type": "application/json"})
-            public = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(obj_name)
-            # Normalize public URL (client may return a dict)
-            public_url = None
-            if isinstance(public, str):
-                public_url = public
-            elif isinstance(public, dict):
-                for k in ("publicUrl", "public_url", "url", "publicURL"):
-                    if k in public and isinstance(public[k], str):
-                        public_url = public[k]
-                        break
-                if not public_url:
-                    try:
-                        public_url = str(public.get("publicUrl") or public.get("url") or next(iter(public.values())))
-                    except Exception:
-                        public_url = str(public)
-            else:
-                public_url = str(public)
-
-            # Attach public URL and Supabase info to both the immediate response and stored latest result
-            response_data["uploaded_url"] = public_url
-            response_data["uploaded_object"] = obj_name
-
-            latest_analysis_result = {
-                **latest_analysis_result,
-                "uploaded_url": public_url,
-                "uploaded_object": obj_name,
-                "supabase_url": SUPABASE_URL,
-                "supabase_bucket": SUPABASE_BUCKET,
-            }
-        except Exception as e:
-            print(f"Supabase upload failed: {e}")
-            response_data.setdefault("uploaded_url", None)
-            response_data.setdefault("uploaded_object", None)
-
     return latest_analysis_result

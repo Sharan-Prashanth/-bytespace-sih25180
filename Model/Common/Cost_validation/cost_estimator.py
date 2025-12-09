@@ -1059,7 +1059,7 @@ Return ONLY the JSON object. No explanations. No text outside JSON.
 
 
 def call_gemini(prompt):
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     resp = model.generate_content(prompt)
     return resp.text or ""
 
@@ -1651,7 +1651,7 @@ def extract_json_from_text(content: str) -> dict:
         {content}
         """
         
-        response = genai.GenerativeModel("gemini-2.5-flash-lite").generate_content(extraction_prompt)
+        response = genai.GenerativeModel("gemini-2.5-flash").generate_content(extraction_prompt)
         extracted_json = response.text.strip()
         
         # Clean the response to ensure it's valid JSON

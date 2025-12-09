@@ -352,9 +352,13 @@ def check_cached_validation(file_hash: str) -> Optional[Dict[str, Any]]:
         logger.info(f"[CACHE] Checking for cached validation: {cache_filename}")
         
         # Try to download the cached result
-        response = supabase.storage.from_(VALIDATION_CACHE_BUCKET).download(cache_filename)
-        if response:
-            cached_data = json.loads(response)
+        data = supabase.storage.from_(VALIDATION_CACHE_BUCKET).download(cache_filename)
+        if data:
+            # Convert bytes to string and parse JSON
+            if isinstance(data, bytes):
+                cached_data = json.loads(data.decode('utf-8'))
+            else:
+                cached_data = json.loads(data)
             logger.info(f"[CACHE] Found cached validation result")
             return cached_data
     except Exception as e:
@@ -381,7 +385,7 @@ def store_validation_cache(file_hash: str, validation_data: Dict[str, Any]) -> b
         supabase.storage.from_(VALIDATION_CACHE_BUCKET).upload(
             cache_filename,
             json_bytes,
-            {"content-type": "application/json", "upsert": "true"}
+            {"content-type": "application/json", "upsert": True}
         )
         logger.info(f"[CACHE] Successfully cached validation result")
         return True
