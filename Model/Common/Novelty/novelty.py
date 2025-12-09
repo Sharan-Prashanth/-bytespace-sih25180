@@ -59,14 +59,8 @@ try:
 except Exception:
     HAS_EXTRACT_MODULE = False
 
-# Import SCAMPER analysis function and router
-HAS_SCAMPER_MODULE = False
-try:
-    from Model.Common.pampus.pampus import semantic_scamper_check, router as scamper_router
-    HAS_SCAMPER_MODULE = True
-except Exception as e:
-    scamper_router = None
-    pass  # Will log warning after logger is configured
+# SCAMPER analysis is now integrated directly below
+HAS_SCAMPER_MODULE = True
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -120,10 +114,7 @@ if GEMINI_KEY:
 app = FastAPI(title="Novelty Agent (GNN + Gemini)")
 router = APIRouter()
 
-# Include SCAMPER router if available
-if scamper_router:
-    app.include_router(scamper_router)
-    logger.info("SCAMPER router included at /scamper")
+# SCAMPER is now integrated directly in the novelty analysis
 
 # ---------------------- CACHE HELPERS ----------------------
 def compute_pdf_hash(pdf_bytes: bytes) -> str:
@@ -436,6 +427,94 @@ def academic_search_combined(idea: str, limit: int = 8) -> List[Dict[str, Any]]:
             logger.debug(f"Academic search {fn.__name__} failed: {e}")
     return results
 
+# ---------------------- SCAMPER SEMANTIC ANALYSIS (INTEGRATED) ----------------------
+def semantic_scamper_check(objectives: str, methodology: str) -> str:
+    """
+    Performs semantic SCAMPER analysis using Gemini LLM.
+    Returns formatted text with analysis of 7 SCAMPER elements.
+    Each element must have: Present (Yes/No), Explanation, Evidence
+    """
+    content = f"""
+Objectives:
+{objectives}
+
+Methodology:
+{methodology}
+"""
+
+    prompt = f"""
+You are an expert evaluator for Ministry of Coal (India) performing SCAMPER innovation analysis.
+
+Analyze this proposal (Objectives + Methodology) and classify it according to SCAMPER framework.
+
+SCAMPER Elements:
+1. Substitute - Replacing components, materials, processes, or approaches with alternatives
+2. Combine - Merging multiple technologies, methods, or ideas together
+3. Adapt - Adjusting or modifying existing concepts for new applications
+4. Modify/Magnify/Minify - Changing size, scale, features, or attributes
+5. Put to Other Use - Repurposing technology or methods for different applications
+6. Eliminate - Removing unnecessary components, steps, or features
+7. Reverse/Rearrange - Changing sequence, order, or direction of processes
+
+IMPORTANT EVALUATION RULES:
+- Use SEMANTIC UNDERSTANDING - understand the meaning and innovation intent
+- DO NOT rely on keyword matching
+- Look for actual innovation elements, not just mentions
+- Each element MUST have: Present (Yes/No), Explanation (why/why not), Evidence (quote/snippet)
+
+Return EXACTLY this format for ALL 7 elements:
+
+1. **Substitute**
+   - Present: Yes/No
+   - Explanation: [Why this element is present or absent - 1-2 sentences]
+   - Evidence: [Direct quote or specific snippet from the proposal that supports your decision]
+
+2. **Combine**
+   - Present: Yes/No
+   - Explanation: [Why this element is present or absent - 1-2 sentences]
+   - Evidence: [Direct quote or specific snippet from the proposal that supports your decision]
+
+3. **Adapt**
+   - Present: Yes/No
+   - Explanation: [Why this element is present or absent - 1-2 sentences]
+   - Evidence: [Direct quote or specific snippet from the proposal that supports your decision]
+
+4. **Modify / Magnify / Minify**
+   - Present: Yes/No
+   - Explanation: [Why this element is present or absent - 1-2 sentences]
+   - Evidence: [Direct quote or specific snippet from the proposal that supports your decision]
+
+5. **Put to Other Use**
+   - Present: Yes/No
+   - Explanation: [Why this element is present or absent - 1-2 sentences]
+   - Evidence: [Direct quote or specific snippet from the proposal that supports your decision]
+
+6. **Eliminate**
+   - Present: Yes/No
+   - Explanation: [Why this element is present or absent - 1-2 sentences]
+   - Evidence: [Direct quote or specific snippet from the proposal that supports your decision]
+
+7. **Reverse / Rearrange**
+   - Present: Yes/No
+   - Explanation: [Why this element is present or absent - 1-2 sentences]
+   - Evidence: [Direct quote or specific snippet from the proposal that supports your decision]
+
+Proposal Content:
+{content}
+
+Provide thorough analysis with clear evidence for each element.
+"""
+
+    if GENAI_AVAILABLE and gemini_model:
+        try:
+            response = gemini_model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            logger.error(f"Gemini SCAMPER analysis failed: {e}")
+            return f"SCAMPER analysis failed: {str(e)}"
+    else:
+        return "Gemini not available for SCAMPER analysis"
+
 # ---------------------- SCAMPER Analysis Helper ----------------------
 def analyze_scamper_for_similarity(objectives: str, methodology: str, raw_text: str = "") -> Dict[str, Any]:
     """
@@ -480,33 +559,53 @@ def analyze_scamper_for_similarity(objectives: str, methodology: str, raw_text: 
         
         logger.info(f"SCAMPER analysis returned {len(result_text)} characters")
         
+        # Build structured SCAMPER elements array
+        scamper_structured = []
+        
         for element in scamper_elements:
             # Look for "Present: Yes" or "Present: No" patterns
             pattern = rf"{element}.*?Present:\s*(Yes|No)"
             match = re.search(pattern, result_text, re.IGNORECASE | re.DOTALL)
+            is_present = False
             if match:
-                scamper_present[element] = match.group(1).lower() == "yes"
+                is_present = match.group(1).lower() == "yes"
+                scamper_present[element] = is_present
             else:
                 scamper_present[element] = False
             
             # Extract explanation for this element
-            expl_pattern = rf"{element}.*?Explanation:\s*([^\n]+(?:\n(?!\d+\.|\*\*)[^\n]+)*)"
+            expl_pattern = rf"{element}.*?Explanation:\s*([^\n]+(?:\n(?!\d+\.|\*\*|Present:|Evidence:)[^\n]+)*)"
             expl_match = re.search(expl_pattern, result_text, re.IGNORECASE | re.DOTALL)
+            explanation_text = "No explanation extracted"
             if expl_match:
                 explanation_text = expl_match.group(1).strip()
-                # Limit explanation length
+                # Clean up explanation (remove markdown, extra spaces)
+                explanation_text = re.sub(r'\[|\]|\*\*', '', explanation_text)
+                explanation_text = ' '.join(explanation_text.split())
                 scamper_details[element] = explanation_text[:500]
             else:
-                scamper_details[element] = "No explanation extracted"
+                scamper_details[element] = explanation_text
             
             # Extract evidence for this element
-            evid_pattern = rf"{element}.*?Evidence:\s*([^\n]+(?:\n(?!\d+\.|\*\*)[^\n]+)*)"
+            evid_pattern = rf"{element}.*?Evidence:\s*([^\n]+(?:\n(?!\d+\.|\*\*|Present:|Explanation:)[^\n]+)*)"
             evid_match = re.search(evid_pattern, result_text, re.IGNORECASE | re.DOTALL)
+            evidence_text = "No evidence extracted"
             if evid_match:
                 evidence_text = evid_match.group(1).strip()
-                scamper_evidence[element] = evidence_text[:300]
+                # Clean up evidence
+                evidence_text = re.sub(r'\[|\]|\*\*', '', evidence_text)
+                evidence_text = ' '.join(evidence_text.split())
+                scamper_evidence[element] = evidence_text[:400]
             else:
-                scamper_evidence[element] = "No evidence extracted"
+                scamper_evidence[element] = evidence_text
+            
+            # Build structured object for this element
+            scamper_structured.append({
+                "element": element,
+                "present": "Yes" if is_present else "No",
+                "explanation": scamper_details[element],
+                "evidence": scamper_evidence[element]
+            })
         
         # Count how many SCAMPER elements are present
         scamper_count = sum(1 for v in scamper_present.values() if v)
@@ -524,6 +623,7 @@ def analyze_scamper_for_similarity(objectives: str, methodology: str, raw_text: 
             "scamper_present": scamper_present,
             "scamper_details": scamper_details,
             "scamper_evidence": scamper_evidence,
+            "scamper_structured": scamper_structured,  # Structured array with all elements
             "scamper_analysis": result_text,
             "scamper_elements_detected": [k for k, v in scamper_present.items() if v]
         }
@@ -899,11 +999,68 @@ async def analyze_novelty(file: UploadFile = File(...)):
         ext_embs = compute_embeddings(ext_texts) if ext_texts else np.zeros((0, embedder.get_sentence_embedding_dimension()))
         # compute cosine sim between input_emb(original embedding before GNN?) We'll use refined input_emb for consistency
         ext_sims = [cos(input_emb, e) for e in ext_embs] if ext_embs.size else []
-        # build normalized external evidence list
+        
+        # Build external evidence list with similarity and uniqueness analysis
         external_evidence = []
+        logger.info(f"Generating uniqueness analysis for {len(citations_global)} external citations...")
+        
         for i, hit in enumerate(citations_global):
             url = hit.get("url") or (f"https://doi.org/{hit.get('doi')}" if hit.get("doi") else None)
-            external_evidence.append({"source": hit.get("source"), "title": hit.get("title"), "url": url, "doi": hit.get("doi"), "snippet": hit.get("snippet"), "year": hit.get("year"), "similarity": round(ext_sims[i], 4) if i < len(ext_sims) else None})
+            similarity_score = round(ext_sims[i], 4) if i < len(ext_sims) else 0.0
+            uniqueness_score = round((1.0 - (ext_sims[i] if i < len(ext_sims) else 0.0)) * 100, 2)
+            
+            # Generate uniqueness snippet using Gemini for top citations
+            uniqueness_snippet = ""
+            if GENAI_AVAILABLE and gemini_model and i < 8:  # Generate for top 8 citations
+                try:
+                    uniqueness_prompt = f"""
+Compare the NEW proposal with this EXTERNAL work and explain in 1-2 sentences what makes the NEW proposal unique/different.
+Focus on methodology differences, novel applications, or new approaches.
+
+NEW PROPOSAL:
+Idea: {idea[:600]}
+Methodology: {methodology[:400] if methodology else "Not extracted"}
+
+EXTERNAL WORK:
+Title: {hit.get('title', 'No title')[:300]}
+Snippet: {hit.get('snippet', 'No snippet')[:400]}
+
+Return ONLY 1-2 sentences explaining the key unique aspects of the NEW proposal compared to this external work.
+"""
+                    resp = gemini_model.generate_content(uniqueness_prompt)
+                    uniqueness_snippet = resp.text.strip()
+                    if uniqueness_snippet.startswith("```"):
+                        uniqueness_snippet = uniqueness_snippet.strip("`")
+                    # Clean up the snippet
+                    uniqueness_snippet = re.sub(r'\[|\]|\*\*', '', uniqueness_snippet)
+                    uniqueness_snippet = ' '.join(uniqueness_snippet.split())[:500]
+                except Exception as e:
+                    logger.debug(f"Failed to generate uniqueness snippet for citation {i}: {e}")
+                    uniqueness_snippet = f"Uniqueness score: {uniqueness_score}% - Different approach or novel application"
+            else:
+                # Fallback for citations beyond top 8 or when Gemini unavailable
+                if uniqueness_score > 70:
+                    uniqueness_snippet = "Highly unique approach with minimal overlap to this prior work"
+                elif uniqueness_score > 50:
+                    uniqueness_snippet = "Moderately unique with some methodological differences"
+                elif uniqueness_score > 30:
+                    uniqueness_snippet = "Some unique elements but shares similar research direction"
+                else:
+                    uniqueness_snippet = "Similar research area with minor variations"
+            
+            external_evidence.append({
+                "source": hit.get("source"), 
+                "title": hit.get("title"), 
+                "url": url, 
+                "doi": hit.get("doi"), 
+                "snippet": hit.get("snippet"), 
+                "year": hit.get("year"), 
+                "similarity": similarity_score,
+                "uniqueness": uniqueness_score,
+                "uniqueness_snippet": uniqueness_snippet
+            })
+        
+        logger.info(f"Generated uniqueness analysis for {len(external_evidence)} external citations")
 
         # Prepare matches for LLM: internal_matches include similarity score, external_matches include title/snippet/url/similarity
         internal_matches_for_llm = [{"source": f.get("source") if isinstance(f, dict) and f.get("source") else f.get("source", f.get("source")), "similarity_score": f.get("similarity_score"), "past_idea": f.get("past_idea")} for f in flagged_internal]  # keep as-is
@@ -917,53 +1074,109 @@ async def analyze_novelty(file: UploadFile = File(...)):
         explanation = comp_result.get("explanation", "")
         recommended_actions = comp_result.get("recommended_actions", [])
         
-        # Build uniqueness comparison against internal proposals
+        # Build uniqueness comparison against internal proposals with detailed similarity/uniqueness analysis
         uniqueness_comparisons = []
         if GENAI_AVAILABLE and gemini_model and flagged_internal:
-            logger.info("Generating uniqueness comparisons with internal proposals...")
+            logger.info("Generating detailed uniqueness comparisons with internal proposals...")
             for idx, internal_match in enumerate(flagged_internal[:5]):  # Top 5 similar proposals
                 try:
                     similarity_to_past = internal_match.get("similarity_score", 0)
                     uniqueness_score = round((1.0 - similarity_to_past) * 100, 2)  # Inverse of similarity
                     
-                    # Ask Gemini to explain what makes this proposal unique compared to the similar one
-                    uniqueness_prompt = f"""
-Compare these two proposals and explain in 2-3 sentences what makes the NEW proposal unique/different from the PAST proposal.
-Focus on methodology differences, novel approaches, or new applications.
+                    # Ask Gemini to explain BOTH similarities AND uniqueness with evidence
+                    detailed_comparison_prompt = f"""
+You are comparing TWO research proposals. Analyze and provide:
 
-NEW PROPOSAL IDEA:
-{idea[:800]}
+1. SIMILARITIES: What aspects are similar between the proposals? (2-3 bullet points with evidence)
+2. UNIQUENESS: What makes the NEW proposal unique/different? (2-3 bullet points with evidence)
+3. CITATION SCORE: Rate similarity (0-100%) and uniqueness (0-100%)
 
-NEW METHODOLOGY:
-{methodology[:600] if methodology else "Not extracted"}
+NEW PROPOSAL:
+Title/Idea: {idea[:700]}
+Methodology: {methodology[:500] if methodology else "Not extracted"}
+Objectives: {objectives[:500] if objectives else "Not extracted"}
 
 PAST PROPOSAL:
-{internal_match.get('past_idea', '')[:800]}
+{internal_match.get('past_idea', '')[:700]}
 
-Return ONLY a brief explanation (2-3 sentences) highlighting the key differences and unique aspects of the NEW proposal.
+Provide response in this EXACT format:
+
+SIMILARITIES:
+- [Point 1 with evidence]
+- [Point 2 with evidence]
+- [Point 3 with evidence]
+
+UNIQUENESS:
+- [Point 1 with evidence]
+- [Point 2 with evidence]
+- [Point 3 with evidence]
+
+SIMILARITY_SCORE: [0-100]%
+UNIQUENESS_SCORE: [0-100]%
 """
-                    resp = gemini_model.generate_content(uniqueness_prompt)
-                    unique_snippet = resp.text.strip()
-                    if unique_snippet.startswith("```"):
-                        unique_snippet = unique_snippet.strip("`")
+                    resp = gemini_model.generate_content(detailed_comparison_prompt)
+                    analysis_text = resp.text.strip()
+                    if analysis_text.startswith("```"):
+                        analysis_text = analysis_text.strip("`")
+                    
+                    # Parse similarities
+                    similarities = []
+                    sim_match = re.search(r"SIMILARITIES:\s*([\s\S]*?)(?=UNIQUENESS:|$)", analysis_text, re.IGNORECASE)
+                    if sim_match:
+                        sim_text = sim_match.group(1).strip()
+                        similarities = [s.strip().lstrip('-•*').strip() for s in sim_text.split('\n') if s.strip() and s.strip().startswith(('-', '•', '*'))]
+                    
+                    # Parse uniqueness points
+                    uniqueness_points = []
+                    uniq_match = re.search(r"UNIQUENESS:\s*([\s\S]*?)(?=SIMILARITY_SCORE:|UNIQUENESS_SCORE:|$)", analysis_text, re.IGNORECASE)
+                    if uniq_match:
+                        uniq_text = uniq_match.group(1).strip()
+                        uniqueness_points = [u.strip().lstrip('-•*').strip() for u in uniq_text.split('\n') if u.strip() and u.strip().startswith(('-', '•', '*'))]
+                    
+                    # Parse scores from LLM if provided
+                    llm_sim_score = None
+                    llm_uniq_score = None
+                    sim_score_match = re.search(r"SIMILARITY_SCORE:\s*(\d+)%?", analysis_text, re.IGNORECASE)
+                    if sim_score_match:
+                        llm_sim_score = int(sim_score_match.group(1))
+                    uniq_score_match = re.search(r"UNIQUENESS_SCORE:\s*(\d+)%?", analysis_text, re.IGNORECASE)
+                    if uniq_score_match:
+                        llm_uniq_score = int(uniq_score_match.group(1))
+                    
+                    # Use computed scores or LLM scores
+                    final_similarity = llm_sim_score if llm_sim_score is not None else round(similarity_to_past * 100, 2)
+                    final_uniqueness = llm_uniq_score if llm_uniq_score is not None else uniqueness_score
                     
                     uniqueness_comparisons.append({
                         "compared_to": internal_match.get("source", "unknown"),
-                        "similarity_to_past": round(similarity_to_past, 4),
-                        "uniqueness_score": uniqueness_score,
+                        "citation_scores": {
+                            "similarity_percentage": final_similarity,
+                            "uniqueness_percentage": final_uniqueness,
+                            "raw_similarity_score": round(similarity_to_past, 4)
+                        },
+                        "similarities": similarities[:5] if similarities else ["Similar research domain and objectives"],
+                        "uniqueness_aspects": uniqueness_points[:5] if uniqueness_points else ["Different methodology or novel application"],
                         "past_idea_snippet": internal_match.get("past_idea", "")[:300],
-                        "what_makes_unique": unique_snippet[:500],
-                        "status": "unique" if uniqueness_score > 40 else "similar"
+                        "full_analysis": analysis_text[:1000],
+                        "status": "unique" if final_uniqueness > 50 else "similar" if final_similarity > 70 else "moderate"
                     })
                     
                 except Exception as e:
-                    logger.warning(f"Failed to generate uniqueness comparison for {internal_match.get('source')}: {e}")
+                    logger.warning(f"Failed to generate detailed comparison for {internal_match.get('source')}: {e}")
+                    similarity_to_past = internal_match.get("similarity_score", 0)
+                    uniqueness_score = round((1.0 - similarity_to_past) * 100, 2)
+                    
                     uniqueness_comparisons.append({
                         "compared_to": internal_match.get("source", "unknown"),
-                        "similarity_to_past": round(internal_match.get("similarity_score", 0), 4),
-                        "uniqueness_score": round((1.0 - internal_match.get("similarity_score", 0)) * 100, 2),
+                        "citation_scores": {
+                            "similarity_percentage": round(similarity_to_past * 100, 2),
+                            "uniqueness_percentage": uniqueness_score,
+                            "raw_similarity_score": round(similarity_to_past, 4)
+                        },
+                        "similarities": ["Analysis failed - similarity score computed from embeddings"],
+                        "uniqueness_aspects": ["Could not generate detailed uniqueness analysis"],
                         "past_idea_snippet": internal_match.get("past_idea", "")[:300],
-                        "what_makes_unique": "Could not generate uniqueness analysis",
+                        "full_analysis": "Analysis generation failed",
                         "status": "analysis_failed"
                     })
         else:
@@ -974,14 +1187,19 @@ Return ONLY a brief explanation (2-3 sentences) highlighting the key differences
                 
                 uniqueness_comparisons.append({
                     "compared_to": internal_match.get("source", "unknown"),
-                    "similarity_to_past": round(similarity_to_past, 4),
-                    "uniqueness_score": uniqueness_score,
+                    "citation_scores": {
+                        "similarity_percentage": round(similarity_to_past * 100, 2),
+                        "uniqueness_percentage": uniqueness_score,
+                        "raw_similarity_score": round(similarity_to_past, 4)
+                    },
+                    "similarities": [f"Similarity based on embedding distance: {round(similarity_to_past * 100, 2)}%"],
+                    "uniqueness_aspects": [f"Uniqueness score: {uniqueness_score}% - Lower similarity indicates higher uniqueness in approach or methodology"],
                     "past_idea_snippet": internal_match.get("past_idea", "")[:300],
-                    "what_makes_unique": f"Uniqueness score: {uniqueness_score}% - Lower similarity indicates higher uniqueness in approach or methodology",
+                    "full_analysis": "Gemini not available - using basic embedding similarity",
                     "status": "unique" if uniqueness_score > 40 else "similar"
                 })
         
-        logger.info(f"Generated {len(uniqueness_comparisons)} uniqueness comparisons")
+        logger.info(f"Generated {len(uniqueness_comparisons)} detailed uniqueness comparisons with citations")
 
         # If Gemini provided a direct novelty percentage, prefer it (validated later by LLM comment JSON if present)
         if comp_result.get("novelty_percentage") is not None:
@@ -1140,7 +1358,7 @@ Internal top matches summary:
             "explanation": explanation,
             "recommended_actions": recommended_actions,
 
-            # SCAMPER Analysis Results
+            # SCAMPER Analysis Results - Structured Format
             "scamper_analysis": {
                 "performed": True,  # Always performed now
                 "available": scamper_result.get("scamper_available", False),
@@ -1150,6 +1368,11 @@ Internal top matches summary:
                 "minimum_novelty_threshold": scamper_minimum_score if scamper_count > 0 else None,
                 "boost_applied": scamper_boost_applied,
                 "scoring_rule": "If ANY SCAMPER element detected: Minimum score = 70 + (count-1)*5. Scale: 1→70, 2→75, 3→80, 4→85, 5→90, 6→95, 7→100",
+                
+                # Structured SCAMPER elements with Present/Explanation/Evidence
+                "elements": scamper_result.get("scamper_structured", []),
+                
+                # Legacy format for backwards compatibility
                 "elements_present": scamper_result.get("scamper_present", {}),
                 "details": scamper_result.get("scamper_details", {}),
                 "evidence": scamper_result.get("scamper_evidence", {}),
@@ -1163,9 +1386,17 @@ Internal top matches summary:
             # Uniqueness comparisons - detailed analysis of how this proposal differs from similar internal proposals
             "uniqueness_comparisons": uniqueness_comparisons,
 
-            # Global citations (top 5) with snippets so the reviewer decision is auditable
+            # Global citations (top 8) with similarity, uniqueness, and snippets for both
             "citations_global": [
-                {"title": e.get("title"), "snippet": e.get("snippet"), "url": e.get("url"), "year": e.get("year"), "similarity": e.get("similarity")} for e in external_evidence[:5]
+                {
+                    "title": e.get("title"), 
+                    "snippet": e.get("snippet"), 
+                    "url": e.get("url"), 
+                    "year": e.get("year"), 
+                    "similarity": e.get("similarity"),
+                    "uniqueness": e.get("uniqueness"),
+                    "uniqueness_snippet": e.get("uniqueness_snippet")
+                } for e in external_evidence[:8]
             ],
 
             # Extraction outputs (from your exact extraction module)
