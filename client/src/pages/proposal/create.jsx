@@ -10,6 +10,7 @@ import ProposalStorage from '../../utils/proposalStorage';
 import { createProposal, updateProposal, submitProposal, getProposalById, getProposals } from '../../utils/proposalApi';
 import '../../utils/clearProposalStorage'; // Enable global clearProposalStorage() function
 import StickyNavigation from '../../components/common/StickyNavigation';
+import CheckboxCaptcha from '../../components/CheckboxCaptcha';
 
 // Import new modular components
 import Header from '../../components/create-page/Header';
@@ -146,6 +147,9 @@ function CreateNewProposalContent() {
 
   // Chatbot State
   const [showChatbot, setShowChatbot] = useState(false);
+
+  // Captcha State
+  const [captchaValid, setCaptchaValid] = useState(false);
 
   // Stage Management
   const [currentStage, setCurrentStage] = useState(1);
@@ -971,6 +975,12 @@ function CreateNewProposalContent() {
 
   // Handle submit button click
   const handleSubmitClick = () => {
+    // Check captcha first
+    if (!captchaValid) {
+      error('Please verify that you are not a robot by checking the captcha box.');
+      return;
+    }
+
     const errors = validateSubmission();
 
     if (errors.length > 0) {
@@ -1212,13 +1222,19 @@ function CreateNewProposalContent() {
               Next Stage
             </button>
           ) : (
-            <button
-              onClick={handleSubmitClick}
-              disabled={isSavingToBackend}
-              className={`px-8 py-3 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}
-            >
-              {isSavingToBackend ? 'Saving...' : 'Submit Proposal'}
-            </button>
+            <div className="flex flex-col items-end gap-4">
+              {/* Captcha */}
+              <CheckboxCaptcha onVerify={(status) => setCaptchaValid(status)} />
+              
+              {/* Submit Button */}
+              <button
+                onClick={handleSubmitClick}
+                disabled={isSavingToBackend}
+                className={`px-8 py-3 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isDark ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}
+              >
+                {isSavingToBackend ? 'Saving...' : 'Submit Proposal'}
+              </button>
+            </div>
           )}
         </div>
       </div>

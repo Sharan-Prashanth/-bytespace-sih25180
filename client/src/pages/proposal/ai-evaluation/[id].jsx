@@ -157,29 +157,33 @@ export default function AIEvaluationReport() {
   const opportunities = parseSWOTCategory(swotString, 'O —');
   const threats = parseSWOTCategory(swotString, 'T —');
 
-  // Parse SCAMPER
-  const scamperData = getOutput(results, 'scamper');
-  const scamperResult = scamperData.scamper_semantic_result || '';
+  // Parse SCAMPER from analyze-novelty endpoint
+  const scamperAnalysis = novel.scamper_analysis || {};
+  const scamperElements = scamperAnalysis.elements || [];
   
-  const parseSCAMPERSection = (text, sectionNum, sectionName) => {
-    if (!text) return { present: 'No', explanation: '', evidence: '' };
-    const regex = new RegExp(`${sectionNum}\\.\\s*\\*\\*${sectionName}\\*\\*[^*]*\\*\\s*\\*\\*Present:\\*\\*\\s*(Yes|No)[^*]*\\*\\s*\\*\\*Explanation:\\*\\*([^*]*?)\\*\\s*\\*\\*Evidence:\\*\\*([^]*?)(?=\\n\\n\\d+\\.|$)`, 'i');
-    const match = text.match(regex);
-    if (!match) return { present: 'No', explanation: '', evidence: '' };
+  // Helper function to get SCAMPER element data
+  const getSCAMPERElement = (elementName) => {
+    const element = scamperElements.find(el => el.element === elementName);
+    if (!element) return { present: 'No', explanation: '', evidence: '' };
     return {
-      present: match[1].trim(),
-      explanation: match[2].trim(),
-      evidence: match[3].trim().replace(/^"|"$/g, '')
+      present: element.present || 'No',
+      explanation: element.explanation || '',
+      evidence: element.evidence || ''
     };
   };
 
-  const scamperSubstitute = parseSCAMPERSection(scamperResult, '1', 'Substitute');
-  const scamperCombine = parseSCAMPERSection(scamperResult, '2', 'Combine');
-  const scamperAdapt = parseSCAMPERSection(scamperResult, '3', 'Adapt');
-  const scamperModify = parseSCAMPERSection(scamperResult, '4', 'Modify / Magnify / Minify');
-  const scamperPutToUse = parseSCAMPERSection(scamperResult, '5', 'Put to Other Use');
-  const scamperEliminate = parseSCAMPERSection(scamperResult, '6', 'Eliminate');
-  const scamperReverse = parseSCAMPERSection(scamperResult, '7', 'Reverse / Rearrange');
+  const scamperSubstitute = getSCAMPERElement('Substitute');
+  const scamperCombine = getSCAMPERElement('Combine');
+  const scamperAdapt = getSCAMPERElement('Adapt');
+  const scamperModify = getSCAMPERElement('Modify');
+  const scamperPutToUse = getSCAMPERElement('Put to Other Use');
+  const scamperEliminate = getSCAMPERElement('Eliminate');
+  const scamperReverse = getSCAMPERElement('Reverse');
+  
+  // SCAMPER score and summary
+  const scamperScore = scamperAnalysis.score || 0;
+  const scamperElementsCount = scamperAnalysis.elements_count || 0;
+  const scamperElementsDetected = scamperAnalysis.elements_detected || [];
 
   // Parse detailed validation data
   const aiFlaggedLines = ai.flagged_lines || [];
@@ -487,7 +491,87 @@ export default function AIEvaluationReport() {
                 </div>
               </div>
             </div>
+              
+            {/* PAGE 3 - SWOT Analysis */}
+            <div className="page w-[214mm] min-h-[297mm] mx-auto my-2 bg-gradient-to-b from-[#fff3e6] via-white to-[#eef8f0] p-12 relative shadow-lg border-l-4 border-l-[#ff9933] border-r-4 border-r-[#138808]">
+              <div className="bg-gradient-to-b from-[#fff3e6] via-white to-[#eef8f0] text-black p-5 rounded-sm shadow-sm border border-gray-100">
+                <div className="bg-gradient-to-r from-gray-100 to-white text-[#002855] p-4 rounded-md text-center font-black tracking-wider text-lg border border-gray-200 mb-3">
+                  SWOT ANALYSIS
+                </div>
 
+                <div className="flex flex-col gap-4">
+                  {/* Strengths */}
+                  <div className="flex gap-5 items-center">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#ff9933] to-[#e67e22] flex-shrink-0 flex items-center justify-center text-white font-black text-3xl shadow-lg border-2 border-white">
+                      S
+                    </div>
+                    <div className="flex-1 bg-white border border-[#ffe0b2] rounded-lg p-3 shadow-sm">
+                      <div className="text-[#e65100] font-extrabold text-xs uppercase mb-2 tracking-wide">Strengths</div>
+                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
+                        {strengths.slice(0, 6).map((item, i) => (
+                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Weaknesses */}
+                  <div className="flex gap-5 items-center">
+                    <div className="w-16 h-16 rounded-full bg-white flex-shrink-0 flex items-center justify-center text-[#000080] font-black text-3xl shadow-md border-2 border-gray-300">
+                      W
+                    </div>
+                    <div className="flex-1 bg-white border border-gray-300 rounded-lg p-3 shadow-sm">
+                      <div className="text-black font-extrabold text-xs uppercase mb-2 tracking-wide">Weaknesses</div>
+                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
+                        {weaknesses.slice(0, 6).map((item, i) => (
+                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Opportunities */}
+                  <div className="flex gap-5 items-center">
+                    <div className="w-16 h-16 rounded-full bg-white flex-shrink-0 flex items-center justify-center text-[#000080] font-black text-3xl shadow-md border-2 border-gray-300">
+                      O
+                    </div>
+                    <div className="flex-1 bg-white border border-gray-300 rounded-lg p-3 shadow-sm">
+                      <div className="text-[#1b5e20] font-extrabold text-xs uppercase mb-2 tracking-wide">Opportunities</div>
+                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
+                        {opportunities.slice(0, 6).map((item, i) => (
+                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Threats */}
+                  <div className="flex gap-5 items-center">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#138808] to-[#0e6b06] flex-shrink-0 flex items-center justify-center text-white font-black text-3xl shadow-lg border-2 border-white">
+                      T
+                    </div>
+                    <div className="flex-1 bg-white border border-[#c8e6c9] rounded-lg p-3 shadow-sm">
+                      <div className="text-[#1b5e20] font-extrabold text-xs uppercase mb-2 tracking-wide">Threats</div>
+                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
+                        {threats.slice(0, 6).map((item, i) => (
+                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="absolute bottom-4 left-8 right-8 text-[9px] text-black flex justify-between items-end">
+                <div className="max-w-[65%] leading-snug">
+                  <strong>Ministry of Coal, Government of India</strong> · Confidential · For internal evaluation purposes only.
+                </div>
+                <div className="text-right">
+                  <div className="mt-2">Page 3 of 4</div>
+                </div>
+              </div>
+            </div>
 
             {/* PAGE 4: SCAMPER ANALYSIS */}
             <div className="page max-w-[210mm] min-h-[297mm] mx-auto bg-white p-[15mm] relative shadow-lg border-t-[5px] border-t-[#ff9933] border-b-[5px] border-b-[#138808] mb-5" style={{ pageBreakAfter: 'always' }}>
