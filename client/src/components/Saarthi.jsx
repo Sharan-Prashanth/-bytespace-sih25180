@@ -18,12 +18,12 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
       return [
         { 
           type: 'bot', 
-          text: 'नमस्कार! வணக்கம்! Welcome! I\'m BIRBAL, your AI Review Assistant, specialized in helping reviewers evaluate research proposals effectively. I support Hindi (हिंदी), Tamil (தமிழ்), and English for comprehensive assistance.',
+          text: 'Welcome! I\'m BIRBAL, your AI Review Assistant specialized in helping reviewers evaluate research proposals effectively.',
           timestamp: new Date().toLocaleTimeString()
         },
         {
           type: 'bot',
-          text: 'मैं आपकी सहायता कर सकता हूं | நான் உங்களுக்கு உதவ முடியும் | I can assist you with:\n• Proposal quality assessment\n• Technical merit evaluation\n• Budget analysis and optimization\n• Compliance with S&T guidelines\n• Comparative research analysis\n• Review documentation\n\nकृपया हिंदी, தமிழ், या English में पूछें! What would you like to know?',
+          text: 'I can assist you with:\n• Proposal quality assessment\n• Technical merit evaluation\n• Budget analysis and optimization\n• Compliance with S&T guidelines\n• Comparative research analysis\n• Review documentation\n\nYou can ask questions in English, Hindi, or Tamil - I\'ll respond in your preferred language!',
           timestamp: new Date().toLocaleTimeString()
         }
       ];
@@ -31,12 +31,12 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
       return [
         { 
           type: 'bot', 
-          text: 'नमस्कार! வணக்கம்! Welcome! मैं बिरबल हूं | நான் பிர்பால் | I\'m BIRBAL, your intelligent multilingual AI research assistant. I support Hindi (हिंदी), Tamil (தமிழ்), and English.',
+          text: 'Welcome! I\'m BIRBAL, your intelligent multilingual AI research assistant for coal research and NaCCER proposals.',
           timestamp: new Date().toLocaleTimeString()
         },
         {
           type: 'bot',
-          text: 'मैं आपकी मदद कर सकता हूं | நான் உதவ முடியும் | I can assist you with:\n• Advanced research methodology design\n• Coal technology innovation strategies\n• Budget optimization and resource allocation\n• Technical writing and documentation\n• NaCCER compliance and S&T guidelines\n• Multi-institutional collaboration frameworks\n\nकृपया अपनी भाषा में पूछें | தயவுசெய்து உங்கள் மொழியில் கேளுங்கள் | Ask me in your preferred language!',
+          text: 'I can assist you with:\n• Advanced research methodology design\n• Coal technology innovation strategies\n• Budget optimization and resource allocation\n• Technical writing and documentation\n• NaCCER compliance and S&T guidelines\n• Multi-institutional collaboration frameworks\n\nFeel free to ask in English, Hindi (हिंदी), or Tamil (தமிழ்) - I\'ll respond in your language!',
           timestamp: new Date().toLocaleTimeString()
         }
       ];
@@ -442,7 +442,7 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
               }}
             >
               <div className="flex items-center gap-2">
-                <img src="/images/AI assistant logo.png" alt="BIRBAL" className="w-8 h-8 rounded-lg shadow-lg transform group-hover:scale-110 transition-transform duration-300" />
+                <img src="/images/AI assistant logo.jpg" alt="BIRBAL" className="w-8 h-8 rounded-lg shadow-lg transform group-hover:scale-110 transition-transform duration-300" />
                 {/* Active indicator dot - more visible and positioned correctly */}
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg animate-blink-green" style={{ zIndex: 1000 }}></div>
               </div>
@@ -461,7 +461,7 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
             <div className="absolute bottom-full right-0 mb-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:translate-y-0 translate-y-2 pointer-events-none z-60">
               <div className="bg-black/90 text-white px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap shadow-2xl backdrop-blur-sm border border-white/10">
                 <div className="flex items-center gap-2">
-                  <span>Launch BIRBAL AI | बिरबल | பிர்பால்</span>
+                  <span>Launch BIRBAL AI Assistant</span>
                 </div>
                 <div className="absolute top-full right-4 w-0 h-0 border-t-4 border-t-black/90 border-l-4 border-l-transparent border-r-4 border-r-transparent"></div>
               </div>
@@ -494,17 +494,17 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                   style={{
                     background: 'linear-gradient(135deg, #ff7f00 0%, #ff7f00 33%, #ffffff 33%, #ffffff 66%, #138808 66%, #138808 100%)'
                   }}>
-                  <img src="/images/AI assistant logo.png" alt="BIRBAL" className="w-8 h-8 rounded-full" />
+                  <img src="/images/AI assistant logo.jpg" alt="BIRBAL" className="w-8 h-8 rounded-full" />
                   {/* Active indicator dot - positioned outside overflow hidden container */}
                 </div>
                 {/* Green dot positioned outside the logo container */}
                 <div className="absolute top-5 left-12 w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg animate-blink-green" style={{ zIndex: 1000 }}></div>
                 <div>
                   <h3 className="font-bold text-white text-lg">
-                    {context === 'reviewer' ? 'BIRBAL - AI Review Assistant' : 'बिरबल BIRBAL AI'}
+                    {context === 'reviewer' ? 'BIRBAL - AI Review Assistant' : 'BIRBAL AI'}
                   </h3>
                   <p className="text-sm text-blue-100">
-                    {context === 'reviewer' ? 'Proposal Evaluator' : 'अनुसंधान सहायक | ஆராய்ச்சி உதவியாளர் | Research Assistant'}
+                    {context === 'reviewer' ? 'Proposal Evaluator' : 'Multilingual Research Assistant'}
                   </p>
                 </div>
               </div>
@@ -606,7 +606,7 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce animation-delay-1000"></div>
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce animation-delay-2000"></div>
                     </div>
-                    <span className="text-blue-500 text-sm">BIRBAL लिख रहा है... எழுதுகிறது... is typing...</span>
+                    <span className="text-blue-500 text-sm">BIRBAL is typing...</span>
                   </div>
                 </div>
               </div>
@@ -621,7 +621,7 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                 value={currentMessage}
                 onChange={(e) => setCurrentMessage(e.target.value)}
                 className="flex-1 px-4 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
-                placeholder="बिरबल से पूछें | பிர்பாலிடம் கேளுங்கள் | Ask BIRBAL anything..."
+                placeholder="Ask BIRBAL in English, Hindi, or Tamil..."
                 style={{ color: '#111827' }}
                 disabled={isTyping}
               />
