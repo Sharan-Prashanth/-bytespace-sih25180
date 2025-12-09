@@ -17,6 +17,7 @@ const SupportingDocuments = ({
   userDocuments = [], 
   aiReports = [], 
   reviewerReports = [],
+  clarificationReports = [],
   proposalId = null,
   theme = 'light'
 }) => {
@@ -120,11 +121,13 @@ const SupportingDocuments = ({
   ];
 
   const displayReviewerReports = reviewerReports.length > 0 ? reviewerReports : [];
+  const displayClarificationReports = clarificationReports.length > 0 ? clarificationReports : [];
 
   const tabs = [
     { id: 'user', label: 'User Uploads', icon: Upload, count: displayUserDocs.length },
     { id: 'ai', label: 'AI Reports', icon: Cpu, count: displayAIReports.length },
-    { id: 'reviewer', label: 'Reviewer Reports', icon: ClipboardCheck, count: displayReviewerReports.length }
+    { id: 'reviewer', label: 'Reviewer Reports', icon: ClipboardCheck, count: displayReviewerReports.length },
+    { id: 'clarification', label: 'Clarifications', icon: FileText, count: displayClarificationReports.length }
   ];
 
   const getActiveDocuments = () => {
@@ -133,6 +136,8 @@ const SupportingDocuments = ({
         return displayAIReports;
       case 'reviewer':
         return displayReviewerReports;
+      case 'clarification':
+        return displayClarificationReports;
       default:
         return displayUserDocs;
     }
@@ -265,6 +270,30 @@ const SupportingDocuments = ({
                                 isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
                               }`}>
                                 {doc.reportType.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* For clarification reports: Show committee and status */}
+                        {activeTab === 'clarification' && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {doc.committeeType && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                doc.committeeType === 'CMPDI' ? 'bg-blue-100 text-blue-700' :
+                                doc.committeeType === 'TSSRC' ? 'bg-purple-100 text-purple-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {doc.committeeType} Committee
+                              </span>
+                            )}
+                            {doc.status && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                doc.status === 'SUBMITTED' 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {doc.status}
                               </span>
                             )}
                           </div>

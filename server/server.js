@@ -19,6 +19,7 @@ import reportRoutes from "./routes/reportRoutes.js";
 import workflowRoutes from "./routes/workflowRoutes.js";
 import calendarRoutes from "./routes/calendarRoutes.js";
 import expertOpinionRoutes from "./routes/expertOpinionRoutes.js";
+import clarificationReportRoutes from "./routes/clarificationReportRoutes.js";
 
 // Import collaboration service and socket handlers (legacy - kept for backwards compatibility)
 import collaborationService from "./services/collaborationService.js";
@@ -109,6 +110,7 @@ app.use('/api/proposals/:proposalId/chat', chatRoutes);
 app.use('/api/proposals/:proposalId/reports', reportRoutes);
 app.use('/api/proposals/:proposalId/opinions', expertOpinionRoutes);
 app.use('/api/reports', reportRoutes); // Direct report routes (for submit, get by id, etc.)
+app.use('/api/clarification-reports', clarificationReportRoutes); // Clarification report routes
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/collaboration', collaborationRoutes);
 app.use('/api/collaboration-api', collaborationApiRoutes);

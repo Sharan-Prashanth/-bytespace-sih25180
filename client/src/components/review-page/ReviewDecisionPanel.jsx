@@ -19,6 +19,7 @@ const ReviewDecisionPanel = ({
   proposalStatus,
   onSubmitDecision,
   onOpenExpertReportModal, // Opens report editor modal for experts
+  onOpenClarificationEditor, // Opens clarification report editor for committee members
   isSubmitting = false,
   isSubmittingExpertReport = false,
   hasUserMadeDecision = false,
@@ -458,6 +459,22 @@ const ReviewDecisionPanel = ({
           <p className={`text-xs ${textColor} text-center mt-3`}>
             You will be asked to provide a detailed report before the decision is finalized.
           </p>
+
+          {/* Clarification Report Button - Only for committee members */}
+          {isCommitteeMember && onOpenClarificationEditor && (
+            <div className="mt-4 pt-4 border-t border-black/10">
+              <button
+                onClick={onOpenClarificationEditor}
+                className={`w-full py-3 px-6 ${secondaryBtnBg} font-semibold rounded-lg transition-colors flex items-center justify-center gap-2`}
+              >
+                <Send className="w-4 h-4" />
+                Request Clarification from User
+              </button>
+              <p className={`text-xs ${textColor} text-center mt-2`}>
+                Send a formal clarification request to the proposal creator
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

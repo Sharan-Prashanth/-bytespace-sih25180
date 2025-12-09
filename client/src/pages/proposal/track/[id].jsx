@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../context/AuthContext';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import apiClient from '../../../utils/api';
-import { Moon, Sun, MoonStar, ArrowLeft, Clock, Users, Eye, ClipboardCheck, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Moon, Sun, MoonStar, ArrowLeft, Clock, Users, Eye, ClipboardCheck, ChevronDown, ChevronUp, FileText, Download } from 'lucide-react';
 import { getUserQuickActions, getCommitteeQuickActions, getExpertQuickActions } from '../../../utils/quickActionsHelper';
 
 // Import modular components
@@ -68,6 +68,7 @@ function TrackProposalContent() {
   const [proposal, setProposal] = useState(null);
   const [opinions, setOpinions] = useState([]);
   const [opinionStats, setOpinionStats] = useState({ count: 0, averageRating: 0 });
+  const [clarificationReports, setClarificationReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -77,6 +78,7 @@ function TrackProposalContent() {
   // Section open states - milestones open by default
   const [milestonesOpen, setMilestonesOpen] = useState(true);
   const [opinionsOpen, setOpinionsOpen] = useState(false);
+  const [clarificationReportsOpen, setClarificationReportsOpen] = useState(false);
   
   // FAB menu state
   const [fabExpanded, setFabExpanded] = useState(true);
@@ -84,6 +86,7 @@ function TrackProposalContent() {
   // Refs for scrolling
   const milestonesRef = useRef(null);
   const opinionsRef = useRef(null);
+  const clarificationReportsRef = useRef(null);
 
   // Role checks
   const userRoles = user?.roles || [];
@@ -126,6 +129,17 @@ function TrackProposalContent() {
         } catch (err) {
           console.warn('Could not load opinions:', err);
           setOpinions([]);
+        }
+        
+        // Fetch clarification reports (only for USER role)
+        if (userRoles.includes('USER') && !userRoles.includes('CMPDI_MEMBER') && !userRoles.includes('TSSRC_MEMBER') && !userRoles.includes('SSRC_MEMBER')) {
+          try {
+            const clarificationResponse = await apiClient.get(`/api/proposals/${id}/clarification-reports`);
+            setClarificationReports(clarificationResponse.data.data || []);
+          } catch (err) {
+            console.warn('Could not load clarification reports:', err);
+            setClarificationReports([]);
+          }
         }
         
       } catch (err) {
@@ -481,6 +495,155 @@ function TrackProposalContent() {
               theme={theme}
             />
           </div>
+
+          {/* Clarification Reports Section - Only visible to USER role */}
+          {userRoles.includes('USER') && !isCommittee && clarificationReports.length > 0 && (
+            <div ref={clarificationReportsRef} className="scroll-mt-20">
+              <div className={`${cardBg} border ${borderColor} rounded-lg overflow-hidden`}>
+                {/* Section Header */}
+                <button
+                  onClick={() => setClarificationReportsOpen(!clarificationReportsOpen)}
+                  className={`w-full flex items-center justify-between p-6 ${hoverBg} transition-colors`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                      <FileText className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="text-left">
+                      <h2 className={`text-xl font-semibold ${textColor}`}>Committee Clarification Requests</h2>
+                      <p className={`text-sm ${textColor} mt-1`}>
+                        {clarificationReports.length} report(s) from review committees
+                      </p>
+                    </div>
+                  </div>
+                  {clarificationReportsOpen ? (
+                    <ChevronUp className={`w-5 h-5 ${textColor}`} />
+                  ) : (
+                    <ChevronDown className={`w-5 h-5 ${textColor}`} />
+                  )}
+                </button>
+
+                {/* Section Content */}
+                {clarificationReportsOpen && (
+                  <div className={`p-6 border-t ${borderColor}`}>
+                    <div className="space-y-4">
+                      {clarificationReports.map((report, index) => (
+                        <div
+                          key={report._id}
+                          className={`p-5 rounded-lg border-2 ${
+                            report.status === 'SUBMITTED' 
+                              ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700' 
+                              : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
+                          }`}
+                        >
+                          {/* Report Header */}
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <h3 className={`text-lg font-semibold ${textColor}`}>
+                                {report.title}
+                              </h3>
+                              <div className="flex items-center gap-3 mt-1 text-sm">
+                                <span className={`px-2 py-1 rounded-full font-semibold ${
+                                  report.committeeType === 'CMPDI' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                                  report.committeeType === 'TSSRC' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
+                                  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                }`}>
+                                  {report.committeeType}
+                                </span>
+                                <span className={textColor}>
+                                  {new Date(report.submittedAt || report.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                              report.status === 'SUBMITTED' 
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                                : 'bg-slate-200 text-black dark:bg-slate-700 dark:text-white'
+                            }`}>
+                              {report.status === 'SUBMITTED' ? 'Submitted' : 'Draft'}
+                            </span>
+                          </div>
+
+                          {/* Report Preview */}
+                          <div className={`text-sm ${textColor} mb-3 line-clamp-3`}>
+                            {report.content?.[0]?.children?.[0]?.text || 'No content preview available'}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const response = await apiClient.get(
+                                    `/api/clarification-reports/${report._id}/export-pdf`,
+                                    { responseType: 'blob' }
+                                  );
+                                  const blob = new Blob([response.data], { type: 'application/pdf' });
+                                  const url = window.URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = `${proposal.proposalCode}-clarification-${report.committeeType}.pdf`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  window.URL.revokeObjectURL(url);
+                                } catch (error) {
+                                  console.error('Error downloading PDF:', error);
+                                  alert('Failed to download PDF');
+                                }
+                              }}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Download PDF
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const response = await apiClient.get(
+                                    `/api/clarification-reports/${report._id}/export-docx`,
+                                    { responseType: 'blob' }
+                                  );
+                                  const blob = new Blob([response.data], { 
+                                    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+                                  });
+                                  const url = window.URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = `${proposal.proposalCode}-clarification-${report.committeeType}.docx`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  window.URL.revokeObjectURL(url);
+                                } catch (error) {
+                                  console.error('Error downloading DOCX:', error);
+                                  alert('Failed to download DOCX');
+                                }
+                              }}
+                              className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium flex items-center gap-2"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Download DOCX
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Help Text */}
+                    <div className={`mt-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800`}>
+                      <p className={`text-sm ${textColor}`}>
+                        <strong>Note:</strong> These clarification requests have been submitted by the review committee. 
+                        Please review and address the concerns mentioned in each report.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       </div>

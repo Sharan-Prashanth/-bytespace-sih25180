@@ -156,6 +156,11 @@ const proposalSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  // Clarification reports from committee members
+  clarificationReports: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ClarificationReport'
+  }],
   timeline: [{
     status: String,
     changedBy: {

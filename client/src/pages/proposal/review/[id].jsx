@@ -8,7 +8,7 @@ import apiClient from '../../../utils/api';
 import jsPDF from 'jspdf';
 import StickyNavigation from '../../../components/common/StickyNavigation';
 
-// Import modular components
+  // Import modular components
 import {
   ReviewHeader,
   ReviewProposalInformation,
@@ -22,8 +22,7 @@ import {
   ExpertOpinionSection,
   ExpertReviewerSelectionModal
 } from '../../../components/review-page';
-
-// Lazy load heavy components
+import ClarificationReportEditor from '../../../components/ClarificationReportEditor';// Lazy load heavy components
 const VersionHistory = lazy(() => import('../../../components/VersionHistory'));
 const Chatbot = lazy(() => import('../../../components/Saarthi'));
 
@@ -99,6 +98,10 @@ function ReviewProposalContent() {
   const [isSubmittingExpertSelection, setIsSubmittingExpertSelection] = useState(false);
   const [isSubmittingExpertReport, setIsSubmittingExpertReport] = useState(false);
   const [isExpertReportMode, setIsExpertReportMode] = useState(false);
+  
+  // Clarification report state
+  const [showClarificationEditor, setShowClarificationEditor] = useState(false);
+  const [clarificationReports, setClarificationReports] = useState([]);
 
   // Role checks
   const userRoles = user?.roles || [];
@@ -147,6 +150,14 @@ function ReviewProposalContent() {
             reviewer: allReports.filter(r => r.reportType !== 'AI_REVIEW')
           };
           setReports(categorizedReports);
+        } catch (err) {
+          console.warn('Could not load reports:', err);
+        }
+        
+        // Fetch clarification reports
+        try {
+          const clarificationResponse = await apiClient.get(`/api/proposals/${id}/clarification-reports`);
+          setClarificationReports(clarificationResponse.data.data || []);
           
           // Check if user has already made a decision for current status
           // Get the report type that corresponds to current status
@@ -313,6 +324,17 @@ function ReviewProposalContent() {
     setIsExpertReportMode(true);
     setShowReportModal(true);
   }, []);
+
+  // Handle clarification report submission
+  const handleClarificationReportSubmit = useCallback(async () => {
+    try {
+      // Refresh clarification reports list
+      const clarificationResponse = await apiClient.get(`/api/proposals/${id}/clarification-reports`);
+      setClarificationReports(clarificationResponse.data.data || []);
+    } catch (err) {
+      console.error('Error refreshing clarification reports:', err);
+    }
+  }, [id]);
 
   // Handle expert report submission (separate from committee decisions)
   const handleExpertReportSubmit = useCallback(async (reportData) => {
@@ -538,6 +560,7 @@ function ReviewProposalContent() {
                 userDocuments={reports.user}
                 aiReports={reports.ai}
                 reviewerReports={reports.reviewer}
+                clarificationReports={clarificationReports}
                 proposalId={id}
                 theme={theme}
               />
@@ -555,6 +578,32 @@ function ReviewProposalContent() {
             {/* Right Side - Decision Panel */}
             <div className="lg:col-span-1">
               <div className="sticky top-8 space-y-6">
+                {/* Clarification Report Button - For Committee Members Only */}
+                {isCommitteeMember && (
+                  <div className={`${cardBg} border ${borderColor} rounded-lg p-6`}>
+                    <h3 className={`text-lg font-semibold ${textColor} mb-3`}>Clarification Report</h3>
+                    <p className={`text-sm ${textColor} mb-4`}>
+                      Request clarifications or corrections from the proposal creator
+                    </p>
+                    <button
+                      onClick={() => setShowClarificationEditor(true)}
+                      className="w-full px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all duration-200 font-semibold flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Create Clarification Report
+                    </button>
+                    
+                    {/* Show existing reports count */}
+                    {clarificationReports.length > 0 && (
+                      <div className={`mt-3 text-sm ${textColor}`}>
+                        <span className="font-semibold">{clarificationReports.length}</span> report(s) created
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Review Decision Panel - Handles both committee decisions and expert report submissions */}
                 <ReviewDecisionPanel
                   userRoles={userRoles}
@@ -668,6 +717,17 @@ function ReviewProposalContent() {
         theme={theme}
         onClose={() => setShowSuccessModal(false)}
       />
+
+      {/* Clarification Report Editor */}
+      {showClarificationEditor && (
+        <ClarificationReportEditor
+          proposalId={id}
+          proposalCode={proposal.proposalCode}
+          committeeType={isCMPDI ? 'CMPDI' : isTSSRC ? 'TSSRC' : 'SSRC'}
+          onClose={() => setShowClarificationEditor(false)}
+          onSubmit={handleClarificationReportSubmit}
+        />
+      )}
     </div>
   );
 }

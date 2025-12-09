@@ -129,13 +129,24 @@ export const updateProposalStatus = asyncHandler(async (req, res) => {
   console.log(`[AUTO-ASSIGN] Collaborators for ${proposal.proposalCode}:`, collaboratorCounts);
 
   // Send notification email (use final status after any auto-transition)
-  await emailService.sendStatusChangeEmail(
-    proposal.createdBy.email,
-    proposal.createdBy.fullName,
-    proposal.proposalCode,
-    oldStatus,
-    proposal.status
-  );
+  try {
+    await emailService.sendStatusUpdateEmail(
+      proposal.createdBy.email,
+      proposal.createdBy.fullName,
+      {
+        proposalCode: proposal.proposalCode,
+        title: proposal.title,
+        projectArea: proposal.projectArea,
+        submittedDate: proposal.createdAt
+      },
+      oldStatus,
+      proposal.status,
+      notes || 'Status updated by committee'
+    );
+  } catch (emailError) {
+    console.error('[EMAIL ERROR] Failed to send status update email:', emailError);
+    // Don't fail the request if email fails
+  }
 
   // Log activity (use the original decision status for logging)
   await activityLogger.log({
@@ -284,13 +295,24 @@ export const selectExpertReviewers = asyncHandler(async (req, res) => {
   }
 
   // Send notification email to PI
-  await emailService.sendStatusChangeEmail(
-    proposal.createdBy.email,
-    proposal.createdBy.fullName,
-    proposal.proposalCode,
-    oldStatus,
-    'CMPDI_EXPERT_REVIEW'
-  );
+  try {
+    await emailService.sendStatusUpdateEmail(
+      proposal.createdBy.email,
+      proposal.createdBy.fullName,
+      {
+        proposalCode: proposal.proposalCode,
+        title: proposal.title,
+        projectArea: proposal.projectArea,
+        submittedDate: proposal.createdAt
+      },
+      oldStatus,
+      'CMPDI_EXPERT_REVIEW',
+      notes || `Sent for expert review with ${reviewers.length} reviewer(s)`
+    );
+  } catch (emailError) {
+    console.error('[EMAIL ERROR] Failed to send status update email:', emailError);
+    // Don't fail the request if email fails
+  }
 
   // Log activity
   await activityLogger.log({

@@ -26,6 +26,20 @@ import {
   getAIValidationData,
   getAIEvaluationData
 } from '../controllers/aiReportController.js';
+import {
+  createClarificationReport,
+  getClarificationReports,
+  getClarificationReportById,
+  updateClarificationReport,
+  uploadSealImage,
+  removeSealImage,
+  uploadEmbeddedImage,
+  removeEmbeddedImage,
+  submitClarificationReport,
+  exportReportPDF,
+  exportReportDOCX,
+  deleteClarificationReport
+} from '../controllers/clarificationReportController.js';
 import { authenticate, authenticateBeacon, optionalAuthenticate } from '../middleware/auth.js';
 import { upload, uploadFormIPdf } from '../middleware/upload.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -80,5 +94,9 @@ router.delete('/:proposalCode/formi', deleteFormI);
 
 // Expert review status update
 router.patch('/:proposalId/review-status', updateReviewStatus);
+
+// Clarification reports routes
+router.post('/:proposalId/clarification-reports', createClarificationReport);
+router.get('/:proposalId/clarification-reports', getClarificationReports);
 
 export default router;
