@@ -195,13 +195,6 @@ export default function AIEvaluationReport() {
           .no-print { display: none !important; }
           body { background: white; }
           .page { box-shadow: none !important; margin: 0 !important; page-break-after: always; }
-          
-          /* Ensure bar chart backgrounds are visible when printing */
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
         }
         @page {
           size: A4;

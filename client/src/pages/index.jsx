@@ -1306,6 +1306,91 @@ export default function Home() {
           </div>
         </div>
       </section>
+      {/* Our Ministers Section */}
+      <section id="leadership" className="py-8 bg-slate-900 relative overflow-hidden">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px]"></div>
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-blue-600 blur-[100px] opacity-20"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-purple-600 blur-[100px] opacity-20"></div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 relative z-10">
+          <div className="text-center mb-6">
+            <h2 className="text-4xl font-bold text-white mb-4">Leadership</h2>
+            <p className="text-slate-400 max-w-2xl mx-auto">Guiding the nation towards energy security and sustainable development.</p>
+          </div>
+
+          <div className="grid lg:grid-cols-12 gap-6 items-center">
+            {/* Prime Minister - Center/Left Focus */}
+            <div className="lg:col-span-5 text-center lg:text-left">
+              <div className="relative inline-block group">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full blur opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
+                <div className="w-72 h-72 bg-slate-800 rounded-full p-2 relative z-10 mx-auto lg:mx-0">
+                  <img
+                    src="/images/narendra modi.jpg"
+                    alt="Hon'ble Prime Minister Shri Narendra Modi"
+                    className="w-full h-full object-cover rounded-full border-4 border-slate-700 shadow-2xl"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-2">
+                <h3 className="text-3xl font-bold text-white">Shri Narendra Modi</h3>
+                <p className="text-blue-400 font-medium text-lg uppercase tracking-wider">Hon'ble Prime Minister of India</p>
+              </div>
+
+              <div className="mt-6 flex items-center justify-center lg:justify-start gap-4">
+                <a href="https://www.pmindia.gov.in/en/" target="_blank" rel="noopener noreferrer" className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-medium transition-colors backdrop-blur-sm border border-white/10">
+                  View Portfolio
+                </a>
+                <div className="flex gap-2">
+                  {[
+                    { icon: "M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z", link: "https://x.com/pmoindia" },
+                    { icon: "M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z", link: "https://www.facebook.com/PMOIndia" }
+                  ].map((social, idx) => (
+                    <a key={idx} href={social.link} target="_blank" rel="noopener noreferrer" className="w-9 h-9 bg-white/5 hover:bg-blue-500 rounded-full flex items-center justify-center text-slate-300 hover:text-white transition-all duration-300">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d={social.icon} />
+                      </svg>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Other Ministers - Cards */}
+            <div className="lg:col-span-7 space-y-6">
+              {[
+                { name: "Shri G. Kishan Reddy", role: "Hon'ble Union Minister", dept: "Coal and Mines, Govt. of India", img: "/images/kishan reddy.jpg", link: "https://www.coal.nic.in/index.php/minister/shri-g-kishan-reddy" },
+                { name: "Shri Satish Chandra Dubey", role: "Hon'ble Minister of State", dept: "Coal and Mines, Govt. of India", img: "/images/satish chandra dubey.jpg", link: "https://www.coal.nic.in/index.php/minister/shri-satish-chandra-dubey" }
+              ].map((minister, idx) => (
+                <a key={idx} href={minister.link} target="_blank" rel="noopener noreferrer" className="block group">
+                  <div className="bg-slate-800/50 backdrop-blur-md border border-slate-700 rounded-2xl p-6 flex items-center gap-6 hover:bg-slate-800 transition-all duration-300 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10">
+                    <div className="w-24 h-24 shrink-0">
+                      <img
+                        src={minister.img}
+                        alt={minister.name}
+                        className="w-full h-full object-cover rounded-xl shadow-lg group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-blue-400 font-medium text-sm mb-1">{minister.role}</p>
+                      <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-300 transition-colors">{minister.name}</h3>
+                      <p className="text-slate-400 text-sm">{minister.dept}</p>
+                    </div>
+                    <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Gallery Section */}
       <section className="py-14 bg-white relative">

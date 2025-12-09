@@ -14,6 +14,7 @@
     "@emoji-mart/data": "^1.2.1",
     "@faker-js/faker": "^10.1.0",
     "@hocuspocus/provider": "^3.4.0",
+    "@pinecone-database/pinecone": "^6.1.3",
     "@platejs/ai": "^51.1.1",
     "@platejs/autoformat": "^51.0.0",
     "@platejs/basic-nodes": "^51.0.0",

@@ -10,7 +10,8 @@ import {
     Shield,
     Users,
     Info,
-    X
+    X,
+    Gauge
 } from 'lucide-react';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
@@ -23,6 +24,7 @@ const MENU_ITEMS = [
     { id: 'finance', label: 'Finance', icon: DollarSign, path: '/admin/finance', section: 'finance' },
     { id: 'gismap', label: 'GIS Map', icon: Globe, path: '/admin/gismap', section: 'gismap' },
     { id: 'roles', label: 'Roles', icon: Shield, path: '/admin/roles', section: 'roles' },
+    { id: 'weightage', label: 'Weightage Meter', icon: Gauge, path: '/admin/weightage', section: 'weightage' },
 ];
 
 import CollapsedSidebarControlPanel from '../Components/CollapsedSidebarControlPanel';

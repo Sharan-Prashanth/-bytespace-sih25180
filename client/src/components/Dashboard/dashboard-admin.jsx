@@ -15,6 +15,7 @@ import AdminProposalsSection from "./Admin/Sections/AdminProposalsSection";
 import RolesSection from "./Sections/RolesSection";
 import StaffSection from "./Sections/StaffSection";
 import UsersSection from "./Sections/UsersSection";
+import WeightageMeterSection from "./Sections/WeightageMeterSection";
 
 function AdminDashboardContent() {
   const { user, logout } = useAuth();
@@ -159,6 +160,8 @@ function AdminDashboardContent() {
         return <GISMapSection theme={theme} />;
       case 'roles':
         return <RolesSection theme={theme} />;
+      case 'weightage':
+        return <WeightageMeterSection theme={theme} />;
       default:
         return <OverviewSection />;
     }
