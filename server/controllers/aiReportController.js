@@ -237,3 +237,93 @@ export const generateAIReport = asyncHandler(async (req, res) => {
     });
   }
 });
+
+/**
+ * @route   GET /api/proposals/:proposalId/ai-validation
+ * @desc    Fetch latest AI validation report from MongoDB
+ * @access  Private
+ */
+export const getAIValidationData = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Filter validation reports
+  const validationReports = proposal.aiReports?.filter(
+    report => report.reportType === 'validation'
+  ) || [];
+
+  if (validationReports.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'No validation report found for this proposal'
+    });
+  }
+
+  // Get the latest validation report (last element)
+  const latestReport = validationReports[validationReports.length - 1];
+
+  res.json({
+    success: true,
+    data: {
+      proposalId: proposal._id,
+      proposalCode: proposal.proposalCode,
+      version: latestReport.version,
+      reportType: latestReport.reportType,
+      reportData: latestReport.reportData,
+      generatedAt: latestReport.generatedAt
+    }
+  });
+});
+
+/**
+ * @route   GET /api/proposals/:proposalId/ai-evaluation
+ * @desc    Fetch latest AI evaluation report from MongoDB
+ * @access  Private
+ */
+export const getAIEvaluationData = asyncHandler(async (req, res) => {
+  const { proposalId } = req.params;
+  
+  const proposal = await findProposal(proposalId);
+  
+  if (!proposal) {
+    return res.status(404).json({
+      success: false,
+      message: 'Proposal not found'
+    });
+  }
+
+  // Filter evaluation reports
+  const evaluationReports = proposal.aiReports?.filter(
+    report => report.reportType === 'evaluation'
+  ) || [];
+
+  if (evaluationReports.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'No evaluation report found for this proposal'
+    });
+  }
+
+  // Get the latest evaluation report (last element)
+  const latestReport = evaluationReports[evaluationReports.length - 1];
+
+  res.json({
+    success: true,
+    data: {
+      proposalId: proposal._id,
+      proposalCode: proposal.proposalCode,
+      version: latestReport.version,
+      reportType: latestReport.reportType,
+      reportData: latestReport.reportData,
+      generatedAt: latestReport.generatedAt
+    }
+  });
+});

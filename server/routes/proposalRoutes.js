@@ -22,7 +22,9 @@ import {
 import {
   getAIReportData,
   getAIReportHTML,
-  generateAIReport
+  generateAIReport,
+  getAIValidationData,
+  getAIEvaluationData
 } from '../controllers/aiReportController.js';
 import { authenticate, authenticateBeacon, optionalAuthenticate } from '../middleware/auth.js';
 import { upload, uploadFormIPdf } from '../middleware/upload.js';
@@ -51,6 +53,8 @@ router.post('/:proposalId/discussions/resolve', authenticate, resolveDiscussion)
 // AI Report routes - public access for viewing HTML reports
 router.get('/:proposalId/ai-report/html', getAIReportHTML);
 router.get('/:proposalId/ai-report', authenticate, getAIReportData);
+router.get('/:proposalId/ai-validation', authenticate, getAIValidationData);
+router.get('/:proposalId/ai-evaluation', authenticate, getAIEvaluationData);
 router.post('/:proposalId/generate-ai-report', authenticate, generateAIReport);
 
 router.use(authenticate);

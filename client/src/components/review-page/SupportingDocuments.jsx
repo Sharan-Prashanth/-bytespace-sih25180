@@ -80,11 +80,9 @@ const SupportingDocuments = ({
   };
 
   const handleViewPdf = (url, title, isAIReport = false, proposalId = null) => {
-    // If it's an AI report, open the test.html template directly
-    if (isAIReport) {
-      const baseUrl = window.location.origin.replace(':3000', ':5000'); // Switch from client port to server port
-      const reportUrl = `${baseUrl}/template/test.html`;
-      window.open(reportUrl, '_blank');
+    // If it's an AI report, route to the ai-evaluation page
+    if (isAIReport && proposalId) {
+      window.open(`/proposal/ai-evaluation/${proposalId}`, '_blank');
       return;
     }
     
