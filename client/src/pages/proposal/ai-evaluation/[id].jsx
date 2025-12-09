@@ -89,13 +89,13 @@ export default function AIEvaluationReport() {
 
   const parseSWOTCategory = (text, categoryMarker) => {
     if (!text) return [];
-    const regex = new RegExp(categoryMarker + '[^\\n]*\\n\\n([\\s\\S]*?)(?=\\n\\n[SWOT] —|$)', 'i');
+    const regex = new RegExp(categoryMarker + '[^\\n]*\\n\\n([\\s\\S]*?)(?=\\n\\n[SWOT] —|\\n\\nNote:|$)', 'i');
     const match = text.match(regex);
     if (!match) return [];
     
     const content = match[1];
-    const lines = content.split(/\n/).map(l => l.trim()).filter(l => l.startsWith('*') || l.startsWith('-'));
-    return lines.map(l => l.replace(/^[\\*\\-]\\s*/, '').trim()).filter(Boolean);
+    const lines = content.split(/\n/).map(l => l.trim()).filter(l => l.startsWith('•') || l.startsWith('*') || l.startsWith('-'));
+    return lines.map(l => l.replace(/^[•\\*\\-]\\s*/, '').trim()).filter(Boolean);
   };
 
 
@@ -195,10 +195,50 @@ export default function AIEvaluationReport() {
   return (
     <>
       <style jsx global>{`
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
         @media print {
           .no-print { display: none !important; }
-          body { background: white; }
-          .page { box-shadow: none !important; margin: 0 !important; page-break-after: always; }
+          body { 
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .page { 
+            box-shadow: none !important; 
+            margin: 0 !important; 
+            page-break-after: always;
+            page-break-inside: avoid;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          /* Prevent breaking inside elements */
+          .border-2, .rounded-lg, .bg-white, 
+          table, tr, th, td,
+          .space-y-2 > div,
+          .space-y-3 > div,
+          .grid > div {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          /* Keep sections together */
+          .mb-5, .mb-4 {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          /* Ensure headers stay with content */
+          h1, h2, h3, h4, h5, h6 {
+            page-break-after: avoid;
+            break-after: avoid;
+          }
         }
         @page {
           size: A4;
@@ -206,7 +246,7 @@ export default function AIEvaluationReport() {
         }
       `}</style>
 
-      <div className="min-h-screen bg-[#555] p-5">
+      <div className="min-h-screen bg-white p-5">
         {/* Debug Toggle */}
         <button
           onClick={() => setShowJsonDebug(!showJsonDebug)}
@@ -340,22 +380,22 @@ export default function AIEvaluationReport() {
               {/* Main Content with Circles and Metrics */}
               <div className="grid grid-cols-[140px_1fr] gap-5 items-start mt-2">
                 {/* Left Circles */}
-                <div className="flex flex-col gap-5 items-start py-2 px-1">
-                  <div className="w-[88px] h-[88px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-md bg-white text-center border-8 border-[#ff9933]">
-                    <div className="text-xl leading-none">{Math.round(novelPct)}%</div>
-                    <div className="text-[11px] mt-2">Novelty</div>
+                <div className="flex flex-col gap-4 items-start py-2 px-1">
+                  <div className="w-[90px] h-[90px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-lg bg-white text-center" style={{ border: '8px solid #ff9933' }}>
+                    <div className="text-2xl leading-none font-black">{Math.round(novelPct)}%</div>
+                    <div className="text-[10px] mt-1 font-semibold">Novelty</div>
                   </div>
-                  <div className="w-[88px] h-[88px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-md bg-white text-center border-8 border-[#138808]">
-                    <div className="text-xl leading-none">{Math.round(feasPct)}%</div>
-                    <div className="text-[11px] mt-2">Feasibility</div>
+                  <div className="w-[90px] h-[90px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-lg bg-white text-center" style={{ border: '8px solid #138808' }}>
+                    <div className="text-2xl leading-none font-black">{Math.round(feasPct)}%</div>
+                    <div className="text-[10px] mt-1 font-semibold">Feasibility</div>
                   </div>
-                  <div className="w-[88px] h-[88px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-md bg-white text-center border-8 border-[#2b8fd6]">
-                    <div className="text-xl leading-none">{Math.round(costPct)}%</div>
-                    <div className="text-[11px] mt-2">Cost</div>
+                  <div className="w-[90px] h-[90px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-lg bg-white text-center" style={{ border: '8px solid #2b8fd6' }}>
+                    <div className="text-2xl leading-none font-black">{Math.round(costPct)}%</div>
+                    <div className="text-[10px] mt-1 font-semibold">Cost</div>
                   </div>
-                  <div className="w-[88px] h-[88px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-md bg-white text-center border-8 border-[#002855]">
-                    <div className="text-xl leading-none">{Math.round(delivPct)}%</div>
-                    <div className="text-[11px] mt-2">Deliverable</div>
+                  <div className="w-[90px] h-[90px] rounded-full flex items-center justify-center flex-col text-black font-extrabold shadow-lg bg-white text-center" style={{ border: '8px solid #002855' }}>
+                    <div className="text-2xl leading-none font-black">{Math.round(delivPct)}%</div>
+                    <div className="text-[10px] mt-1 font-semibold">Deliverable</div>
                   </div>
                 </div>
 
@@ -392,20 +432,30 @@ export default function AIEvaluationReport() {
               </div>
 
               {/* Vertical Bar Chart */}
-              <div className="flex gap-3 items-start mt-2">
+              <div className="flex gap-3 items-start mt-4 print:block">
                 {/* Y-axis labels */}
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col justify-between print:float-left" style={{ height: '180px' }}>
                   {['A+', 'A', 'B', 'C'].map((label, idx) => (
                     <div
                       key={label}
-                      className={`w-11 h-9 leading-9 text-center rounded-lg font-extrabold text-sm shadow-md ${
-                        (overallScore >= 85 && label === 'A+') ||
-                        (overallScore >= 60 && overallScore < 85 && label === 'A') ||
-                        (overallScore >= 30 && overallScore < 60 && label === 'B') ||
-                        (overallScore < 30 && label === 'C')
-                          ? 'bg-[#ff9933] text-white shadow-lg'
-                          : 'bg-gray-600 text-white'
-                      }`}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '8px',
+                        fontWeight: '800',
+                        fontSize: '14px',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                        backgroundColor: (overallScore >= 85 && label === 'A+') ||
+                          (overallScore >= 60 && overallScore < 85 && label === 'A') ||
+                          (overallScore >= 30 && overallScore < 60 && label === 'B') ||
+                          (overallScore < 30 && label === 'C')
+                          ? '#ff9933'
+                          : '#4b5563',
+                        color: 'white'
+                      }}
                     >
                       {label}
                     </div>
@@ -413,30 +463,65 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Chart area */}
-                <div className="flex-1 flex items-end gap-5 p-2 h-[200px] relative">
+                <div 
+                  className="flex-1 flex items-end gap-3 p-3 rounded-lg print:ml-12" 
+                  style={{ 
+                    height: '180px', 
+                    backgroundColor: '#f5f5f5',
+                    WebkitPrintColorAdjust: 'exact',
+                    printColorAdjust: 'exact'
+                  }}
+                >
                   {[
-                    { label: 'Novelty', value: novelPct, color: 'linear-gradient(180deg,#1e90ff,#0033aa)' },
-                    { label: 'Feasibility', value: feasPct, color: 'linear-gradient(180deg,#009688,#00695c)' },
-                    { label: 'Cost', value: costPct, color: 'linear-gradient(180deg,#f0b429,#c77a00)' },
-                    { label: 'AI Score', value: aiScore, color: 'linear-gradient(180deg,#00c8b8,#007f5f)' },
-                    { label: 'Benefit', value: benefitScore, color: 'linear-gradient(180deg,#7e57c2,#5e35b1)' },
-                    { label: 'Deliverables', value: delivPct, color: 'linear-gradient(180deg,#d81b60,#8e0f3a)' }
+                    { label: 'Novelty', value: novelPct, color: '#1e90ff' },
+                    { label: 'Feasibility', value: feasPct, color: '#009688' },
+                    { label: 'Cost', value: costPct, color: '#f0b429' },
+                    { label: 'AI Score', value: aiScore, color: '#00c8b8' },
+                    { label: 'Benefit', value: benefitScore, color: '#7e57c2' },
+                    { label: 'Deliverables', value: delivPct, color: '#d81b60' }
                   ].map((bar, idx) => (
-                    <div key={idx} className="w-[90px] flex flex-col items-center gap-2">
-                      <div className="w-full flex items-end relative" style={{ height: '160px' }}>
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+                      <div className="w-full flex items-end justify-center" style={{ height: '140px' }}>
                         <div
                           className="w-full rounded-t-lg relative"
                           style={{
-                            height: `${(bar.value / 100) * 160}px`,
-                            background: bar.color
+                            height: `${Math.max((bar.value / 100) * 140, 5)}px`,
+                            backgroundColor: bar.color,
+                            minHeight: '5px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            WebkitPrintColorAdjust: 'exact',
+                            printColorAdjust: 'exact'
                           }}
                         >
-                          <div className="absolute left-1/2 top-2 transform -translate-x-1/2 text-white font-black text-sm drop-shadow-md">
+                          <div 
+                            style={{
+                              position: 'absolute',
+                              left: '50%',
+                              top: '4px',
+                              transform: 'translateX(-50%)',
+                              color: 'white',
+                              fontWeight: '900',
+                              fontSize: '11px',
+                              textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                              WebkitPrintColorAdjust: 'exact',
+                              printColorAdjust: 'exact'
+                            }}
+                          >
                             {Math.round(bar.value)}%
                           </div>
                         </div>
                       </div>
-                      <div className="font-bold text-xs text-[#002855] text-center">{bar.label}</div>
+                      <div 
+                        style={{
+                          fontWeight: '700',
+                          fontSize: '10px',
+                          color: '#002855',
+                          textAlign: 'center',
+                          lineHeight: '1.2'
+                        }}
+                      >
+                        {bar.label}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -495,71 +580,96 @@ export default function AIEvaluationReport() {
             {/* PAGE 3 - SWOT Analysis */}
             <div className="page w-[214mm] min-h-[297mm] mx-auto my-2 bg-gradient-to-b from-[#fff3e6] via-white to-[#eef8f0] p-12 relative shadow-lg border-l-4 border-l-[#ff9933] border-r-4 border-r-[#138808]">
               <div className="bg-gradient-to-b from-[#fff3e6] via-white to-[#eef8f0] text-black p-5 rounded-sm shadow-sm border border-gray-100">
-                <div className="bg-gradient-to-r from-gray-100 to-white text-[#002855] p-4 rounded-md text-center font-black tracking-wider text-lg border border-gray-200 mb-3">
+                <div className="bg-gradient-to-r from-gray-100 to-white text-[#002855] p-4 rounded-md text-center font-black tracking-wider text-lg border border-gray-200 mb-5">
                   SWOT ANALYSIS
                 </div>
 
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3">
                   {/* Strengths */}
-                  <div className="flex gap-5 items-center">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#ff9933] to-[#e67e22] flex-shrink-0 flex items-center justify-center text-white font-black text-3xl shadow-lg border-2 border-white">
+                  <div className="flex gap-3 items-start" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#ff9933] to-[#e67e22] flex-shrink-0 flex items-center justify-center text-white font-black text-2xl shadow-lg">
                       S
                     </div>
-                    <div className="flex-1 bg-white border border-[#ffe0b2] rounded-lg p-3 shadow-sm">
-                      <div className="text-[#e65100] font-extrabold text-xs uppercase mb-2 tracking-wide">Strengths</div>
-                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
-                        {strengths.slice(0, 6).map((item, i) => (
-                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
-                        ))}
-                      </ul>
+                    <div className="flex-1 bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                      <div className="text-[#ff9933] font-bold text-xs uppercase mb-2 tracking-wide">Strengths</div>
+                      <div className="text-gray-600 text-xs leading-relaxed italic">
+                        {strengths.length > 0 ? (
+                          strengths.map((item, i) => (
+                            <div key={i} className="mb-1">{item}</div>
+                          ))
+                        ) : (
+                          <span>No strengths identified</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Weaknesses */}
-                  <div className="flex gap-5 items-center">
-                    <div className="w-16 h-16 rounded-full bg-white flex-shrink-0 flex items-center justify-center text-[#000080] font-black text-3xl shadow-md border-2 border-gray-300">
+                  <div className="flex gap-3 items-start" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                    <div className="w-14 h-14 rounded-full bg-white flex-shrink-0 flex items-center justify-center text-[#000080] font-black text-2xl shadow-md border-2 border-gray-300">
                       W
                     </div>
-                    <div className="flex-1 bg-white border border-gray-300 rounded-lg p-3 shadow-sm">
-                      <div className="text-black font-extrabold text-xs uppercase mb-2 tracking-wide">Weaknesses</div>
-                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
-                        {weaknesses.slice(0, 6).map((item, i) => (
-                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
-                        ))}
-                      </ul>
+                    <div className="flex-1 bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                      <div className="text-black font-bold text-xs uppercase mb-2 tracking-wide">Weaknesses</div>
+                      <div className="text-gray-600 text-xs leading-relaxed italic">
+                        {weaknesses.length > 0 ? (
+                          weaknesses.map((item, i) => (
+                            <div key={i} className="mb-1">{item}</div>
+                          ))
+                        ) : (
+                          <span>No weaknesses identified</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Opportunities */}
-                  <div className="flex gap-5 items-center">
-                    <div className="w-16 h-16 rounded-full bg-white flex-shrink-0 flex items-center justify-center text-[#000080] font-black text-3xl shadow-md border-2 border-gray-300">
+                  <div className="flex gap-3 items-start" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                    <div className="w-14 h-14 rounded-full bg-white flex-shrink-0 flex items-center justify-center text-[#000080] font-black text-2xl shadow-md border-2 border-gray-300">
                       O
                     </div>
-                    <div className="flex-1 bg-white border border-gray-300 rounded-lg p-3 shadow-sm">
-                      <div className="text-[#1b5e20] font-extrabold text-xs uppercase mb-2 tracking-wide">Opportunities</div>
-                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
-                        {opportunities.slice(0, 6).map((item, i) => (
-                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
-                        ))}
-                      </ul>
+                    <div className="flex-1 bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                      <div className="text-[#138808] font-bold text-xs uppercase mb-2 tracking-wide">Opportunities</div>
+                      <div className="text-gray-600 text-xs leading-relaxed italic">
+                        {opportunities.length > 0 ? (
+                          opportunities.map((item, i) => (
+                            <div key={i} className="mb-1">{item}</div>
+                          ))
+                        ) : (
+                          <span>No opportunities identified</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Threats */}
-                  <div className="flex gap-5 items-center">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#138808] to-[#0e6b06] flex-shrink-0 flex items-center justify-center text-white font-black text-3xl shadow-lg border-2 border-white">
+                  <div className="flex gap-3 items-start" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#138808] to-[#0e6b06] flex-shrink-0 flex items-center justify-center text-white font-black text-2xl shadow-lg">
                       T
                     </div>
-                    <div className="flex-1 bg-white border border-[#c8e6c9] rounded-lg p-3 shadow-sm">
-                      <div className="text-[#1b5e20] font-extrabold text-xs uppercase mb-2 tracking-wide">Threats</div>
-                      <ul className="m-0 p-0 list-none leading-relaxed text-black text-xs">
-                        {threats.slice(0, 6).map((item, i) => (
-                          <li key={i} className="mb-2 pl-4 relative">{item || '—'}</li>
-                        ))}
-                      </ul>
+                    <div className="flex-1 bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                      <div className="text-[#138808] font-bold text-xs uppercase mb-2 tracking-wide">Threats</div>
+                      <div className="text-gray-600 text-xs leading-relaxed italic">
+                        {threats.length > 0 ? (
+                          threats.map((item, i) => (
+                            <div key={i} className="mb-1">{item}</div>
+                          ))
+                        ) : (
+                          <span>No threats identified</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Note Section */}
+                {swotString.toLowerCase().includes('note:') && (
+                  <div className="mt-4 bg-[#e3f2fd] border border-[#90caf9] rounded-lg p-3">
+                    <p className="text-xs text-[#1565c0] leading-relaxed">
+                      <strong className="font-semibold">Note:</strong> {swotString.substring(swotString.toLowerCase().indexOf('note:') + 5).trim()}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
@@ -568,7 +678,7 @@ export default function AIEvaluationReport() {
                   <strong>Ministry of Coal, Government of India</strong> · Confidential · For internal evaluation purposes only.
                 </div>
                 <div className="text-right">
-                  <div className="mt-2">Page 3 of 4</div>
+                  <div className="mt-2">Page 3 of 7</div>
                 </div>
               </div>
             </div>
@@ -604,9 +714,9 @@ export default function AIEvaluationReport() {
               </div>
 
               {/* SCAMPER Cards Grid */}
-              <div className="space-y-3">
+              <div className="space-y-3" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                 {/* Substitute */}
-                <div className={`border-2 rounded-lg p-3 ${scamperSubstitute.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`}>
+                <div className={`border-2 rounded-lg p-3 ${scamperSubstitute.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                   <div className="flex items-start gap-3">
                     <div className={`w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center font-black text-2xl ${scamperSubstitute.present === 'Yes' ? 'bg-gradient-to-br from-[#138808] to-[#0e6b06] text-white' : 'bg-gray-300 text-gray-600'}`}>
                       S
@@ -631,7 +741,7 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Combine */}
-                <div className={`border-2 rounded-lg p-3 ${scamperCombine.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`}>
+                <div className={`border-2 rounded-lg p-3 ${scamperCombine.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                   <div className="flex items-start gap-3">
                     <div className={`w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center font-black text-2xl ${scamperCombine.present === 'Yes' ? 'bg-gradient-to-br from-[#138808] to-[#0e6b06] text-white' : 'bg-gray-300 text-gray-600'}`}>
                       C
@@ -656,7 +766,7 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Adapt */}
-                <div className={`border-2 rounded-lg p-3 ${scamperAdapt.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`}>
+                <div className={`border-2 rounded-lg p-3 ${scamperAdapt.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                   <div className="flex items-start gap-3">
                     <div className={`w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center font-black text-2xl ${scamperAdapt.present === 'Yes' ? 'bg-gradient-to-br from-[#138808] to-[#0e6b06] text-white' : 'bg-gray-300 text-gray-600'}`}>
                       A
@@ -681,7 +791,7 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Modify */}
-                <div className={`border-2 rounded-lg p-3 ${scamperModify.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`}>
+                <div className={`border-2 rounded-lg p-3 ${scamperModify.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                   <div className="flex items-start gap-3">
                     <div className={`w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center font-black text-2xl ${scamperModify.present === 'Yes' ? 'bg-gradient-to-br from-[#138808] to-[#0e6b06] text-white' : 'bg-gray-300 text-gray-600'}`}>
                       M
@@ -706,7 +816,7 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Put to Other Use */}
-                <div className={`border-2 rounded-lg p-3 ${scamperPutToUse.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`}>
+                <div className={`border-2 rounded-lg p-3 ${scamperPutToUse.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                   <div className="flex items-start gap-3">
                     <div className={`w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center font-black text-2xl ${scamperPutToUse.present === 'Yes' ? 'bg-gradient-to-br from-[#138808] to-[#0e6b06] text-white' : 'bg-gray-300 text-gray-600'}`}>
                       P
@@ -731,7 +841,7 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Eliminate */}
-                <div className={`border-2 rounded-lg p-3 ${scamperEliminate.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`}>
+                <div className={`border-2 rounded-lg p-3 ${scamperEliminate.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                   <div className="flex items-start gap-3">
                     <div className={`w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center font-black text-2xl ${scamperEliminate.present === 'Yes' ? 'bg-gradient-to-br from-[#138808] to-[#0e6b06] text-white' : 'bg-gray-300 text-gray-600'}`}>
                       E
@@ -756,7 +866,7 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Reverse / Rearrange */}
-                <div className={`border-2 rounded-lg p-3 ${scamperReverse.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`}>
+                <div className={`border-2 rounded-lg p-3 ${scamperReverse.present === 'Yes' ? 'border-[#138808] bg-[#f1f8f4]' : 'border-gray-300 bg-gray-50'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                   <div className="flex items-start gap-3">
                     <div className={`w-16 h-16 rounded-full flex-shrink-0 flex items-center justify-center font-black text-2xl ${scamperReverse.present === 'Yes' ? 'bg-gradient-to-br from-[#138808] to-[#0e6b06] text-white' : 'bg-gray-300 text-gray-600'}`}>
                       R
@@ -814,12 +924,12 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Section 1: AI Detection - Flagged Lines */}
-                <div className="mb-5">
+                <div className="mb-5" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                   <div className="text-sm font-bold text-[#002855] mb-3 border-b-2 border-[#ff9933] pb-1">1. AI-Generated Content Detection</div>
                   {aiFlaggedLines && aiFlaggedLines.length > 0 ? (
                     <div className="space-y-2">
                       {aiFlaggedLines.map((line, idx) => (
-                        <div key={idx} className="bg-[#fff0f5] border-l-4 border-[#d81b60] p-3 rounded">
+                        <div key={idx} className="bg-[#fff0f5] border-l-4 border-[#d81b60] p-3 rounded" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                           <div className="flex items-start gap-2">
                             <span className="bg-[#d81b60] text-white text-[10px] font-bold px-2 py-1 rounded">FLAGGED</span>
                             <div className="flex-1 text-xs text-black leading-relaxed">
@@ -842,14 +952,14 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Section 2: Cost Validation - Overview */}
-                <div className="mb-5">
+                <div className="mb-5" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                 <div className="text-sm font-bold text-[#002855] mb-3 border-b-2 border-[#ff9933] pb-1">2. S&T Guidelines Cost Compliance</div>
                 
                   <div className="text-sm font-bold text-[#002855] mb-3 border-b-2 border-[#ff9933] pb-1">2. S&T Guidelines Cost Compliance</div>
                   
                   {/* Overall Status */}
                   {costValidation.overall_comments && (
-                    <div className={`p-3 rounded mb-3 border-2 ${costValidation.compliant ? 'bg-[#eef8f0] border-[#138808]' : 'bg-[#fff0f5] border-[#d81b60]'}`}>
+                    <div className={`p-3 rounded mb-3 border-2 ${costValidation.compliant ? 'bg-[#eef8f0] border-[#138808]' : 'bg-[#fff0f5] border-[#d81b60]'}`} style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                       <div className={`font-bold text-xs mb-2 ${costValidation.compliant ? 'text-[#138808]' : 'text-[#d81b60]'}`}>
                         Overall Status: {costValidation.compliant ? '✓ COMPLIANT' : '✗ NON-COMPLIANT'}
                       </div>
@@ -896,7 +1006,7 @@ export default function AIEvaluationReport() {
                 </div>
 
                 {/* Category Validations */}
-                <div className="space-y-3">
+                <div className="space-y-3" style={{ pageBreakInside: 'avoid' }}>
                   {Object.entries(categoryValidations).map(([category, validation]) => {
                     const isCompliant = validation.compliant === true;
                     const isNonCompliant = validation.compliant === false;
@@ -925,7 +1035,18 @@ export default function AIEvaluationReport() {
                     }
 
                     return (
-                      <div key={category} className="border-2 rounded p-3" style={{ borderColor, backgroundColor: bgColor }}>
+                      <div 
+                        key={category} 
+                        className="border-2 rounded p-3" 
+                        style={{ 
+                          borderColor, 
+                          backgroundColor: bgColor,
+                          pageBreakInside: 'avoid',
+                          breakInside: 'avoid',
+                          WebkitPrintColorAdjust: 'exact',
+                          printColorAdjust: 'exact'
+                        }}
+                      >
                         <div className="flex items-start justify-between mb-2">
                           <div className="text-xs font-bold text-[#002855] uppercase">{category.replace(/_/g, ' ')}</div>
                           <span className="px-2 py-1 rounded text-[9px] font-bold text-white" style={{ backgroundColor: badgeColor }}>
@@ -1003,16 +1124,34 @@ export default function AIEvaluationReport() {
                     <div className="text-xs font-bold text-[#002855] mb-2">Global Research Citations ({novelCitationsGlobal.length})</div>
                     <div className="space-y-2">
                       {novelCitationsGlobal.map((citation, idx) => (
-                        <div key={idx} className="bg-white border border-[#002855] rounded p-3">
+                        <div key={idx} className="bg-white border border-[#002855] rounded p-3" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <div className="text-[11px] font-bold text-[#002855] flex-1">{citation.title}</div>
                             {citation.year && (
                               <span className="text-[10px] bg-[#002855] text-white px-2 py-0.5 rounded font-bold">{citation.year}</span>
                             )}
                           </div>
-                          {citation.similarity !== undefined && (
-                            <div className="text-[10px] text-black mb-1">
-                              <strong>Similarity Score:</strong> {Math.round(citation.similarity * 100)}%
+                          {(citation.similarity !== undefined || citation.uniqueness !== undefined) && (
+                            <div className="text-[10px] text-black mb-1 flex gap-3">
+                              {citation.similarity !== undefined && (
+                                <span>
+                                  <strong>Similarity:</strong> {typeof citation.similarity === 'number' && citation.similarity > 1 
+                                    ? Math.round(citation.similarity) 
+                                    : Math.round(citation.similarity * 100)}%
+                                </span>
+                              )}
+                              {citation.uniqueness !== undefined && (
+                                <span>
+                                  <strong>Uniqueness:</strong> {typeof citation.uniqueness === 'number' && citation.uniqueness > 1 
+                                    ? Math.round(citation.uniqueness) 
+                                    : Math.round(citation.uniqueness * 100)}%
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {citation.uniqueness_snippet && (
+                            <div className="text-[10px] text-[#138808] mb-1 italic">
+                              {citation.uniqueness_snippet}
                             </div>
                           )}
                           {citation.url && (
@@ -1040,7 +1179,7 @@ export default function AIEvaluationReport() {
                     <div className="text-xs font-bold text-[#002855] mb-2">Internal Citations ({novelCitationsInternal.length})</div>
                     <div className="space-y-2">
                       {novelCitationsInternal.map((citation, idx) => (
-                        <div key={idx} className="bg-[#fff3e6] border border-[#ff9933] rounded p-3">
+                        <div key={idx} className="bg-[#fff3e6] border border-[#ff9933] rounded p-3" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                           <div className="text-[11px] font-bold text-[#002855] mb-1">{citation.title}</div>
                           {citation.similarity !== undefined && (
                             <div className="text-[10px] text-black">

@@ -7,6 +7,10 @@ import time
 import uuid
 import hashlib
 from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 router = APIRouter()
 
@@ -18,8 +22,7 @@ INTERNAL_ENDPOINTS = [
     "/analyze-novelty",
     "/technical_feasibility",
     "/benefit-check",
-    "/swot-agent",
-    "/scamper/analyze"
+    "/swot-agent"
 ]
 
 BASE_URL = "http://localhost:8000"   # Change if your internal services run elsewhere
@@ -33,11 +36,17 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_BUCKET = os.getenv("FULL_ANALYSIS_BUCKET", "full-analysis")
 SUPABASE_TABLE = "full_analysis_cache"  # Table to store analysis results
 supabase: Client | None = None
+
+print(f"[CONFIG] SUPABASE_URL: {SUPABASE_URL}")
+print(f"[CONFIG] SUPABASE_KEY: {'*' * 10 if SUPABASE_KEY else 'Not set'}")
+print(f"[CONFIG] SUPABASE_BUCKET: {SUPABASE_BUCKET}")
+
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("[CONFIG] Supabase client created successfully")
     except Exception as e:
-        print(f"Warning: could not create supabase client: {e}")
+        print(f"[CONFIG] Warning: could not create supabase client: {e}")
 
 
 def compute_file_hash(file_bytes: bytes) -> str:
@@ -89,10 +98,19 @@ def store_analysis_result(file_hash: str, filename: str, analysis_data: dict):
         print(f"[CACHE] Storing analysis in cache: {cache_filename}")
         print(f"[CACHE] Data size: {len(json_bytes)} bytes")
         
+        # Try to remove existing file first (to handle updates)
+        try:
+            supabase.storage.from_(SUPABASE_BUCKET).remove([cache_filename])
+            print(f"[CACHE] Removed existing cache file")
+        except Exception:
+            # File doesn't exist, that's fine
+            pass
+        
+        # Upload the new file
         result = supabase.storage.from_(SUPABASE_BUCKET).upload(
             cache_filename,
             json_bytes,
-            {"content-type": "application/json", "upsert": True}
+            file_options={"content-type": "application/json"}
         )
         
         print(f"[CACHE] Upload result: {result}")
@@ -153,20 +171,51 @@ async def full_analysis(pdf: UploadFile = File(...)):
                 if endpoint == "/swot-agent":
                     field_name = "form1_pdf"
 
+                print(f"[ANALYSIS] Calling {endpoint}...")
                 response = await client.post(
                     BASE_URL + endpoint,
                     files={field_name: (pdf.filename, pdf_bytes, "application/pdf")}
                 )
-                response.raise_for_status()
+                
+                # Check if response is successful
+                if response.status_code == 200:
+                    try:
+                        response_data = response.json()
+                        results.append({
+                            "endpoint": endpoint,
+                            "output": response_data,
+                            "status": "success"
+                        })
+                        print(f"[ANALYSIS] {endpoint} completed successfully")
+                    except Exception as json_error:
+                        results.append({
+                            "endpoint": endpoint,
+                            "error": f"Invalid JSON response: {str(json_error)}",
+                            "status": "error"
+                        })
+                else:
+                    # Non-200 response
+                    results.append({
+                        "endpoint": endpoint,
+                        "error": f"HTTP {response.status_code}: {response.text[:200]}",
+                        "status": "error"
+                    })
+                    print(f"[ANALYSIS] {endpoint} failed with status {response.status_code}")
+                    
+            except httpx.TimeoutException:
                 results.append({
                     "endpoint": endpoint,
-                    "output": response.json()
+                    "error": "Request timeout (300s limit exceeded)",
+                    "status": "timeout"
                 })
+                print(f"[ANALYSIS] {endpoint} timed out")
             except Exception as e:
                 results.append({
                     "endpoint": endpoint,
-                    "error": str(e)
+                    "error": str(e),
+                    "status": "error"
                 })
+                print(f"[ANALYSIS] {endpoint} error: {e}")
 
     response_data = {
         "filename": pdf.filename,
@@ -184,11 +233,15 @@ async def full_analysis(pdf: UploadFile = File(...)):
     
     # Store analysis result in Supabase bucket for future retrieval
     if supabase:
+        print(f"[CACHE] Attempting to store analysis in Supabase")
         cache_stored = store_analysis_result(file_hash, pdf.filename, response_data)
+        response_data["stored_in_cache"] = cache_stored
         if cache_stored:
-            response_data["stored_in_cache"] = True
-            print(f"[CACHE] Analysis stored in cache bucket")
+            print(f"[CACHE] Analysis successfully stored in cache bucket")
         else:
-            response_data["stored_in_cache"] = False
+            print(f"[CACHE] Failed to store analysis in cache")
+    else:
+        print(f"[CACHE] Supabase not configured - skipping cache storage")
+        response_data["stored_in_cache"] = False
     
     return latest_analysis_result

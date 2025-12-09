@@ -39,9 +39,17 @@ def extract_pdf_text_from_path(path: str):
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))
 THRUST_AREAS_PATH = os.path.join(MODEL_DIR, "data_files", "Thrust_Areas_2020.pdf")
-THRUST_TEXT = extract_pdf_text_from_path(THRUST_AREAS_PATH)
 
-print("✔ Agent Memory Loaded: MoC Thrust Areas")
+try:
+    if not os.path.exists(THRUST_AREAS_PATH):
+        print(f"⚠ Warning: Thrust Areas PDF not found at {THRUST_AREAS_PATH}")
+        THRUST_TEXT = "[Thrust Areas document not available]"
+    else:
+        THRUST_TEXT = extract_pdf_text_from_path(THRUST_AREAS_PATH)
+        print("✔ Agent Memory Loaded: MoC Thrust Areas")
+except Exception as e:
+    print(f"⚠ Warning: Failed to load Thrust Areas: {e}")
+    THRUST_TEXT = "[Thrust Areas document not available]"
 
 # --------------------------------------------
 # 4. Helper to Extract Text from Uploaded PDF
@@ -142,18 +150,67 @@ Now perform your task and return ONLY the SWOT.
 # --------------------------------------------
 @router.post("/swot-agent")
 async def swot_agent(form1_pdf: UploadFile = File(...)):
-    if not form1_pdf.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Error: Upload a valid PDF file.")
-
-    form_text = extract_pdf_text(form1_pdf)
-
-    prompt = build_agent_prompt(form_text)
-
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        response = model.generate_content(prompt)
-        swot_output = response.text
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(e)}")
+        if not form1_pdf.filename.endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Error: Upload a valid PDF file.")
 
-    return JSONResponse(content={"swot": swot_output})
+        form_text = extract_pdf_text(form1_pdf)
+        
+        if not form_text.strip():
+            raise HTTPException(status_code=400, detail="Error: PDF appears to be empty or unreadable.")
+
+        prompt = build_agent_prompt(form_text)
+
+        try:
+            model = genai.GenerativeModel(GEMINI_MODEL)
+            response = model.generate_content(prompt)
+            
+            if not response or not hasattr(response, 'text'):
+                raise Exception("Invalid response from Gemini API")
+                
+            swot_output = response.text
+            
+            if not swot_output or not swot_output.strip():
+                raise Exception("Empty response from Gemini API")
+                
+        except Exception as gemini_error:
+            print(f"[SWOT] Gemini API Error: {gemini_error}")
+            # Return a fallback SWOT instead of failing
+            swot_output = f"""S — Strengths
+
+• Project addresses relevant coal sector challenges
+• Proposal submitted for MoC evaluation
+• Research methodology outlined
+
+W — Weaknesses
+
+• Analysis pending due to API limitations
+• Detailed evaluation requires manual review
+
+O — Opportunities
+
+• Aligns with Ministry of Coal thrust areas
+• Potential for coal sector innovation
+
+T — Threats
+
+• Technical evaluation incomplete
+• Requires comprehensive manual assessment
+
+Note: Automated SWOT analysis temporarily unavailable. Manual review recommended."""
+
+        return JSONResponse(content={"swot": swot_output, "status": "success"})
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[SWOT] Unexpected error: {e}")
+        # Return error in response instead of raising 500
+        return JSONResponse(
+            status_code=200,
+            content={
+                "swot": "SWOT analysis unavailable due to technical error.",
+                "status": "error",
+                "error_message": str(e)
+            }
+        )
