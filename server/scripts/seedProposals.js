@@ -282,7 +282,7 @@ const seedProposals = async () => {
     await Report.deleteMany({});
 
     // Get PI user
-    const pi1 = await User.findOne({ email: 'user-bs@gmail.com' });
+    const pi1 = await User.findOne({ email: 'userbytespace@gmail.com' });
     
     if (!pi1) {
       console.error('PI user not found. Please run seed:users first.');
