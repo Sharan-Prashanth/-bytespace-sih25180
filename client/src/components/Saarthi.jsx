@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef } from "react";
+import apiClient from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistory, setShowVersionHistory, context, proposalData, onClose }) {
   console.log('Chatbot render - showSaarthi:', showSaarthi, 'context:', context);
+  
+  const { user } = useAuth();
   
   // Internal state for reviewer mode - do NOT auto-open
   const [isVisible, setIsVisible] = useState(context === 'reviewer' ? false : showSaarthi);
@@ -14,12 +18,12 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
       return [
         { 
           type: 'bot', 
-          text: 'नमस्कार! Welcome! I\'m your AI Review Assistant, specialized in helping reviewers evaluate research proposals effectively. I support multiple Indian languages for comprehensive assistance.',
+          text: 'Welcome! I\'m BIRBAL, your AI Review Assistant specialized in helping reviewers evaluate research proposals effectively.',
           timestamp: new Date().toLocaleTimeString()
         },
         {
           type: 'bot',
-          text: 'I can assist you with:\n• Proposal quality assessment\n• Technical merit evaluation\n• Budget analysis and optimization\n• Compliance with S&T guidelines\n• Comparative research analysis\n• Review documentation\n\nWhat aspect of this proposal would you like me to help evaluate?',
+          text: 'I can assist you with:\n• Proposal quality assessment\n• Technical merit evaluation\n• Budget analysis and optimization\n• Compliance with S&T guidelines\n• Comparative research analysis\n• Review documentation\n\nYou can ask questions in English, Hindi, or Tamil - I\'ll respond in your preferred language!',
           timestamp: new Date().toLocaleTimeString()
         }
       ];
@@ -27,12 +31,12 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
       return [
         { 
           type: 'bot', 
-          text: 'नमस्कार! स्वागतम्! Welcome! I\'m SAARTHI, your intelligent multilingual AI research assistant. I support Hindi, English, Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi, Kannada, Malayalam, Odia, and Assamese for comprehensive assistance.',
+          text: 'Welcome! I\'m BIRBAL, your intelligent multilingual AI research assistant for coal research and NaCCER proposals.',
           timestamp: new Date().toLocaleTimeString()
         },
         {
           type: 'bot',
-          text: 'I can assist you with:\n• Advanced research methodology design\n• Coal technology innovation strategies\n• Budget optimization and resource allocation\n• Technical writing and documentation\n• NaCCER compliance and S&T guidelines\n• Multi-institutional collaboration frameworks\n\nWhat specific aspect of your proposal would you like to explore?',
+          text: 'I can assist you with:\n• Advanced research methodology design\n• Coal technology innovation strategies\n• Budget optimization and resource allocation\n• Technical writing and documentation\n• NaCCER compliance and S&T guidelines\n• Multi-institutional collaboration frameworks\n\nFeel free to ask in English, Hindi (हिंदी), or Tamil (தமிழ்) - I\'ll respond in your language!',
           timestamp: new Date().toLocaleTimeString()
         }
       ];
@@ -112,8 +116,8 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
     };
   }, []);
 
-  // SAARTHI Chat Handler
-  const handleChatSubmit = (e) => {
+  // SAARTHI Chat Handler - Integrated with RAG Backend and Proposal Chat
+  const handleChatSubmit = async (e) => {
     e.preventDefault();
     if (!currentMessage.trim()) return;
     
@@ -125,6 +129,7 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
     };
     
     setChatMessages(prev => [...prev, userMessage]);
+    const questionText = currentMessage;
     setCurrentMessage('');
     setIsTyping(true);
     
@@ -133,35 +138,70 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
       scrollToBottom();
     }, 100);
     
-    // Simulate AI processing and response
-    setTimeout(() => {
-      const responses = [
-        'मैं आपके अनुसंधान प्रस्ताव के लिए विस्तृत रणनीति तैयार कर रहा हूँ। आइए कोयला प्रौद्योगिकी में नवाचार के अवसरों पर चर्चा करते हैं।',
-        'Excellent query! For coal technology research, I recommend focusing on clean coal technologies, carbon capture methods, and sustainable mining practices. Let me suggest some specific research directions.',
-        'Based on NaCCER guidelines, your proposal should emphasize multi-institutional collaboration and technology transfer potential. I can help structure your methodology section.',
-        'आपका बजट अनुकूलन एक महत्वपूर्ण पहलू है। मैं संसाधन आवंटन और cost-effectiveness metrics के लिए सुझाव दे सकता हूँ।',
-        'For S&T compliance, ensure your proposal aligns with national coal research priorities. I can guide you through the technical documentation requirements.',
-        'Consider incorporating AI/ML applications in coal analysis and predictive maintenance. This aligns with current research trends and funding priorities.',
-        'Your research timeline should include milestone-based deliverables. Let me help you create a realistic implementation schedule.',
-        'Multi-language documentation support is available. আমি বাংলা, हिंदी, English और अन्य भारतीय भाषाओं में सहायता कर सकता हूँ।'
-      ];
+    try {
+      // Detect if question is about user's proposals
+      const isAboutProposal = /my proposal|my project|my research|my submission|proposal status|my budget|my timeline|proposal code|submitted proposal/i.test(questionText);
       
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      let response;
       
-      const botMessage = {
-        type: 'bot',
-        text: randomResponse,
-        timestamp: new Date().toLocaleTimeString()
-      };
+      if (isAboutProposal && user?._id) {
+        // Use proposal chat endpoint
+        response = await apiClient.post('/api/proposal-chat/chat-proposals', {
+          question: questionText,
+          user_id: user._id
+        });
+        
+        const botMessage = {
+          type: 'bot',
+          text: response.data.answer || 'I couldn\'t find information about your proposals.',
+          proposals: response.data.proposals || [],
+          timestamp: new Date().toLocaleTimeString()
+        };
+        
+        setChatMessages(prev => [...prev, botMessage]);
+        
+      } else {
+        // Use general RAG endpoint
+        response = await apiClient.post('/api/rag/chat', {
+          question: questionText,
+          top_k: 10
+        });
+        
+        const botMessage = {
+          type: 'bot',
+          text: response.data.answer || 'I apologize, but I couldn\'t generate a response. Please try again.',
+          sources: response.data.sources || [],
+          timestamp: new Date().toLocaleTimeString()
+        };
+        
+        setChatMessages(prev => [...prev, botMessage]);
+      }
       
-      setChatMessages(prev => [...prev, botMessage]);
       setIsTyping(false);
       
       // Auto scroll after bot message
       setTimeout(() => {
         scrollToBottom();
       }, 100);
-    }, 2000);
+      
+    } catch (error) {
+      console.error('Chat Error:', error);
+      
+      // Fallback response on error
+      const errorMessage = {
+        type: 'bot',
+        text: 'I apologize, but I\'m having trouble connecting to my knowledge base right now. Please ensure the backend server is running and try again. If the issue persists, I can still help you with general guidance about coal research proposals and NaCCER guidelines.',
+        timestamp: new Date().toLocaleTimeString(),
+        isError: true
+      };
+      
+      setChatMessages(prev => [...prev, errorMessage]);
+      setIsTyping(false);
+      
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
   };
 
   // Custom CSS animations for SAARTHI chatbot
@@ -401,8 +441,8 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                 pointerEvents: 'auto'
               }}
             >
-              <div className="relative z-10 flex items-center justify-center">
-                <img src="/images/AI assistant logo.png" alt="SAARTHI" className="w-8 h-8 rounded-lg shadow-lg transform group-hover:scale-110 transition-transform duration-300" />
+              <div className="flex items-center gap-2">
+                <img src="/images/AI assistant logo.jpg" alt="BIRBAL" className="w-8 h-8 rounded-lg shadow-lg transform group-hover:scale-110 transition-transform duration-300" />
                 {/* Active indicator dot - more visible and positioned correctly */}
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg animate-blink-green" style={{ zIndex: 1000 }}></div>
               </div>
@@ -421,7 +461,7 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
             <div className="absolute bottom-full right-0 mb-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:translate-y-0 translate-y-2 pointer-events-none z-60">
               <div className="bg-black/90 text-white px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap shadow-2xl backdrop-blur-sm border border-white/10">
                 <div className="flex items-center gap-2">
-                  <span>Launch SAARTHI AI</span>
+                  <span>Launch BIRBAL AI Assistant</span>
                 </div>
                 <div className="absolute top-full right-4 w-0 h-0 border-t-4 border-t-black/90 border-l-4 border-l-transparent border-r-4 border-r-transparent"></div>
               </div>
@@ -454,17 +494,17 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                   style={{
                     background: 'linear-gradient(135deg, #ff7f00 0%, #ff7f00 33%, #ffffff 33%, #ffffff 66%, #138808 66%, #138808 100%)'
                   }}>
-                  <img src="/images/AI assistant logo.png" alt="SAARTHI" className="w-8 h-8 rounded-full" />
+                  <img src="/images/AI assistant logo.jpg" alt="BIRBAL" className="w-8 h-8 rounded-full" />
                   {/* Active indicator dot - positioned outside overflow hidden container */}
                 </div>
                 {/* Green dot positioned outside the logo container */}
                 <div className="absolute top-5 left-12 w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg animate-blink-green" style={{ zIndex: 1000 }}></div>
                 <div>
                   <h3 className="font-bold text-white text-lg">
-                    {context === 'reviewer' ? 'AI Review Assistant' : 'SAARTHI AI'}
+                    {context === 'reviewer' ? 'BIRBAL - AI Review Assistant' : 'BIRBAL AI'}
                   </h3>
                   <p className="text-sm text-blue-100">
-                    {context === 'reviewer' ? 'Proposal Evaluator' : 'Research Assistant'}
+                    {context === 'reviewer' ? 'Proposal Evaluator' : 'Multilingual Research Assistant'}
                   </p>
                 </div>
               </div>
@@ -508,18 +548,47 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                 <div className={`max-w-[80%] p-3 rounded-lg ${
                   message.type === 'user' 
                     ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-br-none' 
-                    : 'bg-white text-black border border-blue-200 rounded-bl-none'
+                    : message.isError
+                      ? 'bg-red-50 text-red-800 border border-red-300 rounded-bl-none'
+                      : 'bg-white text-gray-900 border border-blue-200 rounded-bl-none'
                 } shadow-md`}>
-                  <div className="text-sm">
+                  <div className="text-sm" style={{ color: message.type === 'user' ? 'white' : '#111827' }}>
                     {message.text.split('\n').map((line, lineIndex) => (
                       <div key={lineIndex} className="mb-1">
                         {line}
                       </div>
                     ))}
                   </div>
+                  
+                  {/* Display proposal info if available */}
+                  {message.proposals && message.proposals.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <div className="text-xs font-semibold text-blue-600 mb-2">📋 Related Proposals:</div>
+                      {message.proposals.map((proposal, idx) => (
+                        <div key={idx} className="text-xs text-blue-700 mb-2 bg-blue-50 p-2 rounded">
+                          <div className="font-semibold">{proposal.proposalCode}</div>
+                          <div>{proposal.title}</div>
+                          <div className="text-blue-500">Status: {proposal.status} | Relevance: {(proposal.relevance * 100).toFixed(1)}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Display sources if available */}
+                  {message.sources && message.sources.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <div className="text-xs font-semibold text-blue-600 mb-2">📚 Sources:</div>
+                      {message.sources.slice(0, 3).map((source, idx) => (
+                        <div key={idx} className="text-xs text-blue-700 mb-1">
+                          • {source.source} (Relevance: {(source.score * 100).toFixed(1)}%)
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
                   {message.timestamp && (
                     <div className={`text-xs mt-1 ${
-                      message.type === 'user' ? 'text-orange-100' : 'text-blue-500'
+                      message.type === 'user' ? 'text-orange-100' : message.isError ? 'text-red-600' : 'text-blue-500'
                     }`}>
                       {message.timestamp}
                     </div>
@@ -537,7 +606,7 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce animation-delay-1000"></div>
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce animation-delay-2000"></div>
                     </div>
-                    <span className="text-blue-500 text-sm">SAARTHI is typing...</span>
+                    <span className="text-blue-500 text-sm">BIRBAL is typing...</span>
                   </div>
                 </div>
               </div>
@@ -551,8 +620,9 @@ export default function Chatbot({ showSaarthi, setShowSaarthi, showVersionHistor
                 type="text"
                 value={currentMessage}
                 onChange={(e) => setCurrentMessage(e.target.value)}
-                className="flex-1 px-4 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                placeholder="Ask SAARTHI anything..."
+                className="flex-1 px-4 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+                placeholder="Ask BIRBAL in English, Hindi, or Tamil..."
+                style={{ color: '#111827' }}
                 disabled={isTyping}
               />
               <button
