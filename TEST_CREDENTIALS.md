@@ -1,66 +1,66 @@
-# 🔐 NaCCER Portal Test Credentials
+# NaCCER Portal Test Credentials
 
 ## Quick Login Credentials
 
-### 👑 Super Admin (Full system access, user management, proposal oversight)
+### Super Admin (Full system access, user management, proposal oversight)
 - **Email:** bytespacesih@gmail.com  
 - **Password:** adminpass
 - **Name:** Admin User
 - **Organization:** NaCCER Administration
 - **Designation:** System Administrator
 
-### 👤 Regular User (Can create and edit their own proposals)
-- **Email:** user-bs@gmail.com  
-- **Password:** userpass
+### Regular User (Can create and edit their own proposals)
+- **Email:** userbytespace@gmail.com  
+- **Password:** userbytespace@1
 - **Name:** Regular User
 - **Organization:** Indian Institute of Technology
 - **Designation:** Research Scholar
 
-### 🏢 CMPDI Member (Initial technical review and expert assignment)
-- **Email:** cmpdi-bs@gmail.com  
-- **Password:** cmpdipass
+### CMPDI Member (Initial technical review and expert assignment)
+- **Email:** cmpdibytespace@gmail.com  
+- **Password:** cmpdipassbytespace
 - **Name:** CMPDI Member
 - **Organization:** Central Mine Planning & Design Institute
 - **Designation:** Senior Technical Officer
 
-### 🎓 Expert Reviewer (Domain expert evaluation)
-- **Email:** expert-bs@gmail.com  
-- **Password:** expertpass
+### Expert Reviewer (Domain expert evaluation)
+- **Email:** expertbytespace@gmail.com  
+- **Password:** expertpassbytespace123
 - **Name:** Expert Reviewer
 - **Organization:** Indian School of Mines
 - **Designation:** Professor & Domain Expert
 
-### 📋 TSSRC Member (Technical Sub-Committee review)
+### TSSRC Member (Technical Sub-Committee review)
 - **Email:** tssrc-bs@gmail.com  
 - **Password:** tssrcpass
 - **Name:** TSSRC Member
 - **Organization:** Ministry of Coal
 - **Designation:** Technical Sub-Committee Chairperson
 
-### ✅ SSRC Member (Final approval committee)
+### SSRC Member (Final approval committee)
 - **Email:** ssrc-bs@gmail.com  
 - **Password:** ssrcpass
 - **Name:** SSRC Member
 - **Organization:** Coal India Limited
 - **Designation:** Standing Scientific Research Committee Member
 
-## 🎯 Testing Workflow
+## Testing Workflow
 
-### 1. **As Regular User (user-bs@gmail.com):**
+### 1. **As Regular User (userbytespace@gmail.com):**
    - Login and create a new research proposal
    - Edit proposal forms and upload documents
    - Track proposal status through the workflow
    - Respond to clarification requests
    - View final approval/rejection
 
-### 2. **As CMPDI Member (cmpdi-bs@gmail.com):**
+### 2. **As CMPDI Member (cmpdibytespace@gmail.com):**
    - Review submitted proposals
    - Assign expert reviewers
    - Evaluate expert reviews
    - Approve, reject, or request clarifications
    - Forward approved proposals to TSSRC
 
-### 3. **As Expert Reviewer (expert-bs@gmail.com):**
+### 3. **As Expert Reviewer (expertbytespace@gmail.com):**
    - View assigned proposals
    - Conduct detailed technical evaluation
    - Submit expert review reports
@@ -86,21 +86,21 @@
    - Generate system statistics
    - Create users with specific roles
 
-## 🔄 Complete Workflow Test
-1. Create proposal with `user-bs@gmail.com` → Status: Draft → Submitted
-2. CMPDI reviews with `cmpdi-bs@gmail.com` → Assigns expert
-3. Expert evaluates with `expert-bs@gmail.com` → Submits review
-4. CMPDI approves with `cmpdi-bs@gmail.com` → Forwards to TSSRC
+## Complete Workflow Test
+1. Create proposal with `userbytespace@gmail.com` → Status: Draft → Submitted
+2. CMPDI reviews with `cmpdibytespace@gmail.com` → Assigns expert
+3. Expert evaluates with `expertbytespace@gmail.com` → Submits review
+4. CMPDI approves with `cmpdibytespace@gmail.com` → Forwards to TSSRC
 5. TSSRC reviews with `tssrc-bs@gmail.com` → Approves → Forwards to SSRC
 6. SSRC final approval with `ssrc-bs@gmail.com` → Project Ongoing
-7. User tracks progress with `user-bs@gmail.com`
+7. User tracks progress with `userbytespace@gmail.com`
 
-## 🚀 URLs
+## URLs
 - **Frontend:** http://localhost:3001
 - **Backend API:** http://localhost:5000
 - **Database:** MongoDB (check .env for MONGODB_URI)
 
-## 🔧 Seed Database Users
+## Seed Database Users
 To populate the database with test users:
 ```bash
 cd server
@@ -114,7 +114,7 @@ Or add this to package.json scripts and run `npm run seed`:
 }
 ```
 
-## 📝 Notes
+## Notes
 - All accounts are active by default
 - Passwords are hashed using bcrypt (salt rounds: 12)
 - Each role has specific permissions and dashboard views

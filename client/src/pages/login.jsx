@@ -203,11 +203,11 @@ export default function Login() {
                     <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
                       <div className="flex items-center gap-2 whitespace-nowrap">
                         <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0"></div>
-                        <span><strong>User:</strong> user-bs@gmail.com / userpass</span>
+                        <span><strong>User:</strong> userbytespace@gmail.com / userbytespace@1</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setForm({ email: 'user-bs@gmail.com', password: 'userpass' })}
+                        onClick={() => setForm({ email: 'userbytespace@gmail.com', password: 'userbytespace@1' })}
                         className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
                         title="Quick fill User credentials"
                       >
@@ -219,11 +219,11 @@ export default function Login() {
                     <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
                       <div className="flex items-center gap-2 whitespace-nowrap">
                         <div className="w-1.5 h-1.5 bg-orange-400 rounded-full flex-shrink-0"></div>
-                        <span><strong>CMPDI:</strong> cmpdi-bs@gmail.com / cmpdipass</span>
+                        <span><strong>CMPDI:</strong> cmpdibytespace@gmail.com / cmpdipassbytespace</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setForm({ email: 'cmpdi-bs@gmail.com', password: 'cmpdipass' })}
+                        onClick={() => setForm({ email: 'cmpdibytespace@gmail.com', password: 'cmpdipassbytespace' })}
                         className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
                         title="Quick fill CMPDI credentials"
                       >
@@ -235,11 +235,11 @@ export default function Login() {
                     <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
                       <div className="flex items-center gap-2 whitespace-nowrap">
                         <div className="w-1.5 h-1.5 bg-purple-400 rounded-full flex-shrink-0"></div>
-                        <span><strong>Expert:</strong> expert-bs@gmail.com / expertpass</span>
+                        <span><strong>Expert:</strong> expertbytespace@gmail.com / expertpassbytespace123</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setForm({ email: 'expert-bs@gmail.com', password: 'expertpass' })}
+                        onClick={() => setForm({ email: 'expertbytespace@gmail.com', password: 'expertpassbytespace123' })}
                         className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-blue-300 hover:text-blue-200 transition-all duration-200 flex-shrink-0"
                         title="Quick fill Expert credentials"
                       >
