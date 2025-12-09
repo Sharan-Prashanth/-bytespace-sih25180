@@ -503,9 +503,43 @@ function CreateNewProposalContent() {
 
   // Handle next stage
   const handleNextStage = async () => {
-    if (!validateStage(currentStage)) {
-      error('Please complete all required fields before proceeding to the next stage');
-      return;
+    // Special handling for Stage 3: Get latest editor content and update state before validation
+    if (currentStage === 3) {
+      try {
+        const latestContent = getLatestEditorContent();
+        if (latestContent) {
+          // Update state immediately so validation can check it
+          setFormIContent(latestContent);
+          console.log('[SAVE] Updated formIContent state with latest editor content before validation');
+          
+          // Give React a moment to update state
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Now validate with the updated content
+          const hasContent = latestContent && latestContent.formi && latestContent.formi.content && latestContent.formi.content.length > 0;
+          if (!hasContent) {
+            error('Please add content to Form I before proceeding to the next stage');
+            return;
+          }
+          
+          // Save to backend
+          await saveToBackendWithContent(latestContent);
+          info('Editor content saved');
+        } else {
+          error('Please add content to Form I before proceeding to the next stage');
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to save editor content:', err);
+        error('Failed to save editor content. Please try again.');
+        return;
+      }
+    } else {
+      // For other stages, validate normally
+      if (!validateStage(currentStage)) {
+        error('Please complete all required fields before proceeding to the next stage');
+        return;
+      }
     }
 
     // If leaving Stage 1, save proposal to backend to create proposalId/proposalCode for file uploads
@@ -517,21 +551,6 @@ function CreateNewProposalContent() {
       } catch (err) {
         console.error('Failed to save proposal info:', err);
         error('Failed to save proposal information. Please try again.');
-        return;
-      }
-    }
-
-    // If leaving Stage 3 (Form I Editor), save editor content to backend
-    if (currentStage === 3) {
-      try {
-        const latestContent = getLatestEditorContent();
-        if (latestContent) {
-          await saveToBackendWithContent(latestContent);
-          info('Editor content saved');
-        }
-      } catch (err) {
-        console.error('Failed to save editor content:', err);
-        error('Failed to save editor content. Please try again.');
         return;
       }
     }
@@ -982,16 +1001,14 @@ function CreateNewProposalContent() {
       // Wait a moment for save to complete
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Mock AI evaluation process
-      info('AI evaluation in progress...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
       // Submit proposal (creates version 1.0)
       const response = await submitProposal(proposalId, {
         commitMessage: 'Initial submission'
       });
       
       success('Proposal submitted successfully!');
+      info('AI validation is in progress. Please check your dashboard for results.');
+      
       setSubmittedProposalId(response.data.proposalCode || proposalId);
       
       // Clear local storage after successful submission

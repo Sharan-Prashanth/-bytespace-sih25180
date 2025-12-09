@@ -14,8 +14,8 @@ import {
 // Proposal Status Constants - Match backend enum values exactly
 export const PROPOSAL_STATUS = {
   DRAFT: 'DRAFT',
-  AI_EVALUATION_PENDING: 'AI_EVALUATION_PENDING',
-  AI_REJECTED: 'AI_REJECTED',
+  AI_VALIDATION_PENDING: 'AI_VALIDATION_PENDING',
+  AI_VALIDATION_FAILED: 'AI_VALIDATION_FAILED',
   CMPDI_REVIEW: 'CMPDI_REVIEW',
   CMPDI_EXPERT_REVIEW: 'CMPDI_EXPERT_REVIEW',
   CMPDI_ACCEPTED: 'CMPDI_ACCEPTED',
@@ -36,17 +36,17 @@ export const STATUS_CONFIG = {
     Icon: FileText,
     description: 'Proposal is being prepared'
   },
-  [PROPOSAL_STATUS.AI_EVALUATION_PENDING]: {
-    label: 'AI Evaluation Pending',
+  [PROPOSAL_STATUS.AI_VALIDATION_PENDING]: {
+    label: 'AI Validation Pending',
     color: 'bg-purple-100 text-black border-purple-300',
     Icon: BarChart,
-    description: 'Submitted, waiting for AI evaluation'
+    description: 'Submitted, waiting for AI validation'
   },
-  [PROPOSAL_STATUS.AI_REJECTED]: {
-    label: 'AI Rejected',
-    color: 'bg-orange-100 text-black border-orange-300',
-    Icon: AlertCircle,
-    description: 'AI evaluation rejected - can be modified and resubmitted'
+  [PROPOSAL_STATUS.AI_VALIDATION_FAILED]: {
+    label: 'AI Validation Failed',
+    color: 'bg-red-100 text-black border-red-300',
+    Icon: XCircle,
+    description: 'AI validation failed - can be modified and resubmitted'
   },
   [PROPOSAL_STATUS.CMPDI_REVIEW]: {
     label: 'CMPDI Review',
@@ -119,15 +119,15 @@ export const isRejectedFinal = (status) => {
   ].includes(status);
 };
 
-// Helper to check if a proposal can be modified (AI rejected proposals can be modified)
+// Helper to check if a proposal can be modified (AI validation failed proposals can be modified)
 export const canModifyProposal = (status) => {
-  return status === PROPOSAL_STATUS.DRAFT || status === PROPOSAL_STATUS.AI_REJECTED;
+  return status === PROPOSAL_STATUS.DRAFT || status === PROPOSAL_STATUS.AI_VALIDATION_FAILED;
 };
 
 // Helper to check if status is any kind of rejection
 export const isRejected = (status) => {
   return [
-    PROPOSAL_STATUS.AI_REJECTED,
+    PROPOSAL_STATUS.AI_VALIDATION_FAILED,
     PROPOSAL_STATUS.CMPDI_REJECTED,
     PROPOSAL_STATUS.TSSRC_REJECTED,
     PROPOSAL_STATUS.SSRC_REJECTED

@@ -48,8 +48,13 @@ const activitySchema = new mongoose.Schema({
       'PROPOSAL_REJECTED',
       'UPDATE_DISCUSSIONS',
       'UPDATE_PROPOSAL_INFO',
+      'DRAFT_CREATED',
       'DRAFT_UPDATED',
-      'DRAFT_DISCARDED'
+      'DRAFT_DISCARDED',
+      'AI_VALIDATION_STARTED',
+      'AI_VALIDATION_COMPLETED',
+      'AI_EVALUATION_STARTED',
+      'AI_EVALUATION_COMPLETED'
     ]
   },
   details: {

@@ -57,7 +57,34 @@ function InvestigatorDashboardContent() {
     try {
       setLoading(true);
       const response = await apiClient.get('/api/proposals');
-      const proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+      let proposalData = response.data?.data?.proposals || response.data?.proposals || [];
+      
+      // Update proposal statuses based on aiReports (if validation completed while status is still pending)
+      proposalData = proposalData.map(proposal => {
+        if (proposal.status === PROPOSAL_STATUS.AI_VALIDATION_PENDING && proposal.aiReports?.length > 0) {
+          // Find the validation report for the current version
+          const validationReport = proposal.aiReports.find(
+            report => report.reportType === 'validation' && report.version === proposal.currentVersion
+          );
+          
+          if (validationReport) {
+            // Check validation result
+            const overallValidation = validationReport.reportData?.validation_result?.overall_validation;
+            
+            if (overallValidation === true) {
+              // Validation passed - should be in CMPDI_REVIEW now
+              proposal.status = PROPOSAL_STATUS.CMPDI_REVIEW;
+            } else if (overallValidation === false) {
+              // Validation failed
+              proposal.status = PROPOSAL_STATUS.AI_VALIDATION_FAILED;
+            }
+            // If overall_validation is undefined, status remains AI_VALIDATION_PENDING (still processing)
+          }
+        }
+        
+        return proposal;
+      });
+      
       setProposals(Array.isArray(proposalData) ? proposalData : []);
     } catch (error) {
       console.error("Error fetching proposals:", error);
@@ -79,14 +106,14 @@ function InvestigatorDashboardContent() {
 
   // Find the most recent draft (sorted by updatedAt)
   const lastDraft = [...proposals]
-    .filter(p => p.status === PROPOSAL_STATUS.DRAFT || p.status === PROPOSAL_STATUS.AI_REJECTED)
+    .filter(p => p.status === PROPOSAL_STATUS.DRAFT || p.status === PROPOSAL_STATUS.AI_VALIDATION_FAILED)
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
 
   // Calculate stats
   const stats = {
     total: proposals.length,
     draft: proposals.filter(p => p.status === PROPOSAL_STATUS.DRAFT).length,
-    aiPending: proposals.filter(p => p.status === PROPOSAL_STATUS.AI_EVALUATION_PENDING).length,
+    aiPending: proposals.filter(p => p.status === PROPOSAL_STATUS.AI_VALIDATION_PENDING).length,
     underReview: proposals.filter(p =>
       p.status === PROPOSAL_STATUS.CMPDI_REVIEW ||
       p.status === PROPOSAL_STATUS.CMPDI_EXPERT_REVIEW ||

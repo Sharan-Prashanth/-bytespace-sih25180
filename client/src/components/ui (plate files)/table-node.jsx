@@ -445,13 +445,30 @@ function RowDropLine() {
   );
 }
 
-export function TableCellElement({
+// Wrapper to ensure element has borders before rendering
+function TableCellElementInner({
   isHeader,
   ...props
 }) {
   const { api } = useEditorPlugin(TablePlugin);
   const readOnly = useReadOnly();
-  const element = props.element;
+  
+  // CRITICAL: Ensure element has borders property before any hooks that might access it
+  const element = React.useMemo(() => {
+    const el = props.element;
+    if (!el.borders) {
+      return {
+        ...el,
+        borders: {
+          top: { size: 1, style: 'solid', color: '#e5e7eb' },
+          right: { size: 1, style: 'solid', color: '#e5e7eb' },
+          bottom: { size: 1, style: 'solid', color: '#e5e7eb' },
+          left: { size: 1, style: 'solid', color: '#e5e7eb' }
+        }
+      };
+    }
+    return el;
+  }, [props.element]);
 
   const tableId = useElementSelector(([node]) => node.id, [], {
     key: KEYS.table,
@@ -463,6 +480,7 @@ export function TableCellElement({
   const isSelectingRow = useBlockSelected(rowId) || isSelectingTable;
   const isSelectionAreaVisible = usePluginOption(BlockSelectionPlugin, 'isSelectionAreaVisible');
 
+  // Now it's safe to call useTableCellElement because element.borders exists
   const { borders, colIndex, colSpan, minHeight, rowIndex, selected, width } =
     useTableCellElement();
 
@@ -472,6 +490,9 @@ export function TableCellElement({
       colSpan,
       rowIndex,
     });
+
+  // Ensure borders is defined with default values if undefined
+  const safeBorders = borders || { bottom: null, right: null, left: null, top: null };
 
   return (
     <PlateElement
@@ -485,10 +506,10 @@ export function TableCellElement({
         'before:size-full',
         selected && 'before:z-10 before:bg-brand/5',
         "before:absolute before:box-border before:content-[''] before:select-none",
-        borders.bottom?.size && `before:border-b before:border-b-[var(--table-border-color,#e5e7eb)]`,
-        borders.right?.size && `before:border-r before:border-r-[var(--table-border-color,#e5e7eb)]`,
-        borders.left?.size && `before:border-l before:border-l-[var(--table-border-color,#e5e7eb)]`,
-        borders.top?.size && `before:border-t before:border-t-[var(--table-border-color,#e5e7eb)]`
+        safeBorders.bottom?.size && `before:border-b before:border-b-[var(--table-border-color,#e5e7eb)]`,
+        safeBorders.right?.size && `before:border-r before:border-r-[var(--table-border-color,#e5e7eb)]`,
+        safeBorders.left?.size && `before:border-l before:border-l-[var(--table-border-color,#e5e7eb)]`,
+        safeBorders.top?.size && `before:border-t before:border-t-[var(--table-border-color,#e5e7eb)]`
       )}
       style={
         {
@@ -548,6 +569,31 @@ export function TableCellElement({
       )}
     </PlateElement>
   );
+}
+
+// Export wrapper that normalizes the element before passing to inner component
+export function TableCellElement(props) {
+  // Normalize element to ensure borders exist before rendering
+  const normalizedProps = React.useMemo(() => {
+    if (!props.element || (props.element.borders)) {
+      return props;
+    }
+    
+    return {
+      ...props,
+      element: {
+        ...props.element,
+        borders: {
+          top: { size: 1, style: 'solid', color: '#e5e7eb' },
+          right: { size: 1, style: 'solid', color: '#e5e7eb' },
+          bottom: { size: 1, style: 'solid', color: '#e5e7eb' },
+          left: { size: 1, style: 'solid', color: '#e5e7eb' }
+        }
+      }
+    };
+  }, [props.element, props]);
+
+  return <TableCellElementInner {...normalizedProps} />;
 }
 
 export function TableCellHeaderElement(

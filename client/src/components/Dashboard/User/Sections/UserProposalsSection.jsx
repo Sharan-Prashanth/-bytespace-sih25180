@@ -22,8 +22,10 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { PROPOSAL_STATUS, STATUS_CONFIG, formatDate, isRejected, canModifyProposal, isSSRCAccepted } from "../../../../utils/statusConfig";
 import apiClient from "../../../../utils/api";
+import { useToast } from "../../../../components/ui (plate files)/toast";
 
 export default function UserProposalsSection({ proposals, theme, onProposalDeleted }) {
+    const { addToast } = useToast();
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState("table"); // 'table' | 'card'
     const [filterStatus, setFilterStatus] = useState('all');
@@ -84,7 +86,7 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
 
     // Find last draft
     const lastDraft = [...proposals]
-        .filter(p => p.status === PROPOSAL_STATUS.DRAFT || p.status === PROPOSAL_STATUS.AI_REJECTED)
+        .filter(p => p.status === PROPOSAL_STATUS.DRAFT || p.status === PROPOSAL_STATUS.AI_VALIDATION_FAILED)
         .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
 
     // Delete handlers
@@ -146,8 +148,19 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
 
     // Handle validation report view
     const handleViewValidationReport = (proposal) => {
-        setSelectedProposal(proposal);
-        setValidationReportOpen(true);
+        // Check if AI validation is still pending
+        if (proposal.status === PROPOSAL_STATUS.AI_VALIDATION_PENDING) {
+            // Show toast notification
+            addToast({
+                type: 'info',
+                message: 'AI validation is currently in progress. Please refresh the page to check for status updates. Maximum processing time is 5 minutes.',
+                duration: 5000
+            });
+            return;
+        }
+        
+        // Navigate to AI validation report page
+        window.location.href = `/proposal/ai-validation/${proposal._id}`;
     };
 
     const handleCloseValidationReport = () => {
@@ -200,7 +213,7 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                 'Provide more details on the validation methodology.',
                 'Include additional case studies to support the approach.'
             ],
-            aiDecision: proposal.status === PROPOSAL_STATUS.AI_REJECTED ? 'Rejected' : 'Approved'
+            aiDecision: 'Approved'
         };
     };
 
@@ -252,27 +265,47 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                 </td>
                 <td className="p-3 px-4 text-right">
                     <div className="flex justify-end gap-1.5">
-                        {/* For rejected proposals: only View and Track (AI Rejected can edit) */}
+                        {/* For rejected proposals */}
                         {isRejectedSection ? (
                             <>
-                                {/* AI Rejected can be edited in create page */}
-                                {proposal.status === PROPOSAL_STATUS.AI_REJECTED && (
-                                    <Link href={`/proposal/create?draft=${proposal._id}`}>
-                                        <button className={`p-1.5 rounded-lg ${isDark ? 'text-orange-400 hover:bg-orange-900/20' : 'text-orange-600 hover:bg-orange-50'}`} title="Edit & Resubmit">
-                                            <Edit size={16} />
+                                {/* AI Validation Failed: Only Edit and AI Validation Report */}
+                                {proposal.status === PROPOSAL_STATUS.AI_VALIDATION_FAILED ? (
+                                    <>
+                                        <Link href={`/proposal/create?draft=${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'text-orange-400 hover:bg-orange-900/20' : 'text-orange-600 hover:bg-orange-50'}`} title="Edit & Resubmit">
+                                                <Edit size={16} />
+                                            </button>
+                                        </Link>
+                                        <button 
+                                            onClick={() => handleViewValidationReport(proposal)}
+                                            className={`p-1.5 rounded-lg ${isDark ? 'text-blue-400 hover:bg-blue-900/20' : 'text-blue-600 hover:bg-blue-50'}`} 
+                                            title="AI Validation Report"
+                                        >
+                                            <FileCheck size={16} />
                                         </button>
-                                    </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* AI Rejected or other rejected: Show all buttons */}
+                                        {false && (
+                                            <Link href={`/proposal/create?draft=${proposal._id}`}>
+                                                <button className={`p-1.5 rounded-lg ${isDark ? 'text-orange-400 hover:bg-orange-900/20' : 'text-orange-600 hover:bg-orange-50'}`} title="Edit & Resubmit">
+                                                    <Edit size={16} />
+                                                </button>
+                                            </Link>
+                                        )}
+                                        <Link href={`/proposal/view/${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'text-emerald-400 hover:bg-emerald-900/20' : 'text-emerald-600 hover:bg-emerald-50'}`} title="View">
+                                                <Eye size={16} />
+                                            </button>
+                                        </Link>
+                                        <Link href={`/proposal/track/${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'text-purple-400 hover:bg-purple-900/20' : 'text-purple-600 hover:bg-purple-50'}`} title="Track Progress">
+                                                <BarChart3 size={16} />
+                                            </button>
+                                        </Link>
+                                    </>
                                 )}
-                                <Link href={`/proposal/view/${proposal._id}`}>
-                                    <button className={`p-1.5 rounded-lg ${isDark ? 'text-emerald-400 hover:bg-emerald-900/20' : 'text-emerald-600 hover:bg-emerald-50'}`} title="View">
-                                        <Eye size={16} />
-                                    </button>
-                                </Link>
-                                <Link href={`/proposal/track/${proposal._id}`}>
-                                    <button className={`p-1.5 rounded-lg ${isDark ? 'text-purple-400 hover:bg-purple-900/20' : 'text-purple-600 hover:bg-purple-50'}`} title="Track Progress">
-                                        <BarChart3 size={16} />
-                                    </button>
-                                </Link>
                             </>
                         ) : isApprovedSection ? (
                             /* For SSRC Accepted proposals: only View and Track (no collaborate) */
@@ -348,7 +381,7 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
         const canEdit = canModifyProposal(proposal.status);
         const isRejectedProposal = isRejected(proposal.status);
         const isApprovedProposal = isSSRCAccepted(proposal.status);
-        const isAIRejected = proposal.status === PROPOSAL_STATUS.AI_REJECTED;
+        const isAIRejected = false;
         const isDraft = isDraftProposal(proposal.status);
         
         return (
@@ -385,23 +418,44 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                         {/* For rejected proposals */}
                         {isRejectedProposal ? (
                             <>
-                                {isAIRejected && (
-                                    <Link href={`/proposal/create?draft=${proposal._id}`}>
-                                        <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-orange-400' : 'hover:bg-slate-100 text-orange-500'}`} title="Edit & Resubmit">
-                                            <Edit size={14} />
+                                {/* AI Validation Failed: Only Edit and AI Validation Report */}
+                                {proposal.status === PROPOSAL_STATUS.AI_VALIDATION_FAILED ? (
+                                    <>
+                                        <Link href={`/proposal/create?draft=${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-orange-400' : 'hover:bg-slate-100 text-orange-500'}`} title="Edit & Resubmit">
+                                                <Edit size={14} />
+                                            </button>
+                                        </Link>
+                                        <button 
+                                            onClick={() => handleViewValidationReport(proposal)}
+                                            className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-blue-400' : 'hover:bg-slate-100 text-blue-500'}`} 
+                                            title="AI Validation Report"
+                                        >
+                                            <FileCheck size={14} />
                                         </button>
-                                    </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* AI Rejected or other rejected: Show all buttons */}
+                                        {isAIRejected && (
+                                            <Link href={`/proposal/create?draft=${proposal._id}`}>
+                                                <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-orange-400' : 'hover:bg-slate-100 text-orange-500'}`} title="Edit & Resubmit">
+                                                    <Edit size={14} />
+                                                </button>
+                                            </Link>
+                                        )}
+                                        <Link href={`/proposal/view/${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-emerald-400' : 'hover:bg-slate-100 text-emerald-500'}`} title="View">
+                                                <Eye size={14} />
+                                            </button>
+                                        </Link>
+                                        <Link href={`/proposal/track/${proposal._id}`}>
+                                            <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-purple-400' : 'hover:bg-slate-100 text-purple-500'}`} title="Track">
+                                                <BarChart3 size={14} />
+                                            </button>
+                                        </Link>
+                                    </>
                                 )}
-                                <Link href={`/proposal/view/${proposal._id}`}>
-                                    <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-emerald-400' : 'hover:bg-slate-100 text-emerald-500'}`} title="View">
-                                        <Eye size={14} />
-                                    </button>
-                                </Link>
-                                <Link href={`/proposal/track/${proposal._id}`}>
-                                    <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-purple-400' : 'hover:bg-slate-100 text-purple-500'}`} title="Track">
-                                        <BarChart3 size={14} />
-                                    </button>
-                                </Link>
                             </>
                         ) : isApprovedProposal ? (
                             /* For SSRC Accepted proposals: only View and Track */
@@ -566,7 +620,7 @@ export default function UserProposalsSection({ proposals, theme, onProposalDelet
                     >
                         <option value="all">All Status</option>
                         <option value={PROPOSAL_STATUS.DRAFT}>Draft</option>
-                        <option value={PROPOSAL_STATUS.AI_EVALUATION_PENDING}>AI Evaluation Pending</option>
+                        <option value={PROPOSAL_STATUS.AI_VALIDATION_PENDING}>AI Validation Pending</option>
                         <option value={PROPOSAL_STATUS.CMPDI_REVIEW}>CMPDI Review</option>
                         <option value={PROPOSAL_STATUS.CMPDI_EXPERT_REVIEW}>Expert Review</option>
                         <option value={PROPOSAL_STATUS.CMPDI_ACCEPTED}>CMPDI Accepted</option>

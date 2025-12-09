@@ -15,9 +15,9 @@ const MILESTONE_STAGES = [
     key: 'AI_VALIDATION', 
     label: 'AI Evaluation',
     description: 'Automated AI analysis and validation of proposal content',
-    milestoneStatuses: ['AI_EVALUATION_PENDING'],
+    milestoneStatuses: ['AI_VALIDATION_PENDING'],
     completionIndicators: ['CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'],
-    rejectionStatus: 'AI_REJECTED'
+    rejectionStatus: 'AI_VALIDATION_FAILED'
   },
   { 
     key: 'CMPDI_REVIEW', 

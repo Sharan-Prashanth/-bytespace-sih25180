@@ -5,6 +5,7 @@ import User from '../models/User.js';
 import proposalIdGenerator from '../utils/proposalIdGenerator.js';
 import emailService from '../services/emailService.js';
 import aiService from '../services/aiService.js';
+import aiValidationService from '../services/aiValidationService.js';
 import storageService from '../services/storageService.js';
 import formExtractionService from '../services/formExtractionService.js';
 import activityLogger from '../utils/activityLogger.js';
@@ -72,13 +73,16 @@ const checkProposalAccess = (proposal, user) => {
  * Replaces base64 images with S3 URLs
  */
 const processFormImages = async (forms, proposalCode) => {
-  const processedForms = { ...forms };
+  if (!forms) return forms;
   
-  for (const formKey in processedForms) {
-    if (processedForms[formKey] && Array.isArray(processedForms[formKey])) {
-      // Process Plate.js content structure
-      for (const node of processedForms[formKey]) {
-        if (node.type === 'img' && node.url && node.url.startsWith('data:')) {
+  const processedForms = JSON.parse(JSON.stringify(forms)); // Deep clone
+  
+  const processNodes = async (nodes) => {
+    if (!Array.isArray(nodes)) return;
+    
+    for (const node of nodes) {
+      if (node.type === 'img' && node.url && node.url.startsWith('data:')) {
+        try {
           // Extract base64 data
           const matches = node.url.match(/^data:(.+);base64,(.+)$/);
           if (matches) {
@@ -97,7 +101,29 @@ const processFormImages = async (forms, proposalCode) => {
               node.url = uploadResult.url;
             }
           }
+        } catch (error) {
+          console.error('Error processing image:', error);
+          // Continue with other images
         }
+      }
+      
+      // Process nested children
+      if (node.children) {
+        await processNodes(node.children);
+      }
+    }
+  };
+  
+  // Handle different form structures
+  for (const formKey in processedForms) {
+    if (processedForms[formKey]) {
+      // Handle formi.content structure
+      if (processedForms[formKey].content && Array.isArray(processedForms[formKey].content)) {
+        await processNodes(processedForms[formKey].content);
+      }
+      // Handle direct array structure
+      else if (Array.isArray(processedForms[formKey])) {
+        await processNodes(processedForms[formKey]);
       }
     }
   }
@@ -121,7 +147,7 @@ export const getProposals = asyncHandler(async (req, res) => {
     // Admin sees all proposals
   } else if (user.roles.includes('CMPDI_MEMBER')) {
     // CMPDI sees proposals in their review stages and can track proposals forwarded to TSSRC/SSRC
-    query.status = { $in: ['SUBMITTED', 'AI_EVALUATION', 'AI_EVALUATION_PENDING', 'AI_REJECTED', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
+    query.status = { $in: ['SUBMITTED', 'AI_EVALUATION', 'AI_VALIDATION_PENDING', 'CMPDI_REVIEW', 'CMPDI_EXPERT_REVIEW', 'CMPDI_ACCEPTED', 'CMPDI_REJECTED', 'TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
   } else if (user.roles.includes('TSSRC_MEMBER')) {
     // TSSRC sees proposals in their review stages and can track proposals forwarded to SSRC
     query.status = { $in: ['TSSRC_REVIEW', 'TSSRC_ACCEPTED', 'TSSRC_REJECTED', 'SSRC_REVIEW', 'SSRC_ACCEPTED', 'SSRC_REJECTED'] };
@@ -610,8 +636,8 @@ const handleInitialSubmission = async (proposal, req, res) => {
     });
   }
 
-  // Update status to AI_EVALUATION and set version to 1 (submitted)
-  proposal.status = 'AI_EVALUATION_PENDING';
+  // Update status to AI_VALIDATION_PENDING and set version to 1 (submitted)
+  proposal.status = 'AI_VALIDATION_PENDING';
   proposal.currentVersion = 1;
   await proposal.save();
 
@@ -637,55 +663,10 @@ const handleInitialSubmission = async (proposal, req, res) => {
     createdBy: req.user._id
   });
 
-  // Mock AI evaluation (async) - In production, this would call actual AI service
-  setTimeout(async () => {
-    try {
-      // Mock AI report generation
-      const mockAIReport = {
-        proposalCode: proposal.proposalCode,
-        evaluation: {
-          novelty: 'High',
-          technicalFeasibility: 'Good',
-          benefitToIndustry: 'Significant',
-          costValidation: 'Appropriate',
-          overallScore: 8.5
-        },
-        recommendations: [
-          'Proposal demonstrates strong technical merit',
-          'Budget allocation is reasonable',
-          'Timeline is realistic'
-        ],
-        generatedAt: new Date()
-      };
-      
-      // Mock S3 upload for AI report
-      const mockReportUrl = `https://s3.bucket.com/ai-reports/${proposal.proposalCode}-v1-ai-report.pdf`;
-      
-      // Update version with AI report URL
-      version.aiReportUrl = mockReportUrl;
-      await version.save();
-      
-      // Add to proposal's AI reports array
-      proposal.aiReports.push({
-        version: 1,
-        reportUrl: mockReportUrl,
-        generatedAt: new Date()
-      });
-      
-      // Update status to CMPDI_REVIEW after AI evaluation
-      proposal.status = 'CMPDI_REVIEW';
-      
-      // Auto-assign all CMPDI members as collaborators
-      proposal.collaborators = await updateCollaboratorsForStatus(proposal, 'CMPDI_REVIEW');
-      
-      await proposal.save();
-      
-      console.log(`[AI] Evaluation completed for proposal ${proposal.proposalCode}`);
-      console.log(`[AUTO-ASSIGN] Added ${proposal.collaborators.filter(c => c.role === 'CMPDI').length} CMPDI members as collaborators`);
-    } catch (error) {
-      console.error('[AI] Evaluation error:', error);
-    }
-  }, 3000); // 3 seconds delay to simulate AI processing
+  // Trigger AI validation (async) - Call Python AI backend
+  processAIValidation(proposal._id, version._id, req.user._id).catch(error => {
+    console.error('[AI] Validation processing error:', error);
+  });
 
   // Log activity
   await activityLogger.log({
@@ -753,6 +734,12 @@ const handleDraftPromotion = async (proposal, commitMessage, req, res) => {
   // Update proposal with new current version (major version)
   proposal.currentVersion = newMajorVersion;
   await proposal.save();
+
+  // Trigger AI evaluation for the new version (async - silent background process)
+  console.log('[AI] Triggering evaluation for new version', newMajorVersion, 'of proposal', proposal.proposalCode);
+  processAIEvaluation(proposal._id, req.user._id).catch(error => {
+    console.error('[AI] Evaluation processing error for version', newMajorVersion, ':', error);
+  });
 
   // Log activity
   await activityLogger.log({
@@ -982,13 +969,24 @@ export const uploadFormI = asyncHandler(async (req, res) => {
     const s3Key = uploadResult.path;
 
     // Step 2: Extract content using AI backend
-    console.log(`Extracting Form I content from: ${req.file.originalname}`);
+    console.log('=== [EXTRACTION START] ===');
+    console.log(`[EXTRACTION] Processing file: ${req.file.originalname}`);
+    console.log(`[EXTRACTION] File size: ${req.file.size} bytes`);
+    console.log(`[EXTRACTION] Proposal code: ${proposalCode}`);
+    console.log(`[EXTRACTION] File URL: ${fileUrl}`);
+    
+    const extractionStartTime = Date.now();
     const extractionResult = await formExtractionService.extractFormI(
       fileUrl,
       req.file.originalname
     );
+    const extractionDuration = Date.now() - extractionStartTime;
+    
+    console.log(`[EXTRACTION] Completed in ${extractionDuration}ms (${(extractionDuration/1000).toFixed(2)}s)`);
+    console.log(`[EXTRACTION] Success: ${extractionResult.success}`);
 
     if (!extractionResult.success) {
+      console.error('[EXTRACTION] Failed:', extractionResult.error);
       // Even if extraction fails, we keep the uploaded file
       return res.status(500).json({
         success: false,
@@ -1004,9 +1002,29 @@ export const uploadFormI = asyncHandler(async (req, res) => {
       });
     }
 
-    // Log the extracted content structure for debugging
-    console.log('Extracted content structure:', JSON.stringify(extractionResult.content).substring(0, 200));
-    console.log('Extracted content keys:', Object.keys(extractionResult.content));
+    // Validate and log the extracted content structure
+    console.log('[EXTRACTION] Validating extracted content...');
+    console.log('[EXTRACTION] Content type:', typeof extractionResult.content);
+    console.log('[EXTRACTION] Is Array:', Array.isArray(extractionResult.content));
+    
+    if (extractionResult.content) {
+      if (Array.isArray(extractionResult.content)) {
+        console.log('[EXTRACTION] Content is array with', extractionResult.content.length, 'items');
+        console.log('[EXTRACTION] First item type:', extractionResult.content[0]?.type);
+      } else if (typeof extractionResult.content === 'object') {
+        console.log('[EXTRACTION] Content keys:', Object.keys(extractionResult.content));
+        if (extractionResult.content.formi?.content) {
+          console.log('[EXTRACTION] Has formi.content with', extractionResult.content.formi.content.length, 'items');
+        }
+      }
+      // Log a preview of the content
+      const contentPreview = JSON.stringify(extractionResult.content).substring(0, 300);
+      console.log('[EXTRACTION] Content preview:', contentPreview, '...');
+    } else {
+      console.error('[EXTRACTION] WARNING: Content is null or undefined!');
+    }
+    
+    console.log('=== [EXTRACTION END] ===');
 
     // Step 3: Save to proposal's supportingDocs
     const existingDocIndex = proposal.supportingDocs.findIndex(
@@ -1690,3 +1708,199 @@ export const getExpertReviewHistory = asyncHandler(async (req, res) => {
     }
   });
 });
+
+/**
+ * Process AI Validation (Internal async function)
+ * Called after proposal submission to validate Form I using Python AI backend
+ * Status remains AI_VALIDATION_PENDING until validation completes
+ */
+async function processAIValidation(proposalId, versionId, userId) {
+  try {
+    console.log('[AI] Starting validation for proposal', proposalId);
+    
+    const proposal = await Proposal.findById(proposalId);
+    if (!proposal) {
+      console.error('[AI] Proposal', proposalId, 'not found');
+      return;
+    }
+
+    await activityLogger.log({
+      user: userId,
+      action: 'AI_VALIDATION_STARTED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        version: proposal.currentVersion
+      }
+    });
+
+    const validationResult = await aiValidationService.validateFormI(proposal);
+    console.log('[AI] Validation completed for proposal', proposal.proposalCode);
+    console.log('[AI] Validation result:', JSON.stringify(validationResult).substring(0, 200));
+    console.log('[AI] Overall validation:', validationResult.validation_result?.overall_validation);
+
+    // Store validation report in aiReports array
+    if (!proposal.aiReports) {
+      proposal.aiReports = [];
+    }
+    
+    proposal.aiReports.push({
+      version: proposal.currentVersion,
+      reportType: 'validation',
+      reportData: validationResult,
+      generatedAt: new Date()
+    });
+    
+    // Mark as modified for Mixed type
+    proposal.markModified('aiReports');
+
+    const overallValidation = validationResult.validation_result?.overall_validation;
+    console.log('[AI] Storing report for version', proposal.currentVersion, 'with validation:', overallValidation);
+
+    if (overallValidation === true) {
+      proposal.status = 'CMPDI_REVIEW';
+      proposal.collaborators = await updateCollaboratorsForStatus(proposal, 'CMPDI_REVIEW');
+      await proposal.save();
+      
+      console.log('[AI] Validation passed for', proposal.proposalCode, '- moved to CMPDI_REVIEW');
+      console.log('[AI] aiReports stored, count:', proposal.aiReports.length);
+      console.log('[AUTO-ASSIGN] Added', proposal.collaborators.filter(c => c.role === 'CMPDI').length, 'CMPDI members as collaborators');
+
+      processAIEvaluation(proposalId, userId).catch(error => {
+        console.error('[AI] Evaluation processing error:', error);
+      });
+
+    } else {
+      proposal.status = 'AI_VALIDATION_FAILED';
+      await proposal.save();
+      console.log('[AI] Validation failed for', proposal.proposalCode, '- moved to AI_VALIDATION_FAILED');
+      console.log('[AI] aiReports stored, count:', proposal.aiReports.length);
+    }
+
+    await activityLogger.log({
+      user: userId,
+      action: 'AI_VALIDATION_COMPLETED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        validationPassed: overallValidation,
+        version: proposal.currentVersion
+      }
+    });
+
+  } catch (error) {
+    console.error('[AI] Validation error:', error);
+    
+    try {
+      const proposal = await Proposal.findById(proposalId);
+      if (proposal) {
+        proposal.status = 'AI_VALIDATION_FAILED';
+        
+        if (!proposal.aiReports) {
+          proposal.aiReports = [];
+        }
+        
+        proposal.aiReports.push({
+          version: proposal.currentVersion,
+          reportType: 'validation',
+          reportData: {
+            error: true,
+            message: error.message || 'AI validation service error',
+            timestamp: new Date()
+          },
+          generatedAt: new Date()
+        });
+        
+        proposal.markModified('aiReports');
+        await proposal.save();
+        console.log('[AI] Error report stored in aiReports');
+      }
+    } catch (saveError) {
+      console.error('[AI] Failed to update proposal status after validation error:', saveError);
+    }
+  }
+}
+
+/**
+ * Process AI Evaluation (Internal async function)
+ * Called after validation passes to perform full analysis using Python AI backend
+ * This is for reviewers/committee members only and does NOT affect proposal status
+ */
+async function processAIEvaluation(proposalId, userId) {
+  try {
+    console.log('[AI] Starting evaluation for proposal', proposalId);
+    
+    const proposal = await Proposal.findById(proposalId);
+    if (!proposal) {
+      console.error('[AI] Proposal', proposalId, 'not found');
+      return;
+    }
+
+    await activityLogger.log({
+      user: userId,
+      action: 'AI_EVALUATION_STARTED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        version: proposal.currentVersion
+      }
+    });
+
+    const evaluationResult = await aiValidationService.evaluateFormI(proposal);
+    console.log('[AI] Evaluation completed for proposal', proposal.proposalCode);
+
+    if (!proposal.aiReports) {
+      proposal.aiReports = [];
+    }
+    
+    proposal.aiReports.push({
+      version: proposal.currentVersion,
+      reportType: 'evaluation',
+      reportData: evaluationResult,
+      generatedAt: new Date()
+    });
+    
+    proposal.markModified('aiReports');
+    await proposal.save();
+    console.log('[AI] Evaluation report stored for', proposal.proposalCode, '- aiReports count:', proposal.aiReports.length);
+
+    await activityLogger.log({
+      user: userId,
+      action: 'AI_EVALUATION_COMPLETED',
+      proposalId: proposal._id,
+      details: { 
+        proposalCode: proposal.proposalCode,
+        version: proposal.currentVersion
+      }
+    });
+
+  } catch (error) {
+    console.error('[AI] Evaluation error:', error);
+    
+    try {
+      const proposal = await Proposal.findById(proposalId);
+      if (proposal) {
+        if (!proposal.aiReports) {
+          proposal.aiReports = [];
+        }
+        
+        proposal.aiReports.push({
+          version: proposal.currentVersion,
+          reportType: 'evaluation',
+          reportData: {
+            error: true,
+            message: error.message || 'AI evaluation service error',
+            timestamp: new Date()
+          },
+          generatedAt: new Date()
+        });
+        
+        proposal.markModified('aiReports');
+        await proposal.save();
+        console.log('[AI] Evaluation error report stored');
+      }
+    } catch (saveError) {
+      console.error('[AI] Failed to store evaluation error:', saveError);
+    }
+  }
+}

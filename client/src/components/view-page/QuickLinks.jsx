@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 const QuickLinks = ({ proposalId, status, currentVersion }) => {
   const router = useRouter();
   const isDraft = status === 'DRAFT';
-  const isAIRejected = status === 'AI_REJECTED';
+  const isAIRejected = status === 'AI_VALIDATION_FAILED';
   const isFinallyRejected = ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(status);
   
   // Check if this is a draft version (x.1 format or version 0.1)
@@ -12,7 +12,7 @@ const QuickLinks = ({ proposalId, status, currentVersion }) => {
   
   // Can collaborate only if not a final rejection and not a draft
   const canCollaborate = !isFinallyRejected && !isDraft;
-  // Can edit in create page only for DRAFT or AI_REJECTED
+  // Can edit in create page only for DRAFT or AI_VALIDATION_FAILED
   const canEdit = isDraft || isAIRejected;
   // Show versions only for submitted proposals (not drafts)
   const showVersions = !isDraft && !isDraftVersion;
@@ -39,7 +39,7 @@ const QuickLinks = ({ proposalId, status, currentVersion }) => {
       )}
       
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Edit Link - for DRAFT or AI_REJECTED (goes to create page) */}
+        {/* Edit Link - for DRAFT or AI_VALIDATION_FAILED (goes to create page) */}
         {canEdit && (
           <button
             onClick={() => router.push(`/proposal/create?draft=${proposalId}`)}

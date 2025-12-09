@@ -1,11 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { FiUpload, FiFile, FiX, FiDownload, FiCheck } from 'react-icons/fi';
+import { FiUpload, FiFile, FiX, FiDownload, FiCheck, FiZap } from 'react-icons/fi';
 import { uploadDocument, deleteDocument } from '../../utils/proposalApi';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import AlertModal from './AlertModal';
+import { getAutoFillFile } from '../../utils/autoFillHelpers';
 
 const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode, theme = 'light' }) => {
   const [uploading, setUploading] = useState({});
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [removeModal, setRemoveModal] = useState({ isOpen: false, formId: null });
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -87,12 +89,16 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
     }
   ];
 
-  const handleFileUpload = async (formId, event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  const handleFileUpload = async (formId, file) => {
+    // If coming from file input event
+    if (file && file.target) {
+      const inputFile = file.target.files[0];
+      if (!inputFile) return;
+      file.target.value = '';
+      file = inputFile;
+    }
 
-    // Reset the input
-    event.target.value = '';
+    if (!file) return;
 
     // Check if proposalCode exists (proposal must be saved first)
     if (!proposalCode) {
@@ -131,8 +137,53 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
     } catch (error) {
       console.error('Upload error:', error);
       showAlert('Upload Failed', `Failed to upload form: ${error.message || 'Please try again.'}`, 'error');
+      throw error;
     } finally {
       setUploading({ ...uploading, [formId]: false });
+    }
+  };
+
+  const handleAutoFillAll = async () => {
+    // Check if proposalCode exists
+    if (!proposalCode) {
+      showAlert('Save Required', 'Please save the proposal first by completing earlier stages.', 'warning');
+      return;
+    }
+
+    setIsAutoFilling(true);
+
+    try {
+      const formIds = ['formia', 'formix', 'formx', 'formxi', 'formxii'];
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const formId of formIds) {
+        // Skip if already uploaded
+        if (forms[formId]) {
+          continue;
+        }
+
+        try {
+          const file = await getAutoFillFile(formId);
+          await handleFileUpload(formId, file);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to auto-fill ${formId}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        showAlert('Auto-Fill Complete', `Successfully uploaded ${successCount} form(s).`, 'success');
+      }
+      if (failCount > 0) {
+        showAlert('Partial Upload', `${failCount} form(s) failed to upload.`, 'warning');
+      }
+    } catch (error) {
+      console.error('Auto-fill error:', error);
+      showAlert('Auto-Fill Failed', 'Failed to auto-fill forms. Please try again.', 'error');
+    } finally {
+      setIsAutoFilling(false);
     }
   };
 
@@ -202,7 +253,30 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
         theme={theme}
       />
 
-      <h2 className={`text-xl font-semibold ${textColor} mb-2`}>Additional Forms</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className={`text-xl font-semibold ${textColor}`}>Additional Forms</h2>
+        <button
+          onClick={handleAutoFillAll}
+          disabled={isAutoFilling || !proposalCode}
+          className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+            isDark 
+              ? 'border-slate-600 text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed' 
+              : 'border-slate-300 text-black hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {isAutoFilling ? (
+            <>
+              <div className={`w-4 h-4 border-2 ${spinnerBorder} rounded-full animate-spin`}></div>
+              <span className="text-sm">Auto-filling...</span>
+            </>
+          ) : (
+            <>
+              <FiZap className="w-4 h-4" />
+              <span className="text-sm">Auto-Fill All</span>
+            </>
+          )}
+        </button>
+      </div>
       <p className={`${mutedText} text-sm mb-4`}>
         Please download the templates and upload the filled forms. Forms marked with * are mandatory.
       </p>
@@ -275,7 +349,7 @@ const AdditionalFormsUpload = ({ forms, onFormUpload, onFormRemove, proposalCode
                   accept="application/pdf"
                   onChange={(e) => handleFileUpload(config.id, e)}
                   className="hidden"
-                  disabled={uploading[config.id]}
+                  disabled={uploading[config.id] || isAutoFilling}
                 />
               </label>
             )}

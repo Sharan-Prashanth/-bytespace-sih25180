@@ -10,15 +10,15 @@ const REVIEW_STAGES = [
     label: 'Draft',
     description: 'Proposal is being drafted by the PI and collaborators',
     stageStatuses: ['DRAFT'],
-    completionIndicators: ['AI_EVALUATION_PENDING', 'CMPDI_REVIEW']
+    completionIndicators: ['AI_VALIDATION_PENDING', 'CMPDI_REVIEW']
   },
   {
     key: 'AI_EVALUATION',
     label: 'AI Evaluation',
     description: 'Automated AI analysis and validation of proposal content and structure',
-    stageStatuses: ['AI_EVALUATION_PENDING'],
-    completionIndicators: ['CMPDI_REVIEW', 'AI_REJECTED'],
-    rejectionStatus: 'AI_REJECTED'
+    stageStatuses: ['AI_VALIDATION_PENDING'],
+    completionIndicators: ['CMPDI_REVIEW', 'AI_VALIDATION_FAILED'],
+    rejectionStatus: 'AI_VALIDATION_FAILED'
   },
   {
     key: 'CMPDI_REVIEW',

@@ -71,9 +71,9 @@ export default function CMPDIProposalsSection({ theme }) {
     };
 
     // Categorize proposals for CMPDI view
-    // Active: AI_EVALUATION_PENDING, CMPDI_REVIEW
+    // Active: AI_VALIDATION_PENDING, CMPDI_REVIEW
     const activeProposals = proposals.filter(p => 
-        ['AI_EVALUATION_PENDING', 'CMPDI_REVIEW'].includes(p.status)
+        ['AI_VALIDATION_PENDING', 'CMPDI_REVIEW'].includes(p.status)
     );
     
     // Expert Review: CMPDI_EXPERT_REVIEW
@@ -88,9 +88,9 @@ export default function CMPDIProposalsSection({ theme }) {
     // Final Approved: SSRC_ACCEPTED
     const approvedProposals = proposals.filter(p => p.status === 'SSRC_ACCEPTED');
     
-    // Rejected: CMPDI_REJECTED, TSSRC_REJECTED, SSRC_REJECTED, AI_REJECTED
+    // Rejected: CMPDI_REJECTED, TSSRC_REJECTED, SSRC_REJECTED
     const rejectedProposals = proposals.filter(p => 
-        ['AI_REJECTED', 'CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(p.status)
+        ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(p.status)
     );
 
     const getProposalsToFilter = () => {
@@ -124,7 +124,7 @@ export default function CMPDIProposalsSection({ theme }) {
             case 'active':
                 return [
                     { value: 'all', label: 'All Status' },
-                    { value: 'AI_EVALUATION_PENDING', label: 'AI Evaluation Pending' },
+                    { value: 'AI_VALIDATION_PENDING', label: 'AI Validation Pending' },
                     { value: 'CMPDI_REVIEW', label: 'CMPDI Review' }
                 ];
             case 'expertReview':
@@ -145,7 +145,7 @@ export default function CMPDIProposalsSection({ theme }) {
             case 'rejected':
                 return [
                     { value: 'all', label: 'All Status' },
-                    { value: 'AI_REJECTED', label: 'AI Rejected' },
+
                     { value: 'CMPDI_REJECTED', label: 'CMPDI Rejected' },
                     { value: 'TSSRC_REJECTED', label: 'TSSRC Rejected' },
                     { value: 'SSRC_REJECTED', label: 'SSRC Rejected' }
@@ -228,7 +228,7 @@ export default function CMPDIProposalsSection({ theme }) {
 
     const renderProposalCard = (proposal) => {
         const statusConfig = STATUS_CONFIG[proposal.status];
-        const isRejected = ['AI_REJECTED', 'CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(proposal.status);
+        const isRejected = ['CMPDI_REJECTED', 'TSSRC_REJECTED', 'SSRC_REJECTED'].includes(proposal.status);
         const isApproved = proposal.status === 'SSRC_ACCEPTED';
         const isExpertReview = proposal.status === 'CMPDI_EXPERT_REVIEW';
 

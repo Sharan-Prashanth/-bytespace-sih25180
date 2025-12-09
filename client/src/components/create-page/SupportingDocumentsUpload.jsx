@@ -1,11 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { FiUpload, FiFile, FiX, FiCheck } from 'react-icons/fi';
+import { FiUpload, FiFile, FiX, FiCheck, FiZap } from 'react-icons/fi';
 import { uploadDocument, deleteDocument } from '../../utils/proposalApi';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import AlertModal from './AlertModal';
+import { getAutoFillFile } from '../../utils/autoFillHelpers';
 
 const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove, proposalCode, theme = 'light' }) => {
   const [uploading, setUploading] = useState({});
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [removeModal, setRemoveModal] = useState({ isOpen: false, docId: null });
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -86,12 +88,16 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
     }
   ];
 
-  const handleFileUpload = async (docId, event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  const handleFileUpload = async (docId, file) => {
+    // If coming from file input event
+    if (file && file.target) {
+      const inputFile = file.target.files[0];
+      if (!inputFile) return;
+      file.target.value = '';
+      file = inputFile;
+    }
 
-    // Reset the input
-    event.target.value = '';
+    if (!file) return;
 
     // Check if proposalCode exists (proposal must be saved first)
     if (!proposalCode) {
@@ -130,8 +136,53 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
     } catch (error) {
       console.error('Upload error:', error);
       showAlert('Upload Failed', `Failed to upload document: ${error.message || 'Please try again.'}`, 'error');
+      throw error;
     } finally {
       setUploading({ ...uploading, [docId]: false });
+    }
+  };
+
+  const handleAutoFillAll = async () => {
+    // Check if proposalCode exists
+    if (!proposalCode) {
+      showAlert('Save Required', 'Please save the proposal first by completing earlier stages.', 'warning');
+      return;
+    }
+
+    setIsAutoFilling(true);
+
+    try {
+      const docIds = ['orgDetails', 'infrastructure', 'expertise', 'rdComponent', 'benefits', 'webSurvey', 'researchContent', 'collaboration'];
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const docId of docIds) {
+        // Skip if already uploaded
+        if (documents[docId]) {
+          continue;
+        }
+
+        try {
+          const file = await getAutoFillFile(docId);
+          await handleFileUpload(docId, file);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to auto-fill ${docId}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        showAlert('Auto-Fill Complete', `Successfully uploaded ${successCount} document(s).`, 'success');
+      }
+      if (failCount > 0) {
+        showAlert('Partial Upload', `${failCount} document(s) failed to upload.`, 'warning');
+      }
+    } catch (error) {
+      console.error('Auto-fill error:', error);
+      showAlert('Auto-Fill Failed', 'Failed to auto-fill documents. Please try again.', 'error');
+    } finally {
+      setIsAutoFilling(false);
     }
   };
 
@@ -191,7 +242,30 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
         theme={theme}
       />
 
-      <h2 className={`text-xl font-semibold ${textColor} mb-2`}>Supporting Documents</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className={`text-xl font-semibold ${textColor}`}>Supporting Documents</h2>
+        <button
+          onClick={handleAutoFillAll}
+          disabled={isAutoFilling || !proposalCode}
+          className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+            isDark 
+              ? 'border-slate-600 text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed' 
+              : 'border-slate-300 text-black hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {isAutoFilling ? (
+            <>
+              <div className={`w-4 h-4 border-2 ${spinnerBorder} rounded-full animate-spin`}></div>
+              <span className="text-sm">Auto-filling...</span>
+            </>
+          ) : (
+            <>
+              <FiZap className="w-4 h-4" />
+              <span className="text-sm">Auto-Fill All</span>
+            </>
+          )}
+        </button>
+      </div>
       <p className={`${mutedText} text-sm mb-4`}>
         Please upload the following supporting documents as mentioned in the guidelines. Documents marked with * are mandatory.
       </p>
@@ -244,7 +318,7 @@ const SupportingDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemo
                   accept="application/pdf"
                   onChange={(e) => handleFileUpload(config.id, e)}
                   className="hidden"
-                  disabled={uploading[config.id]}
+                  disabled={uploading[config.id] || isAutoFilling}
                 />
               </label>
             )}

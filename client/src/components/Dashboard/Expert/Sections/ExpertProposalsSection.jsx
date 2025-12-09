@@ -161,6 +161,11 @@ export default function ExpertProposalsSection({ user, theme }) {
                 </td>
                 <td className="p-3 px-4 text-right">
                     <div className="flex justify-end gap-1.5">
+                        <Link href={`/proposal/ai-evaluation/${proposal._id}`}>
+                            <button className={`p-1.5 rounded-lg ${isDark ? 'text-indigo-400 hover:bg-indigo-900/20' : 'text-indigo-600 hover:bg-indigo-50'}`} title="AI Evaluation Report">
+                                <BarChart3 size={16} />
+                            </button>
+                        </Link>
                         <Link href={`/proposal/collaborate/${proposal._id}?mode=suggestion`}>
                             <button className={`p-1.5 rounded-lg ${isDark ? 'text-blue-400 hover:bg-blue-900/20' : 'text-blue-600 hover:bg-blue-50'}`} title="Suggest Changes">
                                 <Users size={16} />
@@ -249,6 +254,11 @@ export default function ExpertProposalsSection({ user, theme }) {
                 <div className={`flex items-center justify-between pt-2 border-t mt-auto ${borderColor}`}>
                     <span className={`text-[10px] font-bold ${textColor}`}>{proposal.proposalCode || 'No ID'}</span>
                     <div className="flex gap-1">
+                        <Link href={`/proposal/ai-evaluation/${proposal._id}`}>
+                            <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-indigo-400' : 'hover:bg-slate-100 text-indigo-500'}`} title="AI Report">
+                                <BarChart3 size={14} />
+                            </button>
+                        </Link>
                         <Link href={`/proposal/collaborate/${proposal._id}?mode=suggestion`}>
                             <button className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-blue-400' : 'hover:bg-slate-100 text-blue-500'}`} title="Suggest">
                                 <Users size={14} />

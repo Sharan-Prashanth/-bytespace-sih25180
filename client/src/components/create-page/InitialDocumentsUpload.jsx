@@ -1,11 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { FiUpload, FiFile, FiX, FiCheck } from 'react-icons/fi';
+import { FiUpload, FiFile, FiX, FiCheck, FiZap } from 'react-icons/fi';
 import { uploadDocument, deleteDocument } from '../../utils/proposalApi';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import AlertModal from './AlertModal';
+import { getAutoFillFile } from '../../utils/autoFillHelpers';
 
 const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove, proposalCode, theme = 'light' }) => {
   const [uploading, setUploading] = useState({});
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [removeModal, setRemoveModal] = useState({ isOpen: false, documentType: null });
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -43,12 +45,16 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove,
     setAlertModal(prev => ({ ...prev, isOpen: false }));
   }, []);
 
-  const handleFileUpload = async (documentType, event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  const handleFileUpload = async (documentType, file) => {
+    // If coming from file input event
+    if (file && file.target) {
+      const inputFile = file.target.files[0];
+      if (!inputFile) return;
+      file.target.value = '';
+      file = inputFile;
+    }
 
-    // Reset the input
-    event.target.value = '';
+    if (!file) return;
 
     // Check if proposalCode exists (proposal must be saved first)
     if (!proposalCode) {
@@ -89,8 +95,53 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove,
     } catch (error) {
       console.error('Upload error:', error);
       showAlert('Upload Failed', `Failed to upload document: ${error.message || 'Please try again.'}`, 'error');
+      throw error;
     } finally {
       setUploading({ ...uploading, [documentType]: false });
+    }
+  };
+
+  const handleAutoFillAll = async () => {
+    // Check if proposalCode exists
+    if (!proposalCode) {
+      showAlert('Save Required', 'Please save the proposal first by completing Stage 1 and moving to Stage 2.', 'warning');
+      return;
+    }
+
+    setIsAutoFilling(true);
+
+    try {
+      const documentTypes = ['coveringLetter', 'cv'];
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const docType of documentTypes) {
+        // Skip if already uploaded
+        if (documents[docType]) {
+          continue;
+        }
+
+        try {
+          const file = await getAutoFillFile(docType);
+          await handleFileUpload(docType, file);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to auto-fill ${docType}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        showAlert('Auto-Fill Complete', `Successfully uploaded ${successCount} document(s).`, 'success');
+      }
+      if (failCount > 0) {
+        showAlert('Partial Upload', `${failCount} document(s) failed to upload.`, 'warning');
+      }
+    } catch (error) {
+      console.error('Auto-fill error:', error);
+      showAlert('Auto-Fill Failed', 'Failed to auto-fill documents. Please try again.', 'error');
+    } finally {
+      setIsAutoFilling(false);
     }
   };
 
@@ -156,7 +207,30 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove,
 
   return (
     <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
-      <h2 className={`text-xl font-semibold ${textColor} mb-2`}>Initial Documents</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className={`text-xl font-semibold ${textColor}`}>Initial Documents</h2>
+        <button
+          onClick={handleAutoFillAll}
+          disabled={isAutoFilling || !proposalCode}
+          className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+            isDark 
+              ? 'border-slate-600 text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed' 
+              : 'border-slate-300 text-black hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {isAutoFilling ? (
+            <>
+              <div className={`w-4 h-4 border-2 ${spinnerBorder} rounded-full animate-spin`}></div>
+              <span className="text-sm">Auto-filling...</span>
+            </>
+          ) : (
+            <>
+              <FiZap className="w-4 h-4" />
+              <span className="text-sm">Auto-Fill All</span>
+            </>
+          )}
+        </button>
+      </div>
       <p className={`${mutedText} text-sm mb-4`}>Please upload the following documents before proceeding.</p>
       
       <div className="space-y-4">
@@ -209,7 +283,7 @@ const InitialDocumentsUpload = ({ documents, onDocumentUpload, onDocumentRemove,
                     accept="application/pdf"
                     onChange={(e) => handleFileUpload(config.type, e)}
                     className="hidden"
-                    disabled={uploading[config.type]}
+                    disabled={uploading[config.type] || isAutoFilling}
                   />
                 </label>
               </div>

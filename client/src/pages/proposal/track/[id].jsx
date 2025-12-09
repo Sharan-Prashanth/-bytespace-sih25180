@@ -216,8 +216,8 @@ function TrackProposalContent() {
     
     const stageMap = {
       'DRAFT': 'Draft',
-      'AI_EVALUATION_PENDING': 'AI Evaluation',
-      'AI_REJECTED': 'AI Rejected',
+      'AI_VALIDATION_PENDING': 'AI Validation',
+
       'CMPDI_REVIEW': 'CMPDI Review',
       'CMPDI_EXPERT_REVIEW': 'Expert Review',
       'CMPDI_ACCEPTED': 'CMPDI Accepted',

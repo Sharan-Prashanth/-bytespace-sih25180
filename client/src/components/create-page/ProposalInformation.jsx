@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { FiZap } from 'react-icons/fi';
 
 const ProposalInformation = ({ proposalInfo, validationErrors, onChange, theme = 'light' }) => {
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+  
   const isDark = theme === 'dark' || theme === 'darkest';
   const isDarkest = theme === 'darkest';
 
@@ -10,14 +13,62 @@ const ProposalInformation = ({ proposalInfo, validationErrors, onChange, theme =
   const inputBg = isDarkest ? 'bg-neutral-800 border-neutral-700' : isDark ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-300';
   const inputText = isDark ? 'text-white placeholder-slate-500' : 'text-black placeholder-slate-400';
   const inputFocus = isDark ? 'focus:ring-white/20 focus:border-white/30' : 'focus:ring-black/10 focus:border-black/30';
+  const spinnerBorder = isDark ? 'border-white/30 border-t-white' : 'border-black/20 border-t-black';
 
   const handleChange = (field, value) => {
     onChange(field, value);
   };
 
+  const handleAutoFill = () => {
+    setIsAutoFilling(true);
+    
+    // Mock data for auto-fill
+    const mockData = {
+      title: 'Mission SIH',
+      fundingMethod: 'S&T of MoC',
+      principalImplementingAgency: 'Rajalakshmi Engineering College',
+      subImplementingAgency: 'Chennai Institute of Technology',
+      projectLeader: 'David',
+      projectCoordinator: 'Mr Robin Britto',
+      projectDurationMonths: '4',
+      projectOutlayLakhs: '1.5'
+    };
+    
+    // Simulate a brief loading state for better UX
+    setTimeout(() => {
+      Object.entries(mockData).forEach(([field, value]) => {
+        onChange(field, value);
+      });
+      setIsAutoFilling(false);
+    }, 500);
+  };
+
   return (
     <div className={`${cardBg} border rounded-xl p-6 mb-6`}>
-      <h2 className={`text-xl font-semibold ${textColor} mb-6`}>Proposal Information</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className={`text-xl font-semibold ${textColor}`}>Proposal Information</h2>
+        <button
+          onClick={handleAutoFill}
+          disabled={isAutoFilling}
+          className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+            isDark 
+              ? 'border-slate-600 text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed' 
+              : 'border-slate-300 text-black hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
+        >
+          {isAutoFilling ? (
+            <>
+              <div className={`w-4 h-4 border-2 ${spinnerBorder} rounded-full animate-spin`}></div>
+              <span className="text-sm">Auto-filling...</span>
+            </>
+          ) : (
+            <>
+              <FiZap className="w-4 h-4" />
+              <span className="text-sm">Auto-Fill Sample</span>
+            </>
+          )}
+        </button>
+      </div>
       
       <div className="space-y-5">
         {/* Project Title */}

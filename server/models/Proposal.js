@@ -50,8 +50,8 @@ const proposalSchema = new mongoose.Schema({
     type: String,
     enum: [
       'DRAFT',                    // Unsubmitted draft
-      'AI_EVALUATION_PENDING',    // Submitted, waiting for AI evaluation
-      'AI_REJECTED',              // AI evaluation rejected - can be modified and resubmitted
+      'AI_VALIDATION_PENDING',    // Submitted, waiting for AI validation
+      'AI_VALIDATION_FAILED',     // AI validation failed - can be modified and resubmitted
       'CMPDI_REVIEW',             // AI passed, under CMPDI review
       'CMPDI_EXPERT_REVIEW',      // Assigned to expert reviewers
       'CMPDI_ACCEPTED',           // CMPDI approved, moves to TSSRC
@@ -174,6 +174,22 @@ const proposalSchema = new mongoose.Schema({
     type: Boolean,
     default: null // null = not yet determined, true = skipped, false = expert review was conducted
   },
+  // AI Reports - stored as JSON objects with version tracking
+  aiReports: [{
+    version: Number,
+    reportType: {
+      type: String,
+      enum: ['validation', 'evaluation']
+    },
+    reportData: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    },
+    generatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   orts: [{
     version: Number,
     reportUrl: String,

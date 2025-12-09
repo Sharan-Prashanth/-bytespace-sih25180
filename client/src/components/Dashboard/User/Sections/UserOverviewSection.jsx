@@ -211,7 +211,7 @@ export default function UserOverviewSection({ stats, theme, proposals = [], last
                                     <div
                                         key={proposal._id}
                                         onClick={() => {
-                                            if (proposal.status === PROPOSAL_STATUS.DRAFT || proposal.status === PROPOSAL_STATUS.AI_REJECTED) {
+                                            if (proposal.status === PROPOSAL_STATUS.DRAFT || proposal.status === PROPOSAL_STATUS.AI_VALIDATION_FAILED) {
                                                 router.push(`/proposal/create?draft=${proposal._id}`);
                                             } else {
                                                 router.push(`/proposal/view/${proposal._id}`);
