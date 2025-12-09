@@ -94,13 +94,9 @@ def check_cached_output(file_hash: str) -> Optional[dict]:
         print(f"[CACHE] Checking for cached output: {cache_filename}")
         
         # Try to download the cached result
-        data = supabase.storage.from_(PROCESS_FILE_CACHE_BUCKET).download(cache_filename)
-        if data:
-            # Convert bytes to string and parse JSON
-            if isinstance(data, bytes):
-                cached_data = json.loads(data.decode('utf-8'))
-            else:
-                cached_data = json.loads(data)
+        response = supabase.storage.from_(PROCESS_FILE_CACHE_BUCKET).download(cache_filename)
+        if response:
+            cached_data = json.loads(response)
             print(f"[CACHE] Found cached output")
             return cached_data
     except Exception as e:
@@ -125,7 +121,7 @@ def store_output_cache(file_hash: str, output_data: dict) -> bool:
         supabase.storage.from_(PROCESS_FILE_CACHE_BUCKET).upload(
             cache_filename,
             json_bytes,
-            {"content-type": "application/json", "upsert": True}
+            {"content-type": "application/json", "upsert": "true"}
         )
         print(f"[CACHE] Successfully cached output")
         return True
