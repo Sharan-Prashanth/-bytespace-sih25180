@@ -20,6 +20,7 @@ import workflowRoutes from "./routes/workflowRoutes.js";
 import calendarRoutes from "./routes/calendarRoutes.js";
 import expertOpinionRoutes from "./routes/expertOpinionRoutes.js";
 import clarificationReportRoutes from "./routes/clarificationReportRoutes.js";
+import ragChatRoutes from "./routes/ragChatRoutes.js";
 
 // Import collaboration service and socket handlers (legacy - kept for backwards compatibility)
 import collaborationService from "./services/collaborationService.js";
@@ -117,6 +118,7 @@ app.use('/api/collaboration-api', collaborationApiRoutes);
 app.use('/api/comments', commentRoutes); // Direct comment routes
 app.use('/api/workflow', workflowRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/rag', ragChatRoutes);
 
 // Error handling middleware
 app.use(notFound);

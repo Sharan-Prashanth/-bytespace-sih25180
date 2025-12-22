@@ -12,6 +12,10 @@ from Common.SWOT import swot
 from Common.Technical_fesability import fesability
 from birbal import user_sarathi
 from Common.pampus import pampus
+from routes import rag_pinecone
+from routes import embeddings
+from routes import proposal_chat
+from routes import source_fetcher
 try:
     # Prefer relative import when running as a package (helps editors/linters)
     from . import non_ocr
@@ -60,6 +64,10 @@ app.include_router(file_storage.router)
 app.include_router(ai_detector_pipeline.router)
 app.include_router(report_gen.router)
 app.include_router(user_sarathi.router)
+app.include_router(rag_pinecone.router)
+app.include_router(embeddings.router)
+app.include_router(proposal_chat.router)
+app.include_router(source_fetcher.router)
 # app.include_router(online_checker.app)
 # -----------------------------
 # Run FastAPI directly with Python
